@@ -3,6 +3,7 @@ import { MODELS, getModelById, type Model } from './data/models'
 import { type WorkloadPreset } from './data/presets'
 import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
+import { MigrationPanel } from './components/MigrationPanel'
 
 export interface SimState {
   currentModel: Model
@@ -67,8 +68,7 @@ function App() {
           />
         </section>
 
-        {/* Feature panels — mounted by Tasks 5, 6, 7 in their respective worktrees */}
-        <div id="migration-panel-mount" />
+        <MigrationPanel state={state} />
         <div id="scenario-planner-mount" />
         <div id="summary-card-mount" />
       </main>
