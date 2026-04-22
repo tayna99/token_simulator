@@ -1,0 +1,113 @@
+// src/components/ScenarioPlanner/index.tsx
+import { calculateCost } from '../../lib/calculator'
+import type { SimState } from '../../App'
+
+interface ScenarioDef {
+  label: 'Best' | 'Base' | 'Worst'
+  trafficMultiplier: number
+  cacheHitRate: number
+  batchEnabled: boolean
+}
+
+const SCENARIOS: ScenarioDef[] = [
+  { label: 'Best',  trafficMultiplier: 0.7, cacheHitRate: 0.8, batchEnabled: true },
+  { label: 'Base',  trafficMultiplier: 1.0, cacheHitRate: 0.5, batchEnabled: false },
+  { label: 'Worst', trafficMultiplier: 2.0, cacheHitRate: 0.2, batchEnabled: false },
+]
+
+interface Props {
+  state: SimState
+}
+
+function fmt(n: number): string {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+export function ScenarioPlanner({ state }: Props) {
+  const results = SCENARIOS.map(s => ({
+    ...s,
+    result: calculateCost({
+      model: state.currentModel,
+      monthlyInputTokens: state.monthlyInputTokens * s.trafficMultiplier,
+      monthlyOutputTokens: state.monthlyOutputTokens * s.trafficMultiplier,
+      cacheHitRate: s.cacheHitRate,
+      batchEnabled: s.batchEnabled,
+    }),
+  }))
+
+  const colColors: Record<string, string> = {
+    Best:  'text-green-700 bg-green-50',
+    Base:  'text-gray-700 bg-gray-50',
+    Worst: 'text-red-700 bg-red-50',
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 className="text-base font-semibold text-gray-800 mb-4">Scenario Planner</h2>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="text-left text-gray-500 font-medium py-2 pr-4">Parameter</th>
+              {SCENARIOS.map(s => (
+                <th key={s.label} className={`text-center py-2 px-4 rounded-t-lg ${colColors[s.label]}`}>
+                  {s.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            <tr>
+              <td className="py-2 pr-4 text-gray-600">Traffic</td>
+              {SCENARIOS.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  {s.trafficMultiplier < 1
+                    ? `−${Math.round((1 - s.trafficMultiplier) * 100)}%`
+                    : s.trafficMultiplier === 1 ? 'Current'
+                    : `+${Math.round((s.trafficMultiplier - 1) * 100)}%`}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 text-gray-600">Cache Hit Rate</td>
+              {SCENARIOS.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  {Math.round(s.cacheHitRate * 100)}%
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 text-gray-600">Batch Mode</td>
+              {SCENARIOS.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  {s.batchEnabled ? 'On' : 'Off'}
+                </td>
+              ))}
+            </tr>
+            <tr className="border-t-2 border-gray-300">
+              <td className="py-3 pr-4 font-semibold text-gray-800">Monthly Cost</td>
+              {results.map(r => (
+                <td
+                  key={r.label}
+                  data-testid="monthly-cost"
+                  className={`text-center py-3 px-4 font-bold text-lg ${colColors[r.label]}`}
+                >
+                  {fmt(r.result.monthlyCost)}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="py-2 pr-4 text-gray-600">Annualized</td>
+              {results.map(r => (
+                <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
+                  {fmt(r.result.annualCost)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
