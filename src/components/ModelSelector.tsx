@@ -1,0 +1,29 @@
+import { MODELS, type Model } from '../data/models'
+
+interface Props {
+  label: string
+  value: string
+  onChange: (model: Model) => void
+}
+
+export function ModelSelector({ label, value, onChange }: Props) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <select
+        value={value}
+        onChange={e => {
+          const m = MODELS.find(m => m.id === e.target.value)
+          if (m) onChange(m)
+        }}
+        className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        {MODELS.map(m => (
+          <option key={m.id} value={m.id}>
+            {m.name} — ${m.inputPrice}/${m.outputPrice} per 1M
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
