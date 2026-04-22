@@ -5,6 +5,7 @@ import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
 import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
+import { SummaryCard } from './components/SummaryCard'
 
 export interface SimState {
   currentModel: Model
@@ -71,7 +72,7 @@ function App() {
 
         <MigrationPanel state={state} />
         <ScenarioPlanner state={state} />
-        <div id="summary-card-mount" />
+        <SummaryCard state={state} />
       </main>
     </div>
   )
