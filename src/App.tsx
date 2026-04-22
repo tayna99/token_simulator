@@ -4,6 +4,7 @@ import { type WorkloadPreset } from './data/presets'
 import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
 import { MigrationPanel } from './components/MigrationPanel'
+import { ScenarioPlanner } from './components/ScenarioPlanner'
 
 export interface SimState {
   currentModel: Model
@@ -69,7 +70,7 @@ function App() {
         </section>
 
         <MigrationPanel state={state} />
-        <div id="scenario-planner-mount" />
+        <ScenarioPlanner state={state} />
         <div id="summary-card-mount" />
       </main>
     </div>
