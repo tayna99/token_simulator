@@ -16,7 +16,7 @@ v2 티켓 16개 전부를 실행하기 위한 **하네스 래핑된 그린필드
 
 - `c:\token_simulator\` 를 프로젝트 루트로 사용
 - `harness_framework` 레포의 표준 자산(`/harness`, `/review`, `execute.py`, stock hooks)은 사용자가 별도로 클론/복사하여 트리에 얹는다고 가정
-- 본 스펙이 생성하는 **14개 프로젝트 고유 파일**만 다룸
+- 본 스펙이 생성하는 **16개 프로젝트 고유 파일**만 다룸
 - Phase 실행/검증은 gstack 스킬로 위임
 
 ### 성공 기준 (스펙 자체)
@@ -29,7 +29,7 @@ v2 티켓 16개 전부를 실행하기 위한 **하네스 래핑된 그린필드
 
 ## 2. 전체 구조
 
-### 2.1 생성 파일 (14개)
+### 2.1 생성 파일 (16개)
 
 ```
 token_simulator/
@@ -61,6 +61,7 @@ token_simulator/
 - `scripts/execute.py`, `.claude/commands/harness.md`, `.claude/commands/review.md`, stock hooks 3종 — `harness_framework` 레포에서 공급.
 - 실제 Vite/React 소스 코드 — Phase 0 실행 결과물이며, 본 스펙은 Phase **지시서만** 만든다.
 - `harness_framework` 레포 설치 절차 — 사용자 책임.
+- **배포 인프라 (CI/CD, 호스팅)** — 하네스 엔지니어링 종료 후 gstack `/setup-deploy` → `/land-and-deploy` → `/canary`로 위임. 권장 호스트는 **Vercel** (Vite 일급 지원, js-tiktoken 순수 JS라 WASM MIME 이슈 없음, PR 프리뷰 자동, Hobby 무료 한도 충분). 대안: Cloudflare Pages, Netlify. 추후 β 경로로 전환 시 Open Question #5 참조.
 
 ---
 
@@ -285,6 +286,8 @@ exit 0
 
 생성 완료 후 사용자가 gstack으로 전환하여 Phase 0부터 순차 실행.
 
+파일 수 브레이크다운: 루트 1 (CLAUDE.md) + docs/ 4 + phases/mvp/ 9 + scripts/hooks/ 1 + .claude/ 1 = **16**.
+
 ---
 
 ## 10. Open Questions (구현 시점에 결정)
@@ -293,3 +296,9 @@ exit 0
 2. Ground truth 수집 시 사용할 모델 3개 / 토큰값 3개의 구체적 선택 — Phase 0.5 실행 시점에서 결정.
 3. ADR-003 (localStorage) 검증 결과 — Phase 0.5 끝에 ⚠️ 마커 제거 혹은 유지 결정.
 4. 디자인 토큰의 라이트/다크 전환 기본값 — Phase 0 또는 7에서 결정.
+5. **배포 Phase 8 승격 여부 (α ↔ β)** — 현재는 α (gstack 위임). 마음이 바뀌면 Phase 파일 하나만 추가하면 됨 — 나머지 9개 Phase 재작업 없음. 추가될 Phase 8 골자: Vercel 프로젝트 연결 + `vercel.json` (SPA fallback 불필요, 프리셋만), GitHub Actions 또는 Vercel Git 통합, 프로덕션 URL을 `CLAUDE.md`에 기록, `/canary` 엔드포인트 정의 (예: 홈에서 모델 카드 3개 렌더 확인). 전환 비용: Phase 1개 추가, 총 10 Phase. 전환 이득: 설계서 하나로 배포까지 완결, 하네스 + gstack 경계가 명확.
+
+   **β 전환이 싸게 붙는 이유:**
+   - 배포 Phase는 소스 코드를 건드리지 않음 → 앞 Phase들과 의존 고리가 없음 (Phase 7 이후 append).
+   - Vercel Git 통합 쓰면 Phase 파일이 매우 짧음 (`vercel link` + dashboard 설정 + URL 기록 정도).
+   - `/canary` 엔드포인트 정의만 약간 머리 씀 (예: "홈에서 모델 카드 3개 렌더 확인" 같은 가벼운 스모크).
