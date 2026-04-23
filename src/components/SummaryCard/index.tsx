@@ -97,6 +97,7 @@ export function SummaryCard({ state }: Props) {
 
       <div
         ref={cardRef}
+        lang="en"
         className="bg-gray-50 border border-gray-200 rounded-lg p-5"
       >
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>
