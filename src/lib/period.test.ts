@@ -23,3 +23,13 @@ describe('periodLabel', () => {
     expect(periodLabel('quarter')).toBe('quarter')
   })
 })
+
+describe('PERIOD_DAYS', () => {
+  it('exports canonical day counts per period', () => {
+    expect(PERIOD_DAYS.day).toBe(1)
+    expect(PERIOD_DAYS.week).toBe(7)
+    expect(PERIOD_DAYS.month).toBe(30)
+    expect(PERIOD_DAYS.quarter).toBe(90)
+    expect(PERIOD_DAYS.year).toBe(365)
+  })
+})
