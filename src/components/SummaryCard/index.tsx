@@ -54,16 +54,25 @@ export function SummaryCard({ state }: Props) {
   const summaryText = buildSummaryText(state)
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(summaryText)
+    try {
+      await navigator.clipboard.writeText(summaryText)
+    } catch {
+      window.prompt('Copy the text below:', summaryText)
+    }
   }
 
   const handleExportPng = async () => {
     if (!cardRef.current) return
-    const dataUrl = await toPng(cardRef.current, { cacheBust: true })
-    const link = document.createElement('a')
-    link.download = 'llm-cost-summary.png'
-    link.href = dataUrl
-    link.click()
+    try {
+      const dataUrl = await toPng(cardRef.current, { cacheBust: true })
+      const link = document.createElement('a')
+      link.download = 'llm-cost-summary.png'
+      link.href = dataUrl
+      link.click()
+    } catch (err) {
+      console.error('Export failed:', err)
+      alert('Export failed. Try again or use a screenshot.')
+    }
   }
 
   return (

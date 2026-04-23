@@ -38,8 +38,9 @@ export function TokenInputs({
           <label className="text-sm font-medium text-gray-700">Monthly Input Tokens</label>
           <input
             type="number"
+            min={0}
             value={monthlyInputTokens}
-            onChange={e => onInputChange(Number(e.target.value))}
+            onChange={e => onInputChange(Math.max(0, Number(e.target.value)))}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
@@ -47,8 +48,9 @@ export function TokenInputs({
           <label className="text-sm font-medium text-gray-700">Monthly Output Tokens</label>
           <input
             type="number"
+            min={0}
             value={monthlyOutputTokens}
-            onChange={e => onOutputChange(Number(e.target.value))}
+            onChange={e => onOutputChange(Math.max(0, Number(e.target.value)))}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
