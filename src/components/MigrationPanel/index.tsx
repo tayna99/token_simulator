@@ -8,6 +8,22 @@ interface Props {
 }
 
 export function MigrationPanel({ state }: Props) {
+  const isSameModel = state.currentModel.id === state.candidateModel.id
+
+  if (isSameModel) {
+    return (
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-4">Migration Comparison</h2>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
+          <p className="text-sm text-amber-800">
+            Current and candidate are the <strong>same model</strong> ({state.currentModel.name}).
+            Select a different candidate to see migration delta.
+          </p>
+        </div>
+      </section>
+    )
+  }
+
   const result = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,

@@ -88,4 +88,15 @@ describe('MigrationPanel', () => {
     // sonnet: 100M*$3 + 5M*$15 = $375
     expect(screen.getByText(/\$375\/mo/)).toBeInTheDocument()
   })
+
+  it('shows "same model" notice when current === candidate', () => {
+    const same = {
+      ...BASE_STATE,
+      candidateModel: BASE_STATE.currentModel,
+    }
+    render(<MigrationPanel state={same} />)
+    expect(screen.getByText(/same model/i)).toBeInTheDocument()
+    // Delta section must NOT render
+    expect(screen.queryByTestId('monthly-delta')).not.toBeInTheDocument()
+  })
 })
