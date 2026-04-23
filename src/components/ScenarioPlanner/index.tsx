@@ -1,5 +1,6 @@
 // src/components/ScenarioPlanner/index.tsx
 import { calculateCost } from '../../lib/calculator'
+import { fmtCurrency, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
 
 interface ScenarioDef {
@@ -10,17 +11,13 @@ interface ScenarioDef {
 }
 
 const SCENARIOS: ScenarioDef[] = [
-  { label: 'Best',  trafficMultiplier: 0.7, cacheHitRate: () => 0.8,      batchEnabled: () => true },
-  { label: 'Base',  trafficMultiplier: 1.0, cacheHitRate: b => b,          batchEnabled: b => b },
-  { label: 'Worst', trafficMultiplier: 2.0, cacheHitRate: () => 0.2,      batchEnabled: () => false },
+  { label: 'Best',  trafficMultiplier: 0.7, cacheHitRate: () => 0.8, batchEnabled: () => true },
+  { label: 'Base',  trafficMultiplier: 1.0, cacheHitRate: b => b,     batchEnabled: b => b },
+  { label: 'Worst', trafficMultiplier: 2.0, cacheHitRate: () => 0.2, batchEnabled: () => false },
 ]
 
 interface Props {
   state: SimState
-}
-
-function fmt(n: number): string {
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export function ScenarioPlanner({ state }: Props) {
@@ -79,7 +76,7 @@ export function ScenarioPlanner({ state }: Props) {
               <td className="py-2 pr-4 text-gray-600">Cache Hit Rate</td>
               {results.map(r => (
                 <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
-                  {Math.round(r.cacheHitRate * 100)}%
+                  {fmtPercent(r.cacheHitRate)}
                 </td>
               ))}
             </tr>
@@ -99,7 +96,7 @@ export function ScenarioPlanner({ state }: Props) {
                   data-testid="monthly-cost"
                   className={`text-center py-3 px-4 font-bold text-lg ${colColors[r.label]}`}
                 >
-                  {fmt(r.result.monthlyCost)}
+                  {fmtCurrency(r.result.monthlyCost)}
                 </td>
               ))}
             </tr>
@@ -107,7 +104,7 @@ export function ScenarioPlanner({ state }: Props) {
               <td className="py-2 pr-4 text-gray-600">Annualized</td>
               {results.map(r => (
                 <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
-                  {fmt(r.result.annualCost)}
+                  {fmtCurrency(r.result.annualCost)}
                 </td>
               ))}
             </tr>
