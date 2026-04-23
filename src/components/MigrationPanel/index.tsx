@@ -27,8 +27,8 @@ export function MigrationPanel({ state }: Props) {
   const result = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })

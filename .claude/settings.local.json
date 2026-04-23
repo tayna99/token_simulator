@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(gstack)",
+      "Bash(git -C /c/token_simulator status)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(git checkout *)",
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(./node_modules/.bin/tailwindcss init *)",
+      "Bash(node *)",
+      "Bash(npm run *)",
+      "Bash(git *)",
+      "Bash(npm list *)",
+      "Read(//c/token-migration/src//**)",
+      "Read(//c/token-scenario/src//**)",
+      "Read(//c/token-summary/src//**)",
+      "Bash(gh run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://tayna99.github.io/token_simulator/)",
+      "Bash(2>&1)",
+      "Bash(python3 -c \"import sys,json; runs=json.load\\(sys.stdin\\)['workflow_runs']; [print\\(r['name'], r['status'], r['conclusion'], r['html_url']\\) for r in runs[:3]]\")",
+      "Bash(curl -s -H 'Authorization: token $GITHUB_TOKEN' 'https://api.github.com/repos/tayna99/token_simulator/actions/runs?per_page=3')",
+      "Bash(curl *)",
+      "Bash(Start-Process -NoNewWindow -FilePath \"cmd\" -ArgumentList \"/c npm run dev\")",
+      "Bash(cmd /c start http://localhost:5173/)",
+      "Bash(xargs grep *)"
+    ]
+  }
+}

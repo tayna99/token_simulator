@@ -5,12 +5,17 @@ import { MigrationPanel } from './index'
 import { MODELS } from '../../data/models'
 
 const BASE_STATE = {
+  role: 'pm' as const,
   currentModel: MODELS.find(m => m.id === 'claude-sonnet-4.6')!,
   candidateModel: MODELS.find(m => m.id === 'gemini-3.1-flash')!,
-  monthlyInputTokens: 50_000_000,
-  monthlyOutputTokens: 5_000_000,
+  period: 'month' as const,
+  periodInputTokens: 50_000_000,
+  periodOutputTokens: 5_000_000,
   cacheHitRate: 0,
   batchEnabled: false,
+  monthlyRequests: 100_000,
+  activeUsers: 1000,
+  monthlyBudgetUsd: null,
 }
 
 describe('MigrationPanel', () => {
@@ -79,11 +84,11 @@ describe('MigrationPanel', () => {
     expect(screen.getByText(/\$16\/mo/)).toBeInTheDocument()
   })
 
-  it('updates when monthlyInputTokens changes', () => {
+  it('updates when periodInputTokens changes', () => {
     const { rerender } = render(<MigrationPanel state={BASE_STATE} />)
     expect(screen.getByText(/\$225\/mo/)).toBeInTheDocument()
 
-    const doubled = { ...BASE_STATE, monthlyInputTokens: 100_000_000 }
+    const doubled = { ...BASE_STATE, periodInputTokens: 100_000_000 }
     rerender(<MigrationPanel state={doubled} />)
     // sonnet: 100M*$3 + 5M*$15 = $375
     expect(screen.getByText(/\$375\/mo/)).toBeInTheDocument()

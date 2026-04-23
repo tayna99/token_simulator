@@ -3,8 +3,8 @@ import { PRESETS, type WorkloadPreset } from '../data/presets'
 import { fmtTokens } from '../lib/format'
 
 interface Props {
-  monthlyInputTokens: number
-  monthlyOutputTokens: number
+  periodInputTokens: number
+  periodOutputTokens: number
   cacheHitRate: number
   batchEnabled: boolean
   onInputChange: (v: number) => void
@@ -39,18 +39,18 @@ function presetTooltip(p: WorkloadPreset): string {
 }
 
 export function TokenInputs({
-  monthlyInputTokens, monthlyOutputTokens,
+  periodInputTokens, periodOutputTokens,
   cacheHitRate, batchEnabled,
   onInputChange, onOutputChange, onCacheChange, onBatchChange, onPresetSelect,
 }: Props) {
   // Internal display strings keep the thousand-separator formatting while
   // the parent state stays numeric. Sync back whenever parent changes
   // (e.g., preset selection flips the numeric tokens from outside).
-  const [inputStr, setInputStr] = useState(() => formatInput(monthlyInputTokens))
-  const [outputStr, setOutputStr] = useState(() => formatInput(monthlyOutputTokens))
+  const [inputStr, setInputStr] = useState(() => formatInput(periodInputTokens))
+  const [outputStr, setOutputStr] = useState(() => formatInput(periodOutputTokens))
 
-  useEffect(() => { setInputStr(formatInput(monthlyInputTokens)) }, [monthlyInputTokens])
-  useEffect(() => { setOutputStr(formatInput(monthlyOutputTokens)) }, [monthlyOutputTokens])
+  useEffect(() => { setInputStr(formatInput(periodInputTokens)) }, [periodInputTokens])
+  useEffect(() => { setOutputStr(formatInput(periodOutputTokens)) }, [periodOutputTokens])
 
   return (
     <div className="flex flex-col gap-4">

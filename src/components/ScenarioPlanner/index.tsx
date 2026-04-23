@@ -30,8 +30,8 @@ export function ScenarioPlanner({ state }: Props) {
       batchEnabled,
       result: calculateCost({
         model: state.currentModel,
-        monthlyInputTokens: state.monthlyInputTokens * s.trafficMultiplier,
-        monthlyOutputTokens: state.monthlyOutputTokens * s.trafficMultiplier,
+        monthlyInputTokens: state.periodInputTokens * s.trafficMultiplier,
+        monthlyOutputTokens: state.periodOutputTokens * s.trafficMultiplier,
         cacheHitRate,
         batchEnabled,
       }),

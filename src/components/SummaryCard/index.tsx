@@ -12,8 +12,8 @@ interface Props {
 function buildSummaryText(state: SimState): string {
   const current = calculateCost({
     model: state.currentModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })
@@ -21,8 +21,8 @@ function buildSummaryText(state: SimState): string {
   const migration = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })
@@ -37,7 +37,7 @@ function buildSummaryText(state: SimState): string {
   const absAnnual = fmtCurrency(Math.abs(migration.annualDelta))
   const percent = fmtPercent(Math.abs(migration.savingPercent) / 100, 1)
 
-  return `On ${state.currentModel.name} with ${fmtTokens(state.monthlyInputTokens)} input / ${fmtTokens(state.monthlyOutputTokens)} output tokens/month` +
+  return `On ${state.currentModel.name} with ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output tokens/month` +
     `${cacheText}${batchText}, estimated monthly cost is ${fmtCurrency(current.monthlyCost)} ` +
     `(${fmtCurrency(current.annualCost)}/yr). ` +
     `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +

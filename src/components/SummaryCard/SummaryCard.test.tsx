@@ -5,12 +5,17 @@ import { SummaryCard } from './index'
 import { MODELS } from '../../data/models'
 
 const BASE_STATE = {
+  role: 'pm' as const,
   currentModel: MODELS.find(m => m.id === 'claude-sonnet-4.6')!,
   candidateModel: MODELS.find(m => m.id === 'gemini-3.1-flash')!,
-  monthlyInputTokens: 50_000_000,
-  monthlyOutputTokens: 5_000_000,
+  period: 'month' as const,
+  periodInputTokens: 50_000_000,
+  periodOutputTokens: 5_000_000,
   cacheHitRate: 0,
   batchEnabled: false,
+  monthlyRequests: 100_000,
+  activeUsers: 1000,
+  monthlyBudgetUsd: null,
 }
 
 describe('SummaryCard', () => {

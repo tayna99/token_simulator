@@ -5,34 +5,50 @@ import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
 import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
+import { CostBreakdown } from './components/CostBreakdown'
 import { SummaryCard } from './components/SummaryCard'
 
+export type Role = 'developer' | 'pm' | 'ceo'
+export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
+
 export interface SimState {
+  role: Role
   currentModel: Model
   candidateModel: Model
-  monthlyInputTokens: number
-  monthlyOutputTokens: number
+  period: Period
+  periodInputTokens: number
+  periodOutputTokens: number
   cacheHitRate: number
   batchEnabled: boolean
+  monthlyRequests: number
+  activeUsers: number
+  monthlyBudgetUsd: number | null
 }
 
 function App() {
   const [state, setState] = useState<SimState>({
+    role: 'pm',
     currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
     candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
-    monthlyInputTokens: 50_000_000,
-    monthlyOutputTokens: 5_000_000,
+    period: 'month',
+    periodInputTokens: 50_000_000,
+    periodOutputTokens: 5_000_000,
     cacheHitRate: 0.5,
     batchEnabled: false,
+    monthlyRequests: 100_000,
+    activeUsers: 1000,
+    monthlyBudgetUsd: null,
   })
 
   const handlePreset = (p: WorkloadPreset) => {
     setState(s => ({
       ...s,
-      monthlyInputTokens: p.monthlyInputTokens,
-      monthlyOutputTokens: p.monthlyOutputTokens,
+      periodInputTokens: p.monthlyInputTokens,
+      periodOutputTokens: p.monthlyOutputTokens,
       cacheHitRate: p.defaultCacheHitRate,
       batchEnabled: p.defaultBatchEnabled,
+      monthlyRequests: p.monthlyRequestsDefault || s.monthlyRequests,
+      activeUsers: p.activeUsersDefault || s.activeUsers,
     }))
   }
 
@@ -58,12 +74,12 @@ function App() {
             />
           </div>
           <TokenInputs
-            monthlyInputTokens={state.monthlyInputTokens}
-            monthlyOutputTokens={state.monthlyOutputTokens}
+            periodInputTokens={state.periodInputTokens}
+            periodOutputTokens={state.periodOutputTokens}
             cacheHitRate={state.cacheHitRate}
             batchEnabled={state.batchEnabled}
-            onInputChange={v => setState(s => ({ ...s, monthlyInputTokens: v }))}
-            onOutputChange={v => setState(s => ({ ...s, monthlyOutputTokens: v }))}
+            onInputChange={v => setState(s => ({ ...s, periodInputTokens: v }))}
+            onOutputChange={v => setState(s => ({ ...s, periodOutputTokens: v }))}
             onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}
             onBatchChange={v => setState(s => ({ ...s, batchEnabled: v }))}
             onPresetSelect={handlePreset}
@@ -71,6 +87,7 @@ function App() {
         </section>
 
         <MigrationPanel state={state} />
+        <CostBreakdown state={state} />
         <ScenarioPlanner state={state} />
         <SummaryCard state={state} />
       </main>
