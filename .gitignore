@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# gstack runtime artifacts
+.gstack/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
