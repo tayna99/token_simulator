@@ -6,6 +6,7 @@ import { TokenInputs } from './components/TokenInputs'
 import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
 import { CostBreakdown } from './components/CostBreakdown'
+import { BudgetCap } from './components/BudgetCap'
 import { SummaryCard } from './components/SummaryCard'
 
 export type Role = 'developer' | 'pm' | 'ceo'
@@ -88,6 +89,7 @@ function App() {
 
         <MigrationPanel state={state} />
         <CostBreakdown state={state} />
+        <BudgetCap state={state} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />
         <ScenarioPlanner state={state} />
         <SummaryCard state={state} />
       </main>
