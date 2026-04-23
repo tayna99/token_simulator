@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
+import { fmtTokens } from '../lib/format'
 
 interface Props {
   monthlyInputTokens: number
@@ -12,11 +14,44 @@ interface Props {
   onPresetSelect: (p: WorkloadPreset) => void
 }
 
+const MAX_TOKENS = 10_000_000_000 // 10 billion cap
+
+function sanitize(raw: string): number {
+  // Keep digits only; reject negatives, decimals, letters.
+  const cleaned = raw.replace(/[^\d]/g, '')
+  if (cleaned === '') return 0
+  const n = Number(cleaned)
+  if (!Number.isFinite(n)) return 0
+  return Math.min(MAX_TOKENS, Math.max(0, n))
+}
+
+function formatInput(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  return n.toLocaleString('en-US')
+}
+
+function presetTooltip(p: WorkloadPreset): string {
+  const inTokens = fmtTokens(p.monthlyInputTokens)
+  const outTokens = fmtTokens(p.monthlyOutputTokens)
+  const cachePct = Math.round(p.defaultCacheHitRate * 100)
+  const batchPart = p.defaultBatchEnabled ? ' · batch on' : ''
+  return `${inTokens} in / ${outTokens} out · cache ${cachePct}%${batchPart}`
+}
+
 export function TokenInputs({
   monthlyInputTokens, monthlyOutputTokens,
   cacheHitRate, batchEnabled,
   onInputChange, onOutputChange, onCacheChange, onBatchChange, onPresetSelect,
 }: Props) {
+  // Internal display strings keep the thousand-separator formatting while
+  // the parent state stays numeric. Sync back whenever parent changes
+  // (e.g., preset selection flips the numeric tokens from outside).
+  const [inputStr, setInputStr] = useState(() => formatInput(monthlyInputTokens))
+  const [outputStr, setOutputStr] = useState(() => formatInput(monthlyOutputTokens))
+
+  useEffect(() => { setInputStr(formatInput(monthlyInputTokens)) }, [monthlyInputTokens])
+  useEffect(() => { setOutputStr(formatInput(monthlyOutputTokens)) }, [monthlyOutputTokens])
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -26,6 +61,7 @@ export function TokenInputs({
             <button
               key={p.id}
               onClick={() => onPresetSelect(p)}
+              title={presetTooltip(p)}
               className="px-3 py-1 text-xs border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 transition-colors"
             >
               {p.name}
@@ -35,33 +71,48 @@ export function TokenInputs({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-sm font-medium text-gray-700">Monthly Input Tokens</label>
+          <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
+            Monthly Input Tokens
+          </label>
           <input
-            type="number"
-            min={0}
-            value={monthlyInputTokens}
-            onChange={e => onInputChange(Math.max(0, Number(e.target.value)))}
+            id="monthly-input-tokens"
+            type="text"
+            inputMode="numeric"
+            value={inputStr}
+            onChange={e => {
+              const n = sanitize(e.target.value)
+              setInputStr(formatInput(n))
+              onInputChange(n)
+            }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label className="text-sm font-medium text-gray-700">Monthly Output Tokens</label>
+          <label htmlFor="monthly-output-tokens" className="text-sm font-medium text-gray-700">
+            Monthly Output Tokens
+          </label>
           <input
-            type="number"
-            min={0}
-            value={monthlyOutputTokens}
-            onChange={e => onOutputChange(Math.max(0, Number(e.target.value)))}
+            id="monthly-output-tokens"
+            type="text"
+            inputMode="numeric"
+            value={outputStr}
+            onChange={e => {
+              const n = sanitize(e.target.value)
+              setOutputStr(formatInput(n))
+              onOutputChange(n)
+            }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
       </div>
       <div className="flex gap-6 items-center">
         <div className="flex-1">
-          <label className="text-sm font-medium text-gray-700">
+          <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
             Cache Hit Rate: {Math.round(cacheHitRate * 100)}%
           </label>
           <input
-            type="range" min={0} max={100}
+            id="cache-hit-rate"
+            type="range" min={0} max={100} step={1}
             value={Math.round(cacheHitRate * 100)}
             onChange={e => onCacheChange(Number(e.target.value) / 100)}
             className="mt-1 w-full"

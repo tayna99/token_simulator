@@ -2,14 +2,11 @@
 import { useRef } from 'react'
 import { toPng } from 'html-to-image'
 import { calculateCost, calculateMigrationDelta } from '../../lib/calculator'
+import { fmtCurrency, fmtTokens, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
 
 interface Props {
   state: SimState
-}
-
-function fmt(n: number): string {
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
 function buildSummaryText(state: SimState): string {
@@ -31,22 +28,20 @@ function buildSummaryText(state: SimState): string {
   })
 
   const cacheText = state.cacheHitRate > 0
-    ? `, ${Math.round(state.cacheHitRate * 100)}% cache hit`
+    ? `, ${fmtPercent(state.cacheHitRate)} cache hit`
     : ''
   const batchText = state.batchEnabled ? ', batch enabled' : ''
-  const inputM = (state.monthlyInputTokens / 1_000_000).toFixed(0)
-  const outputM = (state.monthlyOutputTokens / 1_000_000).toFixed(0)
 
   const direction = migration.monthlyDelta < 0 ? 'save' : 'cost an additional'
-  const absDelta = fmt(Math.abs(migration.monthlyDelta))
-  const absAnnual = fmt(Math.abs(migration.annualDelta))
-  const percent = Math.abs(migration.savingPercent).toFixed(1)
+  const absDelta = fmtCurrency(Math.abs(migration.monthlyDelta))
+  const absAnnual = fmtCurrency(Math.abs(migration.annualDelta))
+  const percent = fmtPercent(Math.abs(migration.savingPercent) / 100, 1)
 
-  return `On ${state.currentModel.name} with ${inputM}M input / ${outputM}M output tokens/month` +
-    `${cacheText}${batchText}, estimated monthly cost is ${fmt(current.monthlyCost)} ` +
-    `(${fmt(current.annualCost)}/yr). ` +
+  return `On ${state.currentModel.name} with ${fmtTokens(state.monthlyInputTokens)} input / ${fmtTokens(state.monthlyOutputTokens)} output tokens/month` +
+    `${cacheText}${batchText}, estimated monthly cost is ${fmtCurrency(current.monthlyCost)} ` +
+    `(${fmtCurrency(current.annualCost)}/yr). ` +
     `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +
-    `(${percent}%), annualized ${absAnnual}.`
+    `(${percent}), annualized ${absAnnual}.`
 }
 
 export function SummaryCard({ state }: Props) {
@@ -97,6 +92,7 @@ export function SummaryCard({ state }: Props) {
 
       <div
         ref={cardRef}
+        lang="en"
         className="bg-gray-50 border border-gray-200 rounded-lg p-5"
       >
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>

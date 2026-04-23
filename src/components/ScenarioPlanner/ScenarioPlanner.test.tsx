@@ -40,4 +40,31 @@ describe('ScenarioPlanner', () => {
     const values = costs.map(el => parseFloat(el.textContent!.replace(/[$,]/g, '')))
     expect(values[2]).toBeGreaterThan(values[1]) // worst > base
   })
+
+  it('never renders NaN in any cell', () => {
+    render(<ScenarioPlanner state={BASE_STATE} />)
+    expect(screen.queryByText(/NaN/i)).not.toBeInTheDocument()
+  })
+
+  it('handles cacheHitRate=0 without NaN', () => {
+    const zeroCache = { ...BASE_STATE, cacheHitRate: 0 }
+    render(<ScenarioPlanner state={zeroCache} />)
+    expect(screen.queryByText(/NaN/i)).not.toBeInTheDocument()
+    // 3 cache cells rendered
+    const cacheCells = screen.getAllByText(/^\d+%$/)
+    expect(cacheCells.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('handles cacheHitRate=1 without NaN', () => {
+    const fullCache = { ...BASE_STATE, cacheHitRate: 1 }
+    render(<ScenarioPlanner state={fullCache} />)
+    expect(screen.queryByText(/NaN/i)).not.toBeInTheDocument()
+  })
+
+  it('Base column reflects current user cacheHitRate', () => {
+    const specific = { ...BASE_STATE, cacheHitRate: 0.37 }
+    render(<ScenarioPlanner state={specific} />)
+    // Base column Cache Hit Rate cell: fmtPercent(0.37) = "37%"
+    expect(screen.getByText('37%')).toBeInTheDocument()
+  })
 })

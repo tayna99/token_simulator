@@ -1,4 +1,5 @@
 import { MODELS, type Model } from '../data/models'
+import { fmtPricePerMillion } from '../lib/format'
 
 interface Props {
   label: string
@@ -22,7 +23,7 @@ export function ModelSelector({ label, value, onChange }: Props) {
       >
         {MODELS.map(m => (
           <option key={m.id} value={m.id}>
-            {m.name} — ${m.inputPrice}/${m.outputPrice} per 1M
+            {m.name} — {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
           </option>
         ))}
       </select>

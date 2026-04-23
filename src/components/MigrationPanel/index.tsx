@@ -1,25 +1,29 @@
 // src/components/MigrationPanel/index.tsx
 import { calculateMigrationDelta } from '../../lib/calculator'
+import { fmtCurrency, fmtDelta, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
 
 interface Props {
   state: SimState
 }
 
-function fmt(n: number, decimals = 0): string {
-  return n.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
-}
-
-function fmtDelta(n: number): string {
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : '+'
-  return `${sign}$${fmt(abs)}`
-}
-
 export function MigrationPanel({ state }: Props) {
+  const isSameModel = state.currentModel.id === state.candidateModel.id
+
+  if (isSameModel) {
+    return (
+      <section className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-4">Migration Comparison</h2>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
+          <p className="text-sm text-amber-800">
+            Current and candidate are the <strong>same model</strong> ({state.currentModel.name}).
+            Select a different candidate to see migration delta.
+          </p>
+        </div>
+      </section>
+    )
+  }
+
   const result = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
@@ -42,18 +46,18 @@ export function MigrationPanel({ state }: Props) {
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Current</p>
           <p className="font-semibold text-gray-900">{state.currentModel.name}</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">
-            ${fmt(result.currentCost.monthlyCost)}/mo
+            {fmtCurrency(result.currentCost.monthlyCost)}/mo
           </p>
-          <p className="text-sm text-gray-500">${fmt(result.currentCost.annualCost)}/yr</p>
+          <p className="text-sm text-gray-500">{fmtCurrency(result.currentCost.annualCost)}/yr</p>
         </div>
 
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Candidate</p>
           <p className="font-semibold text-gray-900">{state.candidateModel.name}</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">
-            ${fmt(result.candidateCost.monthlyCost)}/mo
+            {fmtCurrency(result.candidateCost.monthlyCost)}/mo
           </p>
-          <p className="text-sm text-gray-500">${fmt(result.candidateCost.annualCost)}/yr</p>
+          <p className="text-sm text-gray-500">{fmtCurrency(result.candidateCost.annualCost)}/yr</p>
         </div>
       </div>
 
@@ -77,7 +81,7 @@ export function MigrationPanel({ state }: Props) {
           <div>
             <p className="text-xs text-gray-500 mb-1">Change</p>
             <p className={`text-xl font-bold ${deltaColor}`}>
-              {result.savingPercent.toFixed(1)}%
+              {fmtPercent(result.savingPercent / 100, 1)}
             </p>
           </div>
         </div>
