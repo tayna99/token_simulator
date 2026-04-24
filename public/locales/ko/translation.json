@@ -80,7 +80,8 @@
     "output": "출력",
     "perRequest": "요청당 비용",
     "monthlyTotal": "월간 총액",
-    "batchSavings": "배치 절감"
+    "batchSavings": "배치 절감",
+    "batchBaseline": "배치 미적용 기준 대비"
   },
   "budgetCap": {
     "title": "예산 용량",

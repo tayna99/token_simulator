@@ -63,7 +63,7 @@ export function CostBreakdown({ state }: Props) {
         {br.batchSavingsUsd > 0 && (
           <div className="flex items-center gap-3 text-sm text-green-700">
             <span className="w-36">{t('costBreakdown.batchSavings')}</span>
-            <span className="flex-1 text-xs italic">vs no-batch baseline</span>
+            <span className="flex-1 text-xs italic">{t('costBreakdown.batchBaseline')}</span>
             <span className="w-20 text-right font-medium">
               -{fmtCurrency(br.batchSavingsUsd)}
             </span>

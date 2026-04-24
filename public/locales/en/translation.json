@@ -80,7 +80,8 @@
     "output": "Output",
     "perRequest": "Per request",
     "monthlyTotal": "Monthly total",
-    "batchSavings": "Batch savings"
+    "batchSavings": "Batch savings",
+    "batchBaseline": "vs no-batch baseline"
   },
   "budgetCap": {
     "title": "Budget Capacity",
