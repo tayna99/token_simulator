@@ -22,6 +22,7 @@ import { ExportAnalysis } from './components/ExportAnalysis'
 import { BudgetAlert } from './components/BudgetAlert'
 import { ROICalculator } from './components/ROICalculator'
 import { TokenEfficiency } from './components/TokenEfficiency'
+import { ModelMatrix } from './components/ModelMatrix'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -242,6 +243,8 @@ function App() {
         <ROICalculator state={state} />
 
         <TokenEfficiency state={state} />
+
+        <ModelMatrix state={state} />
 
         <SummaryCard state={state} />
       </main>
