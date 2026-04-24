@@ -40,7 +40,10 @@ export function CostBreakdown({ state }: Props) {
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-      <h2 className="text-base font-semibold text-gray-800 mb-3">{heading}</h2>
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-base font-semibold text-gray-800">{heading}</h2>
+        <span className="text-xs text-gray-500" title="Breakdown of costs by token type and impact of optimization options">(?)</span>
+      </div>
 
       <div className="space-y-2 mb-4">
         {rows.map(([label, usd]) => (
