@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
 import { fmtTokens } from '../lib/format'
+import { Tooltip } from './ui/Tooltip'
 
 interface Props {
   periodInputTokens: number
@@ -62,14 +63,14 @@ export function TokenInputs({
         <p className="text-sm font-medium text-gray-700 mb-2">{t('tokenInputs.preset')}</p>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onPresetSelect(p)}
-              title={presetTooltip(p)}
-              className="px-3 py-1 text-xs border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 transition-colors"
-            >
-              {p.name}
-            </button>
+            <Tooltip key={p.id} content={presetTooltip(p)}>
+              <button
+                onClick={() => onPresetSelect(p)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 transition-colors"
+              >
+                {p.name}
+              </button>
+            </Tooltip>
           ))}
         </div>
       </div>
