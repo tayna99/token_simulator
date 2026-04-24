@@ -101,7 +101,10 @@ function App() {
       <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
         <section className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-6">
           <div className="flex items-end justify-between">
-            <h2 className="text-base font-semibold text-gray-800">{t('config.title')}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-800">{t('config.title')}</h2>
+              <span className="text-xs text-gray-500" title="Set up your workload: models, token volumes, optimization options, and time period for analysis">(?)</span>
+            </div>
             <div className="text-right">
               <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
               <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
