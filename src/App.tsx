@@ -16,6 +16,7 @@ import { CostProjection } from './components/CostProjection'
 import { ModelRecommendation } from './components/ModelRecommendation'
 import { ProviderComparison } from './components/ProviderComparison'
 import { WorkloadImpact } from './components/WorkloadImpact'
+import { CostSensitivity } from './components/CostSensitivity'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -198,6 +199,8 @@ function App() {
         <ProviderComparison state={state} />
 
         <WorkloadImpact state={state} />
+
+        <CostSensitivity state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
