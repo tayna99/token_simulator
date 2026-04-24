@@ -98,7 +98,8 @@
     "copied": "Copied to clipboard!",
     "exportFailed": "Export failed. Try again or use a screenshot.",
     "pricesUpdated": "Prices updated",
-    "sourceLabel": "Source: official API docs"
+    "sourceLabel": "Prices based on official API docs",
+    "dateFormat": "long"
   },
   "errors": {
     "sameModel": "Current and candidate are the same model"

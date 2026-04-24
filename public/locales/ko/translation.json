@@ -98,7 +98,8 @@
     "copied": "클립보드에 복사됨!",
     "exportFailed": "내보내기 실패. 다시 시도하거나 스크린샷 사용.",
     "pricesUpdated": "가격 업데이트",
-    "sourceLabel": "출처: 공식 API 문서"
+    "sourceLabel": "공식 API 문서 기준 가격",
+    "dateFormat": "long"
   },
   "errors": {
     "sameModel": "현재 모델과 후보 모델이 동일합니다"

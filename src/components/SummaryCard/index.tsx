@@ -85,13 +85,13 @@ export function SummaryCard({ state }: Props) {
             onClick={handleCopy}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
           >
-            Copy
+            {t('summary.copy')}
           </button>
           <button
             onClick={handleExportPng}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            Export PNG
+            {t('summary.exportPng')}
           </button>
         </div>
       </div>
@@ -103,7 +103,7 @@ export function SummaryCard({ state }: Props) {
       >
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">
-          Prices based on official API docs · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          {t('summary.sourceLabel')} · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </p>
       </div>
       <Toast toast={toast} onClose={hideToast} />
