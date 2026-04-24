@@ -8,6 +8,7 @@ import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
 import { CostBreakdown } from './components/CostBreakdown'
 import { BudgetCap } from './components/BudgetCap'
+import { OptimizationTips } from './components/OptimizationTips'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -182,6 +183,8 @@ function App() {
               return null
           }
         })}
+
+        <OptimizationTips state={state} />
 
         <SummaryCard state={state} />
       </main>

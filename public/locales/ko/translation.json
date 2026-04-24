@@ -125,6 +125,14 @@
     "sourceLabel": "공식 API 문서 기준 가격",
     "dateFormat": "long"
   },
+  "optimization": {
+    "title": "최적화 팁",
+    "cacheTitle": "캐시 히트율 개선",
+    "cacheDescription": "캐시 히트율을 {{rate}}로 높이면 월 {{saving}} 절감 (~{{percent}}%)",
+    "batchTitle": "배치 처리 활성화",
+    "batchDescription": "배치 API 활성화로 월 {{saving}} 절감 (~{{percent}}%)",
+    "optimized": "훌륭한 최적화 설정입니다!"
+  },
   "errors": {
     "sameModel": "현재 모델과 후보 모델이 동일합니다"
   }

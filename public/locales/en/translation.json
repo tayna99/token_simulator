@@ -125,6 +125,14 @@
     "sourceLabel": "Prices based on official API docs",
     "dateFormat": "long"
   },
+  "optimization": {
+    "title": "Optimization Tips",
+    "cacheTitle": "Improve cache hit rate",
+    "cacheDescription": "Increasing cache hit rate from {{rate}} would save {{saving}} per month (~{{percent}}%)",
+    "batchTitle": "Enable batch processing",
+    "batchDescription": "Batch API could save {{saving}} per month (~{{percent}}%)",
+    "optimized": "Great optimization settings!"
+  },
   "errors": {
     "sameModel": "Current and candidate are the same model"
   }
