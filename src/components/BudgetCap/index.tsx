@@ -73,9 +73,16 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
                 onBudgetChange(v === '' ? null : Math.max(0, Number(v)))
               }}
               aria-label="Monthly budget in USD"
-              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm"
+              className={`flex-1 border rounded px-3 py-2 text-sm ${
+                state.monthlyBudgetUsd === null
+                  ? 'border-gray-300'
+                  : 'border-blue-400 bg-blue-50'
+              }`}
             />
           </div>
+          {state.monthlyBudgetUsd !== null && state.monthlyBudgetUsd === 0 && (
+            <p className="text-xs text-amber-600 mt-1">💡 Set a budget to see capacity calculations</p>
+          )}
         </div>
         {cap && state.monthlyBudgetUsd !== null && (
           <>
