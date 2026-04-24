@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { calculateCost } from '../../lib/calculator'
 import { fmtCurrency, fmtPercent } from '../../lib/format'
+import { Tooltip } from '../ui/Tooltip'
 import type { SimState } from '../../App'
 
 interface Scenario {
@@ -25,6 +26,7 @@ interface Props {
 export function ScenarioPlanner({ state }: Props) {
   const { t } = useTranslation()
   const [scenarios, setScenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS)
+  const [showExplanation, setShowExplanation] = useState(false)
 
   const results = scenarios.map(s => {
     // Use scenario values, but "Base" can inherit from state
@@ -62,7 +64,42 @@ export function ScenarioPlanner({ state }: Props) {
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-base font-semibold text-gray-800 mb-4">{t('scenario.title')}</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold text-gray-800">{t('scenario.title')}</h2>
+        <Tooltip content="Best/Base/Worst scenarios help model different business outcomes. Click ? for details.">
+          <button
+            onClick={() => setShowExplanation(!showExplanation)}
+            className="text-sm font-semibold text-gray-500 hover:text-gray-700 w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="Scenario explanation"
+          >
+            ?
+          </button>
+        </Tooltip>
+      </div>
+      {showExplanation && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="font-semibold text-blue-900 mb-2">Best Case</p>
+              <p className="text-xs mb-1">{t('scenario.tooltips.bestTraffic')}</p>
+              <p className="text-xs">{t('scenario.tooltips.bestCache')}</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Base Case</p>
+              <p className="text-xs mb-1">{t('scenario.tooltips.baseTraffic')}</p>
+              <p className="text-xs">{t('scenario.tooltips.baseCache')}</p>
+            </div>
+            <div>
+              <p className="font-semibold text-red-900 mb-2">Worst Case</p>
+              <p className="text-xs mb-1">{t('scenario.tooltips.worstTraffic')}</p>
+              <p className="text-xs">{t('scenario.tooltips.worstCache')}</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-blue-200">
+            💡 You can customize traffic, cache, and batch settings for each scenario by clicking the table cells above.
+          </p>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
