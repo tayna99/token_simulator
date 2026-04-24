@@ -80,6 +80,7 @@ export function TokenInputs({
               <Tooltip key={p.id} content={presetTooltip(p)}>
                 <button
                   onClick={() => onPresetSelect(p)}
+                  aria-pressed={isActive}
                   className={`px-3 py-1 text-xs border rounded-full transition-colors ${
                     isActive
                       ? 'bg-blue-100 border-blue-400 text-blue-700 font-medium'
