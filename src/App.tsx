@@ -14,6 +14,7 @@ import { BatchAnalyzer } from './components/BatchAnalyzer'
 import { CacheAnalyzer } from './components/CacheAnalyzer'
 import { CostProjection } from './components/CostProjection'
 import { ModelRecommendation } from './components/ModelRecommendation'
+import { ProviderComparison } from './components/ProviderComparison'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -192,6 +193,8 @@ function App() {
             }
           }}
         />
+
+        <ProviderComparison state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
