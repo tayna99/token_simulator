@@ -27,6 +27,7 @@ export interface SimState {
   monthlyRequests: number
   activeUsers: number
   monthlyBudgetUsd: number | null
+  selectedPresetId: string | null
 }
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
     monthlyRequests: 100_000,
     activeUsers: 1000,
     monthlyBudgetUsd: null,
+    selectedPresetId: null,
   })
 
   const handlePreset = (p: WorkloadPreset) => {
@@ -53,6 +55,7 @@ function App() {
       batchEnabled: p.defaultBatchEnabled,
       monthlyRequests: p.monthlyRequestsDefault || s.monthlyRequests,
       activeUsers: p.activeUsersDefault || s.activeUsers,
+      selectedPresetId: p.id,
     }))
   }
 
@@ -94,6 +97,7 @@ function App() {
             periodOutputTokens={state.periodOutputTokens}
             cacheHitRate={state.cacheHitRate}
             batchEnabled={state.batchEnabled}
+            selectedPresetId={state.selectedPresetId}
             onInputChange={v => setState(s => ({ ...s, periodInputTokens: v }))}
             onOutputChange={v => setState(s => ({ ...s, periodOutputTokens: v }))}
             onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}

@@ -15,6 +15,7 @@ const STATE = {
   monthlyRequests: 100_000,
   activeUsers: 1000,
   monthlyBudgetUsd: 500,
+  selectedPresetId: null,
 }
 
 describe('BudgetCap', () => {

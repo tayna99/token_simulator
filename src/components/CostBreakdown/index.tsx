@@ -69,7 +69,7 @@ export function CostBreakdown({ state }: Props) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-sm">
         <div className="rounded bg-gray-50 p-3">
           <div className="text-xs text-gray-500">Per request</div>
           <div className="font-semibold">

@@ -17,6 +17,7 @@ const BASE_STATE = {
   monthlyRequests: 100_000,
   activeUsers: 1000,
   monthlyBudgetUsd: null,
+  selectedPresetId: null,
 }
 
 describe('ScenarioPlanner', () => {

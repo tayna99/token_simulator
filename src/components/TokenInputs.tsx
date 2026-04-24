@@ -7,6 +7,7 @@ interface Props {
   periodOutputTokens: number
   cacheHitRate: number
   batchEnabled: boolean
+  selectedPresetId: string | null
   onInputChange: (v: number) => void
   onOutputChange: (v: number) => void
   onCacheChange: (v: number) => void
@@ -45,7 +46,7 @@ function presetTooltip(p: WorkloadPreset): string {
 
 export function TokenInputs({
   periodInputTokens, periodOutputTokens,
-  cacheHitRate, batchEnabled,
+  cacheHitRate, batchEnabled, selectedPresetId,
   onInputChange, onOutputChange, onCacheChange, onBatchChange, onPresetSelect,
 }: Props) {
   // Internal display strings keep the thousand-separator formatting while
@@ -62,19 +63,27 @@ export function TokenInputs({
       <div>
         <p className="text-sm font-medium text-gray-700 mb-2">Workload Preset</p>
         <div className="flex flex-wrap gap-2">
-          {PRESETS.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onPresetSelect(p)}
-              title={presetTooltip(p)}
-              className="px-3 py-1 text-xs border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 transition-colors"
-            >
-              {p.name}
-            </button>
-          ))}
+          {PRESETS.map(p => {
+            const isSelected = selectedPresetId === p.id
+            return (
+              <button
+                key={p.id}
+                onClick={() => onPresetSelect(p)}
+                title={presetTooltip(p)}
+                aria-pressed={isSelected}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border border-blue-700'
+                    : 'border border-gray-300 text-gray-900 hover:bg-blue-50 hover:border-blue-400'
+                }`}
+              >
+                {p.name}
+              </button>
+            )
+          })}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
             Monthly Input Tokens
