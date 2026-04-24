@@ -148,11 +148,13 @@ function App() {
               label={t('config.currentModel')}
               value={state.currentModel.id}
               onChange={m => setState(s => ({ ...s, currentModel: m }))}
+              disabledModelId={state.candidateModel.id}
             />
             <ModelSelector
               label={t('config.candidateModel')}
               value={state.candidateModel.id}
               onChange={m => setState(s => ({ ...s, candidateModel: m }))}
+              disabledModelId={state.currentModel.id}
             />
           </div>
           <TokenInputs

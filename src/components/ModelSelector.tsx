@@ -5,6 +5,7 @@ interface Props {
   label: string
   value: string
   onChange: (model: Model) => void
+  disabledModelId?: string
 }
 
 const PROVIDER_NAMES: Record<Provider, string> = {
@@ -20,7 +21,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   moonshot: 'Moonshot',
 }
 
-export function ModelSelector({ label, value, onChange }: Props) {
+export function ModelSelector({ label, value, onChange, disabledModelId }: Props) {
   const id = `model-select-${label.replace(/\s+/g, '-').toLowerCase()}`
 
   // Group models by provider
@@ -51,7 +52,7 @@ export function ModelSelector({ label, value, onChange }: Props) {
         {Array.from(providers.entries()).map(([provider, models]) => (
           <optgroup key={provider} label={PROVIDER_NAMES[provider]}>
             {models.map(m => (
-              <option key={m.id} value={m.id}>
+              <option key={m.id} value={m.id} disabled={m.id === disabledModelId}>
                 {m.name} — {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
               </option>
             ))}

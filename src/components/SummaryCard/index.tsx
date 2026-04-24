@@ -161,7 +161,19 @@ export function SummaryCard({ state }: Props) {
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:underline"
               >
-                {state.currentModel.name} pricing
+                {state.currentModel.name}
+              </a>
+            </>
+          )}
+          {state.candidateModel.priceSourceUrl && (
+            <>
+              {' '}· <a
+                href={state.candidateModel.priceSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                {state.candidateModel.name}
               </a>
             </>
           )}
