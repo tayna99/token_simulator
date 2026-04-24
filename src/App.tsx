@@ -11,6 +11,7 @@ import { BudgetCap } from './components/BudgetCap'
 import { OptimizationTips } from './components/OptimizationTips'
 import { ModelFeatures } from './components/ModelFeatures'
 import { BatchAnalyzer } from './components/BatchAnalyzer'
+import { CacheAnalyzer } from './components/CacheAnalyzer'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -175,6 +176,8 @@ function App() {
         <ModelFeatures state={state} />
 
         <BatchAnalyzer state={state} />
+
+        <CacheAnalyzer state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
