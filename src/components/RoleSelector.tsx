@@ -24,6 +24,7 @@ export function RoleSelector({ value, onChange }: Props) {
           key={r}
           role="tab"
           aria-pressed={value === r}
+          aria-label={`${label} view`}
           onClick={() => onChange(r)}
           className={`px-3 py-1.5 text-sm transition-colors ${
             value === r

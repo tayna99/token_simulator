@@ -20,6 +20,7 @@ export function PeriodSelector({ value, onChange }: Props) {
     <select
       value={value}
       onChange={e => onChange(e.target.value as Period)}
+      aria-label="Time period for calculations"
       className="px-3 py-1.5 text-sm border border-gray-300 rounded bg-white hover:border-gray-400 focus:outline-none focus:border-blue-500"
     >
       {PERIOD_KEYS.map(([p, key]) => (
