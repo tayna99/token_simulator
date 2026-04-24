@@ -1,4 +1,5 @@
 // src/components/MigrationPanel/index.tsx
+import { useTranslation } from 'react-i18next'
 import { calculateMigrationDelta } from '../../lib/calculator'
 import { fmtCurrency, fmtDelta, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
@@ -8,16 +9,16 @@ interface Props {
 }
 
 export function MigrationPanel({ state }: Props) {
+  const { t } = useTranslation()
   const isSameModel = state.currentModel.id === state.candidateModel.id
 
   if (isSameModel) {
     return (
       <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Migration Comparison</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-4">{t('migration.title')}</h2>
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
           <p className="text-sm text-amber-800">
-            Current and candidate are the <strong>same model</strong> ({state.currentModel.name}).
-            Select a different candidate to see migration delta.
+            {t('errors.sameModel')} ({state.currentModel.name}).
           </p>
         </div>
       </section>
@@ -50,11 +51,11 @@ export function MigrationPanel({ state }: Props) {
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-base font-semibold text-gray-800 mb-4">Migration Comparison</h2>
+      <h2 className="text-base font-semibold text-gray-800 mb-4">{t('migration.title')}</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Current</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('config.currentModel')}</p>
           <p className="font-semibold text-gray-900">{state.currentModel.name}</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">
             {fmtCurrency(result.currentCost.monthlyCost)}/mo
@@ -63,7 +64,7 @@ export function MigrationPanel({ state }: Props) {
         </div>
 
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Candidate</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('config.candidateModel')}</p>
           <p className="font-semibold text-gray-900">{state.candidateModel.name}</p>
           <p className="text-2xl font-bold text-gray-900 mt-2">
             {fmtCurrency(result.candidateCost.monthlyCost)}/mo
@@ -75,7 +76,7 @@ export function MigrationPanel({ state }: Props) {
       <div className={`rounded-lg border p-4 ${deltaBg}`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mb-4">
           <div>
-            <p className="text-xs text-gray-500 mb-1">Monthly Delta</p>
+            <p className="text-xs text-gray-500 mb-1">{t('migration.monthly')}</p>
             <p
               data-testid="monthly-delta"
               className={`text-xl font-bold ${deltaColor}`}
@@ -84,13 +85,13 @@ export function MigrationPanel({ state }: Props) {
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Annual Delta</p>
+            <p className="text-xs text-gray-500 mb-1">{t('migration.annual')}</p>
             <p className={`text-xl font-bold ${deltaColor}`}>
               <span translate="no">{arrow} {fmtDelta(result.annualDelta)}</span>
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Change</p>
+            <p className="text-xs text-gray-500 mb-1">{t('migration.percent')}</p>
             <p className={`text-xl font-bold ${deltaColor}`}>
               {fmtPercent(result.savingPercent / 100, 1)}
             </p>
@@ -98,9 +99,9 @@ export function MigrationPanel({ state }: Props) {
         </div>
 
         {breakEvenMonths !== null && (
-          <div className="pt-4 border-t border-current border-opacity-20 text-center">
+          <div data-testid="break-even" className="pt-4 border-t border-current border-opacity-20 text-center">
             <p className="text-sm font-medium">
-              Migration pays back in <span className="font-bold">{breakEvenMonths} month{breakEvenMonths !== 1 ? 's' : ''}</span>
+              {t('migration.breakEven')} <span className="font-bold">{breakEvenMonths} {t('migration.months')}</span>
             </p>
           </div>
         )}

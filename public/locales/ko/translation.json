@@ -1,0 +1,103 @@
+{
+  "header": {
+    "title": "LLM 비용 플래너",
+    "subtitle": "마이그레이션 ROI · 시나리오 계획 · 이해관계자 보고서",
+    "role": "역할"
+  },
+  "roles": {
+    "developer": "개발자",
+    "pm": "PM",
+    "ceo": "CEO"
+  },
+  "config": {
+    "title": "설정",
+    "period": "기간",
+    "currentModel": "현재 모델",
+    "candidateModel": "후보 모델"
+  },
+  "periods": {
+    "day": "일",
+    "week": "주",
+    "month": "월",
+    "quarter": "분기",
+    "year": "년"
+  },
+  "tokenInputs": {
+    "preset": "워크로드 프리셋",
+    "inputTokens": "월간 입력 토큰",
+    "outputTokens": "월간 출력 토큰",
+    "cacheHitRate": "캐시 히트율",
+    "batchMode": "배치 모드",
+    "extremeWarning": "⚠️ 비정상적으로 큼 — 단위 확인",
+    "cacheSlider": "캐시 히트율 슬라이더",
+    "cachePercent": "캐시 히트율 퍼센트"
+  },
+  "presets": {
+    "basicChat": "기본 채팅",
+    "codeGeneration": "코드 생성",
+    "dataAnalysis": "데이터 분석",
+    "imageProcessing": "이미지 처리",
+    "highFrequency": "고빈도",
+    "longContext": "긴 컨텍스트",
+    "reasoning": "추론"
+  },
+  "migration": {
+    "title": "마이그레이션 비교",
+    "monthly": "월간 변화",
+    "annual": "연간 절감",
+    "percent": "% 절감",
+    "breakEven": "손익분기점",
+    "months": "개월"
+  },
+  "scenario": {
+    "title": "시나리오 계획",
+    "best": "최고",
+    "base": "기본",
+    "worst": "최악",
+    "traffic": "트래픽",
+    "cache": "캐시 히트율",
+    "batch": "배치 모드",
+    "reset": "기본값으로 재설정",
+    "tooltips": {
+      "bestTraffic": "낙관적 성장 (예: 요청 +30%, 효율 개선)",
+      "baseTraffic": "현재 사용량 기준",
+      "worstTraffic": "비관적 시나리오 (예: 요청 -30%, 레이턴시 증가)",
+      "bestCache": "캐싱 전략 개선 시 최고 히트율",
+      "baseCache": "현재 캐시 히트율 기준",
+      "worstCache": "캐시 비효율 시",
+      "bestBatch": "호환 워크로드에 배치 API 활성화",
+      "baseBatch": "현재 배치 모드 상태",
+      "worstBatch": "배치 미지원 또는 비활성화"
+    }
+  },
+  "costBreakdown": {
+    "title": "비용 분석",
+    "uncachedInput": "캐시 미적용 입력",
+    "cachedInput": "캐시 적용 입력",
+    "output": "출력",
+    "perRequest": "요청당 비용",
+    "monthlyTotal": "월간 총액",
+    "batchSavings": "배치 절감"
+  },
+  "budgetCap": {
+    "title": "예산 용량",
+    "label": "월간 예산 (USD)",
+    "maxRequests": "최대 요청",
+    "maxUsers": "최대 활성 사용자",
+    "costPerRequest": "요청당 비용"
+  },
+  "summary": {
+    "title": "보고서 요약",
+    "executive": "임원급",
+    "technical": "기술",
+    "copy": "복사",
+    "exportPng": "PNG 내보내기",
+    "copied": "클립보드에 복사됨!",
+    "exportFailed": "내보내기 실패. 다시 시도하거나 스크린샷 사용.",
+    "pricesUpdated": "가격 업데이트",
+    "sourceLabel": "출처: 공식 API 문서"
+  },
+  "errors": {
+    "sameModel": "현재 모델과 후보 모델이 동일합니다"
+  }
+}

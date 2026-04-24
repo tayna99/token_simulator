@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
 import { fmtTokens } from '../lib/format'
 
@@ -48,9 +49,7 @@ export function TokenInputs({
   cacheHitRate, batchEnabled,
   onInputChange, onOutputChange, onCacheChange, onBatchChange, onPresetSelect,
 }: Props) {
-  // Internal display strings keep the thousand-separator formatting while
-  // the parent state stays numeric. Sync back whenever parent changes
-  // (e.g., preset selection flips the numeric tokens from outside).
+  const { t } = useTranslation()
   const [inputStr, setInputStr] = useState(() => formatInput(periodInputTokens))
   const [outputStr, setOutputStr] = useState(() => formatInput(periodOutputTokens))
 
@@ -60,7 +59,7 @@ export function TokenInputs({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Workload Preset</p>
+        <p className="text-sm font-medium text-gray-700 mb-2">{t('tokenInputs.preset')}</p>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map(p => (
             <button
@@ -77,7 +76,7 @@ export function TokenInputs({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
-            Monthly Input Tokens
+            {t('tokenInputs.inputTokens')}
           </label>
           <input
             id="monthly-input-tokens"
@@ -92,12 +91,12 @@ export function TokenInputs({
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
           {isExtremeValue(periodInputTokens) && (
-            <p className="text-xs text-amber-600 mt-1">⚠️ Unusually large — verify unit</p>
+            <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
           )}
         </div>
         <div>
           <label htmlFor="monthly-output-tokens" className="text-sm font-medium text-gray-700">
-            Monthly Output Tokens
+            {t('tokenInputs.outputTokens')}
           </label>
           <input
             id="monthly-output-tokens"
@@ -112,14 +111,14 @@ export function TokenInputs({
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
           {isExtremeValue(periodOutputTokens) && (
-            <p className="text-xs text-amber-600 mt-1">⚠️ Unusually large — verify unit</p>
+            <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
           )}
         </div>
       </div>
       <div className="flex gap-6 items-end">
         <div className="flex-1">
           <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
-            Cache Hit Rate
+            {t('tokenInputs.cacheHitRate')}
           </label>
           <div className="flex gap-2 mt-1 items-center">
             <input
@@ -156,7 +155,7 @@ export function TokenInputs({
             onChange={e => onBatchChange(e.target.checked)}
             className="w-4 h-4"
           />
-          Batch Mode
+          {t('tokenInputs.batchMode')}
         </label>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { Role } from '../App'
 
 interface Props {
@@ -6,10 +7,11 @@ interface Props {
 }
 
 export function RoleSelector({ value, onChange }: Props) {
+  const { t } = useTranslation()
   const roles: Array<[Role, string]> = [
-    ['developer', 'Developer'],
-    ['pm', 'PM'],
-    ['ceo', 'CEO'],
+    ['developer', t('roles.developer')],
+    ['pm', t('roles.pm')],
+    ['ceo', t('roles.ceo')],
   ]
 
   return (

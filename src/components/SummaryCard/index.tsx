@@ -1,5 +1,6 @@
 // src/components/SummaryCard/index.tsx
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toPng } from 'html-to-image'
 import { calculateCost, calculateMigrationDelta } from '../../lib/calculator'
 import { fmtCurrency, fmtTokens, fmtPercent } from '../../lib/format'
@@ -47,6 +48,7 @@ function buildSummaryText(state: SimState): string {
 }
 
 export function SummaryCard({ state }: Props) {
+  const { t } = useTranslation()
   const cardRef = useRef<HTMLDivElement>(null)
   const { toast, show: showToast, hide: hideToast } = useToast()
   const summaryText = buildSummaryText(state)
@@ -54,7 +56,7 @@ export function SummaryCard({ state }: Props) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(summaryText)
-      showToast('Copied to clipboard!')
+      showToast(t('summary.copied'))
     } catch {
       window.prompt('Copy the text below:', summaryText)
     }

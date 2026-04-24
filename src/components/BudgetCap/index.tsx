@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { calculateCapacity } from '../../lib/budget'
 import { fmtCurrency } from '../../lib/format'
 import { ROLE_PACK } from '../../lib/roleLanguage'
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function BudgetCap({ state, onBudgetChange }: Props) {
+  const { t } = useTranslation()
   const heading = ROLE_PACK[state.role].budgetHeading
 
   const avgIn =
@@ -53,7 +55,7 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
             htmlFor="monthly-budget"
             className="text-sm text-gray-600 block mb-1"
           >
-            Monthly budget (USD)
+            {t('budgetCap.label')}
           </label>
           <input
             id="monthly-budget"

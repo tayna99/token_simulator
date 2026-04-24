@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MODELS, getModelById, type Model } from './data/models'
 import { type WorkloadPreset } from './data/presets'
 import { ModelSelector } from './components/ModelSelector'
@@ -30,6 +31,7 @@ export interface SimState {
 }
 
 function App() {
+  const { t, i18n } = useTranslation()
   const [state, setState] = useState<SimState>({
     role: 'pm',
     currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
@@ -58,33 +60,61 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">LLM Cost Planner</h1>
-          <p className="text-sm text-gray-500">Migration ROI · Scenario Planning · Stakeholder Export</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500 mb-2">Role</p>
-          <RoleSelector value={state.role} onChange={r => setState(s => ({ ...s, role: r }))} />
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">{t('header.title')}</h1>
+            <p className="text-sm text-gray-500">{t('header.subtitle')}</p>
+          </div>
+          <div className="flex gap-4 items-center">
+            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+              <button
+                onClick={() => i18n.changeLanguage('en')}
+                aria-pressed={i18n.language === 'en'}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  i18n.language === 'en'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => i18n.changeLanguage('ko')}
+                aria-pressed={i18n.language === 'ko'}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-gray-300 ${
+                  i18n.language === 'ko'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                KO
+              </button>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 mb-2">{t('header.role')}</p>
+              <RoleSelector value={state.role} onChange={r => setState(s => ({ ...s, role: r }))} />
+            </div>
+          </div>
         </div>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
         <section className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-6">
           <div className="flex items-end justify-between">
-            <h2 className="text-base font-semibold text-gray-800">Configuration</h2>
+            <h2 className="text-base font-semibold text-gray-800">{t('config.title')}</h2>
             <div className="text-right">
-              <p className="text-xs text-gray-500 mb-1">Time Period</p>
+              <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
               <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <ModelSelector
-              label="Current Model"
+              label={t('config.currentModel')}
               value={state.currentModel.id}
               onChange={m => setState(s => ({ ...s, currentModel: m }))}
             />
             <ModelSelector
-              label="Candidate Model"
+              label={t('config.candidateModel')}
               value={state.candidateModel.id}
               onChange={m => setState(s => ({ ...s, candidateModel: m }))}
             />

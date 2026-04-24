@@ -107,7 +107,7 @@ describe('MigrationPanel', () => {
 
   it('shows break-even line when candidate saves money', () => {
     render(<MigrationPanel state={BASE_STATE} />)
-    expect(screen.getByText(/migration pays back/i)).toBeInTheDocument()
+    expect(screen.getByTestId('break-even')).toBeInTheDocument()
   })
 
   it('shows ▼ icon for savings', () => {

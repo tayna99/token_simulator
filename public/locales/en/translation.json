@@ -1,0 +1,103 @@
+{
+  "header": {
+    "title": "LLM Cost Planner",
+    "subtitle": "Migration ROI · Scenario Planning · Stakeholder Export",
+    "role": "Role"
+  },
+  "roles": {
+    "developer": "Developer",
+    "pm": "PM",
+    "ceo": "CEO"
+  },
+  "config": {
+    "title": "Configuration",
+    "period": "Time Period",
+    "currentModel": "Current Model",
+    "candidateModel": "Candidate Model"
+  },
+  "periods": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "quarter": "Quarter",
+    "year": "Year"
+  },
+  "tokenInputs": {
+    "preset": "Workload Preset",
+    "inputTokens": "Monthly Input Tokens",
+    "outputTokens": "Monthly Output Tokens",
+    "cacheHitRate": "Cache Hit Rate",
+    "batchMode": "Batch Mode",
+    "extremeWarning": "⚠️ Unusually large — verify unit",
+    "cacheSlider": "Cache hit rate slider",
+    "cachePercent": "Cache hit rate percent"
+  },
+  "presets": {
+    "basicChat": "Basic Chat",
+    "codeGeneration": "Code Generation",
+    "dataAnalysis": "Data Analysis",
+    "imageProcessing": "Image Processing",
+    "highFrequency": "High Frequency",
+    "longContext": "Long Context",
+    "reasoning": "Reasoning"
+  },
+  "migration": {
+    "title": "Migration Comparison",
+    "monthly": "Monthly delta",
+    "annual": "Annual savings",
+    "percent": "% savings",
+    "breakEven": "Break-even",
+    "months": "months"
+  },
+  "scenario": {
+    "title": "Scenario Planner",
+    "best": "Best",
+    "base": "Base",
+    "worst": "Worst",
+    "traffic": "Traffic",
+    "cache": "Cache Hit Rate",
+    "batch": "Batch Mode",
+    "reset": "Reset to defaults",
+    "tooltips": {
+      "bestTraffic": "Optimistic growth (e.g., +30% requests with better efficiency)",
+      "baseTraffic": "Current usage baseline",
+      "worstTraffic": "Pessimistic scenario (e.g., -30% requests or higher latency)",
+      "bestCache": "Best-case cache hit rate with improved caching strategy",
+      "baseCache": "Current cache hit rate baseline",
+      "worstCache": "Worst-case when cache is ineffective",
+      "bestBatch": "Batch API enabled for compatible workloads",
+      "baseBatch": "Current batch mode state",
+      "worstBatch": "Batch not available or disabled"
+    }
+  },
+  "costBreakdown": {
+    "title": "Cost Analysis",
+    "uncachedInput": "Uncached input",
+    "cachedInput": "Cached input",
+    "output": "Output",
+    "perRequest": "Per request",
+    "monthlyTotal": "Monthly total",
+    "batchSavings": "Batch savings"
+  },
+  "budgetCap": {
+    "title": "Budget Capacity",
+    "label": "Monthly Budget (USD)",
+    "maxRequests": "Max requests",
+    "maxUsers": "Max active users",
+    "costPerRequest": "Cost per request"
+  },
+  "summary": {
+    "title": "Board-Ready Summary",
+    "executive": "Executive",
+    "technical": "Technical",
+    "copy": "Copy",
+    "exportPng": "Export PNG",
+    "copied": "Copied to clipboard!",
+    "exportFailed": "Export failed. Try again or use a screenshot.",
+    "pricesUpdated": "Prices updated",
+    "sourceLabel": "Source: official API docs"
+  },
+  "errors": {
+    "sameModel": "Current and candidate are the same model"
+  }
+}

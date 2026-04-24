@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { calculateBreakdown } from '../../lib/breakdown'
 import { topDriverHint } from '../../lib/insights'
 import { fmtCurrency } from '../../lib/format'
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function CostBreakdown({ state }: Props) {
+  const { t } = useTranslation()
   const br = calculateBreakdown({
     model: state.currentModel,
     monthlyInputTokens: state.periodInputTokens,
@@ -28,9 +30,9 @@ export function CostBreakdown({ state }: Props) {
   const heading = ROLE_PACK[state.role].breakdownHeading
 
   const rows: Array<[string, number]> = [
-    ['Uncached input', br.uncachedInputUsd],
-    ['Cached input', br.cachedInputUsd],
-    ['Output', br.outputUsd],
+    [t('costBreakdown.uncachedInput'), br.uncachedInputUsd],
+    [t('costBreakdown.cachedInput'), br.cachedInputUsd],
+    [t('costBreakdown.output'), br.outputUsd],
   ]
 
   const total = br.totalUsd
@@ -60,7 +62,7 @@ export function CostBreakdown({ state }: Props) {
         ))}
         {br.batchSavingsUsd > 0 && (
           <div className="flex items-center gap-3 text-sm text-green-700">
-            <span className="w-36">Batch savings</span>
+            <span className="w-36">{t('costBreakdown.batchSavings')}</span>
             <span className="flex-1 text-xs italic">vs no-batch baseline</span>
             <span className="w-20 text-right font-medium">
               -{fmtCurrency(br.batchSavingsUsd)}
@@ -71,13 +73,13 @@ export function CostBreakdown({ state }: Props) {
 
       <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
         <div className="rounded bg-gray-50 p-3">
-          <div className="text-xs text-gray-500">Per request</div>
+          <div className="text-xs text-gray-500">{t('costBreakdown.perRequest')}</div>
           <div className="font-semibold">
             {fmtCurrency(perRequest, perRequest < 0.01 ? 4 : 2)}
           </div>
         </div>
         <div className="rounded bg-gray-50 p-3">
-          <div className="text-xs text-gray-500">Monthly total</div>
+          <div className="text-xs text-gray-500">{t('costBreakdown.monthlyTotal')}</div>
           <div className="font-semibold">{fmtCurrency(total)}</div>
         </div>
       </div>

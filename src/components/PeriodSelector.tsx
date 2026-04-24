@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { Period } from '../App'
 
 interface Props {
@@ -5,24 +6,25 @@ interface Props {
   onChange: (p: Period) => void
 }
 
-const PERIODS: Array<[Period, string]> = [
-  ['day', 'Daily'],
-  ['week', 'Weekly'],
-  ['month', 'Monthly'],
-  ['quarter', 'Quarterly'],
-  ['year', 'Yearly'],
+const PERIOD_KEYS: Array<[Period, string]> = [
+  ['day', 'periods.day'],
+  ['week', 'periods.week'],
+  ['month', 'periods.month'],
+  ['quarter', 'periods.quarter'],
+  ['year', 'periods.year'],
 ]
 
 export function PeriodSelector({ value, onChange }: Props) {
+  const { t } = useTranslation()
   return (
     <select
       value={value}
       onChange={e => onChange(e.target.value as Period)}
       className="px-3 py-1.5 text-sm border border-gray-300 rounded bg-white hover:border-gray-400 focus:outline-none focus:border-blue-500"
     >
-      {PERIODS.map(([p, label]) => (
+      {PERIOD_KEYS.map(([p, key]) => (
         <option key={p} value={p}>
-          {label}
+          {t(key)}
         </option>
       ))}
     </select>
