@@ -100,6 +100,7 @@
     "copy": "복사",
     "exportPng": "PNG 내보내기",
     "copied": "클립보드에 복사됨!",
+    "exported": "PNG로 내보냈습니다!",
     "exportFailed": "내보내기 실패. 다시 시도하거나 스크린샷 사용.",
     "pricesUpdated": "가격 업데이트",
     "sourceLabel": "공식 API 문서 기준 가격",

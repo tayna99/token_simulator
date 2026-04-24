@@ -70,9 +70,10 @@ export function SummaryCard({ state }: Props) {
       link.download = 'llm-cost-summary.png'
       link.href = dataUrl
       link.click()
+      showToast(t('summary.exported'))
     } catch (err) {
       console.error('Export failed:', err)
-      alert('Export failed. Try again or use a screenshot.')
+      showToast(t('summary.exportFailed'))
     }
   }
 

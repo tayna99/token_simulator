@@ -100,6 +100,7 @@
     "copy": "Copy",
     "exportPng": "Export PNG",
     "copied": "Copied to clipboard!",
+    "exported": "Summary exported as PNG!",
     "exportFailed": "Export failed. Try again or use a screenshot.",
     "pricesUpdated": "Prices updated",
     "sourceLabel": "Prices based on official API docs",
