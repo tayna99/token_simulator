@@ -10,6 +10,7 @@ import { CostBreakdown } from './components/CostBreakdown'
 import { BudgetCap } from './components/BudgetCap'
 import { OptimizationTips } from './components/OptimizationTips'
 import { ModelFeatures } from './components/ModelFeatures'
+import { BatchAnalyzer } from './components/BatchAnalyzer'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -172,6 +173,8 @@ function App() {
         </section>
 
         <ModelFeatures state={state} />
+
+        <BatchAnalyzer state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
