@@ -15,6 +15,7 @@ interface Props {
 }
 
 const MAX_TOKENS = 10_000_000_000 // 10 billion cap
+const EXTREME_THRESHOLD = 1_000_000_000 // 1 billion warning threshold
 
 function sanitize(raw: string): number {
   // Keep digits only; reject negatives, decimals, letters.
@@ -23,6 +24,10 @@ function sanitize(raw: string): number {
   const n = Number(cleaned)
   if (!Number.isFinite(n)) return 0
   return Math.min(MAX_TOKENS, Math.max(0, n))
+}
+
+function isExtremeValue(n: number): boolean {
+  return n > EXTREME_THRESHOLD
 }
 
 function formatInput(n: number): string {
@@ -86,6 +91,9 @@ export function TokenInputs({
             }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
+          {isExtremeValue(periodInputTokens) && (
+            <p className="text-xs text-amber-600 mt-1">⚠️ Unusually large — verify unit</p>
+          )}
         </div>
         <div>
           <label htmlFor="monthly-output-tokens" className="text-sm font-medium text-gray-700">
@@ -103,20 +111,43 @@ export function TokenInputs({
             }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
+          {isExtremeValue(periodOutputTokens) && (
+            <p className="text-xs text-amber-600 mt-1">⚠️ Unusually large — verify unit</p>
+          )}
         </div>
       </div>
-      <div className="flex gap-6 items-center">
+      <div className="flex gap-6 items-end">
         <div className="flex-1">
           <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
-            Cache Hit Rate: {Math.round(cacheHitRate * 100)}%
+            Cache Hit Rate
           </label>
-          <input
-            id="cache-hit-rate"
-            type="range" min={0} max={100} step={1}
-            value={Math.round(cacheHitRate * 100)}
-            onChange={e => onCacheChange(Number(e.target.value) / 100)}
-            className="mt-1 w-full"
-          />
+          <div className="flex gap-2 mt-1 items-center">
+            <input
+              id="cache-hit-rate"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(cacheHitRate * 100)}
+              onChange={e => onCacheChange(Number(e.target.value) / 100)}
+              className="flex-1"
+              aria-label="Cache hit rate slider"
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(cacheHitRate * 100)}
+              onChange={e => {
+                const v = Math.min(100, Math.max(0, Number(e.target.value)))
+                onCacheChange(v / 100)
+              }}
+              className="w-14 border border-gray-300 rounded px-2 py-1 text-sm"
+              aria-label="Cache hit rate percent"
+            />
+            <span className="text-sm text-gray-500">%</span>
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
           <input
