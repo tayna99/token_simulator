@@ -46,7 +46,9 @@
     "batchMode": "Batch Mode",
     "extremeWarning": "⚠️ Unusually large — verify unit",
     "cacheSlider": "Cache hit rate slider",
-    "cachePercent": "Cache hit rate percent"
+    "cachePercent": "Cache hit rate percent",
+    "saveAsPreset": "Save as Preset",
+    "presetName": "Preset name:"
   },
   "presets": {
     "basicChat": "Basic Chat",

@@ -46,7 +46,9 @@
     "batchMode": "배치 모드",
     "extremeWarning": "⚠️ 비정상적으로 큼 — 단위 확인",
     "cacheSlider": "캐시 히트율 슬라이더",
-    "cachePercent": "캐시 히트율 퍼센트"
+    "cachePercent": "캐시 히트율 퍼센트",
+    "saveAsPreset": "프리셋으로 저장",
+    "presetName": "프리셋 이름:"
   },
   "presets": {
     "basicChat": "기본 채팅",

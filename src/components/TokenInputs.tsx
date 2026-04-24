@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
 import { fmtTokens } from '../lib/format'
+import { saveCustomPreset, createPresetFromCurrent } from '../lib/customPresets'
 import { Tooltip } from './ui/Tooltip'
 
 interface Props {
@@ -65,14 +66,39 @@ export function TokenInputs({
   const [outputStr, setOutputStr] = useState(() => formatInput(periodOutputTokens))
   const [showInputInvalidMsg, setShowInputInvalidMsg] = useState(false)
   const [showOutputInvalidMsg, setShowOutputInvalidMsg] = useState(false)
+  const [savePresetName, setSavePresetName] = useState('')
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
 
   useEffect(() => { setInputStr(formatInput(periodInputTokens)) }, [periodInputTokens])
   useEffect(() => { setOutputStr(formatInput(periodOutputTokens)) }, [periodOutputTokens])
 
+  const handleSavePreset = () => {
+    if (!savePresetName.trim()) return
+    const preset = createPresetFromCurrent(
+      savePresetName.trim(),
+      periodInputTokens,
+      periodOutputTokens,
+      cacheHitRate,
+      batchEnabled
+    )
+    saveCustomPreset(preset)
+    setSavePresetName('')
+    setShowSaveDialog(false)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">{t('tokenInputs.preset')}</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-700">{t('tokenInputs.preset')}</p>
+          <button
+            onClick={() => setShowSaveDialog(true)}
+            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-600"
+            title="Save current configuration as a preset"
+          >
+            + {t('tokenInputs.saveAsPreset')}
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map(p => {
             const isActive = presetMatches(p, periodInputTokens, periodOutputTokens, cacheHitRate, batchEnabled)
@@ -94,6 +120,42 @@ export function TokenInputs({
             )
           })}
         </div>
+
+        {showSaveDialog && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-gray-600 mb-2">{t('tokenInputs.presetName')}</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={savePresetName}
+                onChange={e => setSavePresetName(e.target.value)}
+                placeholder="e.g., My Analysis"
+                className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSavePreset()
+                  if (e.key === 'Escape') setShowSaveDialog(false)
+                }}
+                autoFocus
+              />
+              <button
+                onClick={handleSavePreset}
+                disabled={!savePresetName.trim()}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setShowSaveDialog(false)
+                  setSavePresetName('')
+                }}
+                className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         <div>
