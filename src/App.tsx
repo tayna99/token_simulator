@@ -17,6 +17,7 @@ import { ModelRecommendation } from './components/ModelRecommendation'
 import { ProviderComparison } from './components/ProviderComparison'
 import { WorkloadImpact } from './components/WorkloadImpact'
 import { CostSensitivity } from './components/CostSensitivity'
+import { ModelSearch } from './components/ModelSearch'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -201,6 +202,16 @@ function App() {
         <WorkloadImpact state={state} />
 
         <CostSensitivity state={state} />
+
+        <ModelSearch
+          state={state}
+          onSelectCandidate={modelId => {
+            const model = getModelById(modelId)
+            if (model) {
+              setState(s => ({ ...s, candidateModel: model }))
+            }
+          }}
+        />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
