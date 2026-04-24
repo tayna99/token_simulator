@@ -162,7 +162,7 @@ export function TokenInputs({
               value={Math.round(cacheHitRate * 100)}
               onChange={e => onCacheChange(Number(e.target.value) / 100)}
               className="flex-1"
-              aria-label="Cache hit rate slider"
+              aria-label="Cache hit rate slider (0-100%)"
             />
             <input
               type="number"
@@ -175,7 +175,7 @@ export function TokenInputs({
                 onCacheChange(v / 100)
               }}
               className="w-14 border border-gray-300 rounded px-2 py-1 text-sm"
-              aria-label="Cache hit rate percent"
+              aria-label="Cache hit rate percentage input"
             />
             <span className="text-sm text-gray-500">%</span>
           </div>
@@ -185,6 +185,7 @@ export function TokenInputs({
             type="checkbox"
             checked={batchEnabled}
             onChange={e => onBatchChange(e.target.checked)}
+            aria-label="Enable batch mode API for cost savings"
             className="w-4 h-4"
           />
           {t('tokenInputs.batchMode')}
