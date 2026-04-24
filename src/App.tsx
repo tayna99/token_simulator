@@ -12,6 +12,7 @@ import { OptimizationTips } from './components/OptimizationTips'
 import { ModelFeatures } from './components/ModelFeatures'
 import { BatchAnalyzer } from './components/BatchAnalyzer'
 import { CacheAnalyzer } from './components/CacheAnalyzer'
+import { CostProjection } from './components/CostProjection'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -178,6 +179,8 @@ function App() {
         <BatchAnalyzer state={state} />
 
         <CacheAnalyzer state={state} />
+
+        <CostProjection state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
