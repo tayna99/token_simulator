@@ -21,7 +21,7 @@ const BASE_STATE = {
 describe('SummaryCard', () => {
   it('renders model name in summary text', () => {
     render(<SummaryCard state={BASE_STATE} />)
-    expect(screen.getByText(/Claude Sonnet 4.6/)).toBeInTheDocument()
+    expect(screen.getByText(/On Claude Sonnet 4.6 with/)).toBeInTheDocument()
   })
 
   it('renders monthly cost in summary text', () => {

@@ -104,6 +104,18 @@ export function SummaryCard({ state }: Props) {
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">
           {t('summary.sourceLabel')} · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          {state.currentModel.priceSourceUrl && (
+            <>
+              {' '}· <a
+                href={state.currentModel.priceSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                {state.currentModel.name} pricing
+              </a>
+            </>
+          )}
         </p>
       </div>
       <Toast toast={toast} onClose={hideToast} />
