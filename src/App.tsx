@@ -58,6 +58,9 @@ function App() {
     }))
   }
 
+  const isSameModel = state.currentModel.id === state.candidateModel.id
+  const configSummary = `Analyzing ${state.currentModel.name} → ${state.candidateModel.name} with ${Math.round(state.cacheHitRate * 100)}% cache hit rate${state.batchEnabled ? ' + batch mode' : ''}`
+
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -100,7 +103,7 @@ function App() {
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
         <section className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-6">
-          <div className="flex items-end justify-between">
+          <div className="flex items-end justify-between mb-2">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-gray-800">{t('config.title')}</h2>
               <span className="text-xs text-gray-500" title="Set up your workload: models, token volumes, optimization options, and time period for analysis">(?)</span>
@@ -109,6 +112,9 @@ function App() {
               <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
               <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
             </div>
+          </div>
+          <div className="text-xs bg-gray-50 border border-gray-200 rounded p-3 text-gray-600">
+            {!isSameModel ? configSummary : `⚠️ ${t('errors.sameModel')}`}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <ModelSelector
