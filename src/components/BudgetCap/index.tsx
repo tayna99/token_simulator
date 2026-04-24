@@ -73,14 +73,14 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
         {cap && state.monthlyBudgetUsd !== null && (
           <>
             <div className="flex-1 rounded bg-gray-50 p-3">
-              <div className="text-xs text-gray-500">Cost per request</div>
+              <div className="text-xs text-gray-500">{t('budgetCap.costPerRequest')}</div>
               <div className="font-semibold">
                 {fmtCurrency(cap.costPerRequestUsd, 4)}
               </div>
             </div>
             <div className="flex-1 rounded bg-gray-50 p-3">
               <div className="text-xs text-gray-500">
-                Max requests / month
+                {t('budgetCap.maxRequests')} / {t('periods.month')}
               </div>
               <div className="font-semibold">
                 {cap.maxMonthlyRequests === Infinity
@@ -90,7 +90,7 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
             </div>
             {maxUsers > 0 && (
               <div className="flex-1 rounded bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Max active users</div>
+                <div className="text-xs text-gray-500">{t('budgetCap.maxUsers')}</div>
                 <div className="font-semibold">
                   {fmtTokens(maxUsers)}
                 </div>
