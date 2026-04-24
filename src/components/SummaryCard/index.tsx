@@ -78,22 +78,22 @@ export function SummaryCard({ state }: Props) {
   }
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
+    <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-gray-800">{t('summary.title')}</h2>
+          <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('summary.title')}</h2>
           <span className="text-xs text-gray-500" title="AI-generated summary with verified pricing sources for stakeholder presentation">(?)</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleCopy}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="px-2.5 py-1.5 text-xs md:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
           >
             {t('summary.copy')}
           </button>
           <button
             onClick={handleExportPng}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-2.5 py-1.5 text-xs md:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
             {t('summary.exportPng')}
           </button>
@@ -103,7 +103,7 @@ export function SummaryCard({ state }: Props) {
       <div
         ref={cardRef}
         lang="en"
-        className="bg-gray-50 border border-gray-200 rounded-lg p-5"
+        className="bg-gray-50 border border-gray-200 rounded-lg p-3 md:p-5"
       >
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">

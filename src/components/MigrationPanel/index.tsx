@@ -14,8 +14,8 @@ export function MigrationPanel({ state }: Props) {
 
   if (isSameModel) {
     return (
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">{t('migration.title')}</h2>
+      <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+        <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">{t('migration.title')}</h2>
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
           <p className="text-sm text-amber-800">
             {t('errors.sameModel')} ({state.currentModel.name}).
@@ -50,60 +50,60 @@ export function MigrationPanel({ state }: Props) {
   const arrow = isSaving ? '▼' : '▲'
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-6">
+    <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
       <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-base font-semibold text-gray-800">{t('migration.title')}</h2>
+        <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('migration.title')}</h2>
         <span className="text-xs text-gray-500" title="Compares costs between current model and candidate model with migration effort consideration">(?)</span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 mb-6">
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 md:p-4">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('config.currentModel')}</p>
-          <p className="font-semibold text-gray-900">{state.currentModel.name}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">
+          <p className="font-semibold text-sm md:text-base text-gray-900">{state.currentModel.name}</p>
+          <p className="text-lg md:text-2xl font-bold text-gray-900 mt-2">
             {fmtCurrency(result.currentCost.monthlyCost)}/mo
           </p>
-          <p className="text-sm text-gray-500">{fmtCurrency(result.currentCost.annualCost)}/yr</p>
+          <p className="text-xs md:text-sm text-gray-500">{fmtCurrency(result.currentCost.annualCost)}/yr</p>
         </div>
 
-        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 md:p-4">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('config.candidateModel')}</p>
-          <p className="font-semibold text-gray-900">{state.candidateModel.name}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">
+          <p className="font-semibold text-sm md:text-base text-gray-900">{state.candidateModel.name}</p>
+          <p className="text-lg md:text-2xl font-bold text-gray-900 mt-2">
             {fmtCurrency(result.candidateCost.monthlyCost)}/mo
           </p>
-          <p className="text-sm text-gray-500">{fmtCurrency(result.candidateCost.annualCost)}/yr</p>
+          <p className="text-xs md:text-sm text-gray-500">{fmtCurrency(result.candidateCost.annualCost)}/yr</p>
         </div>
       </div>
 
-      <div className={`rounded-lg border p-4 ${deltaBg}`}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mb-4">
+      <div className={`rounded-lg border p-3 md:p-4 ${deltaBg}`}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 text-center mb-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">{t('migration.monthly')}</p>
             <p
               data-testid="monthly-delta"
-              className={`text-xl font-bold ${deltaColor}`}
+              className={`text-lg md:text-xl font-bold ${deltaColor}`}
             >
               <span translate="no">{arrow} {fmtDelta(result.monthlyDelta)}</span>
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">{t('migration.annual')}</p>
-            <p className={`text-xl font-bold ${deltaColor}`}>
+            <p className={`text-lg md:text-xl font-bold ${deltaColor}`}>
               <span translate="no">{arrow} {fmtDelta(result.annualDelta)}</span>
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">{t('migration.percent')}</p>
-            <p className={`text-xl font-bold ${deltaColor}`}>
+            <p className={`text-lg md:text-xl font-bold ${deltaColor}`}>
               {fmtPercent(result.savingPercent / 100, 1)}
             </p>
           </div>
         </div>
 
         {breakEvenMonths !== null && (
-          <div data-testid="break-even" className="pt-4 border-t border-current border-opacity-20 text-center">
-            <p className="text-sm font-medium">
+          <div data-testid="break-even" className="pt-3 md:pt-4 border-t border-current border-opacity-20 text-center">
+            <p className="text-xs md:text-sm font-medium">
               {t('migration.breakEven')} <span className="font-bold">{breakEvenMonths} {t('migration.months')}</span>
             </p>
           </div>

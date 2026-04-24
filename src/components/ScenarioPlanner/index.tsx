@@ -63,9 +63,9 @@ export function ScenarioPlanner({ state }: Props) {
   }
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-gray-800">{t('scenario.title')}</h2>
+    <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('scenario.title')}</h2>
         <Tooltip content="Best/Base/Worst scenarios help model different business outcomes. Click ? for details.">
           <button
             onClick={() => setShowExplanation(!showExplanation)}
@@ -77,8 +77,8 @@ export function ScenarioPlanner({ state }: Props) {
         </Tooltip>
       </div>
       {showExplanation && (
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
-          <div className="grid grid-cols-3 gap-4">
+        <div className="mb-4 p-3 md:p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
             <div>
               <p className="font-semibold text-blue-900 mb-2">Best Case</p>
               <p className="text-xs mb-1">{t('scenario.tooltips.bestTraffic')}</p>
@@ -147,7 +147,7 @@ export function ScenarioPlanner({ state }: Props) {
                       max={100}
                       value={s.cacheHitRate * 100}
                       onChange={e => handleScenarioChange(s.label, 'cacheHitRate', parseFloat(e.target.value) / 100)}
-                      className="w-24"
+                      className="w-16 md:w-24"
                       aria-label={`${s.label} cache hit rate`}
                     />
                   )}

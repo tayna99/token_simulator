@@ -47,7 +47,7 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-base font-semibold text-gray-800">
+        <h2 className="text-sm md:text-base font-semibold text-gray-800">
           {heading}
         </h2>
         <span className="text-xs text-gray-500" title="Calculate maximum requests or users your budget can support">(?)</span>

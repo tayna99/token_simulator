@@ -95,7 +95,7 @@ export function TokenInputs({
           })}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
@@ -159,7 +159,7 @@ export function TokenInputs({
           )}
         </div>
       </div>
-      <div className="flex gap-6 items-end">
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6 md:items-end">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
@@ -176,7 +176,7 @@ export function TokenInputs({
               step={1}
               value={Math.round(cacheHitRate * 100)}
               onChange={e => onCacheChange(Number(e.target.value) / 100)}
-              className="flex-1"
+              className="flex-1 min-w-0"
               aria-label="Cache hit rate slider (0-100%)"
             />
             <input
@@ -195,7 +195,7 @@ export function TokenInputs({
             <span className="text-sm text-gray-500">%</span>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
           <input
             type="checkbox"
             checked={batchEnabled}

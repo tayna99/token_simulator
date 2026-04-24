@@ -63,13 +63,13 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-start justify-between mb-4">
+      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-0 mb-4">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">{t('header.title')}</h1>
-            <p className="text-sm text-gray-500">{t('header.subtitle')}</p>
+            <h1 className="text-lg md:text-xl font-semibold text-gray-900">{t('header.title')}</h1>
+            <p className="text-xs md:text-sm text-gray-500">{t('header.subtitle')}</p>
           </div>
-          <div className="flex gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-4 md:gap-4 items-start sm:items-center">
             <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
               <button
                 onClick={() => i18n.changeLanguage('en')}
@@ -101,14 +101,14 @@ function App() {
           </div>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
-        <section className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-6">
-          <div className="flex items-end justify-between mb-2">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-8 flex flex-col gap-4 md:gap-8">
+        <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 flex flex-col gap-4 md:gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-800">{t('config.title')}</h2>
+              <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('config.title')}</h2>
               <span className="text-xs text-gray-500" title="Set up your workload: models, token volumes, optimization options, and time period for analysis">(?)</span>
             </div>
-            <div className="text-right">
+            <div>
               <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
               <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
             </div>
@@ -116,7 +116,7 @@ function App() {
           <div className="text-xs bg-gray-50 border border-gray-200 rounded p-3 text-gray-600">
             {!isSameModel ? configSummary : `⚠️ ${t('errors.sameModel')}`}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <ModelSelector
               label={t('config.currentModel')}
               value={state.currentModel.id}
