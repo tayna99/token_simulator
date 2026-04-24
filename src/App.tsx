@@ -19,6 +19,7 @@ import { WorkloadImpact } from './components/WorkloadImpact'
 import { CostSensitivity } from './components/CostSensitivity'
 import { ModelSearch } from './components/ModelSearch'
 import { ExportAnalysis } from './components/ExportAnalysis'
+import { BudgetAlert } from './components/BudgetAlert'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -233,6 +234,8 @@ function App() {
         <ExportAnalysis state={state} />
 
         <OptimizationTips state={state} />
+
+        <BudgetAlert state={state} />
 
         <SummaryCard state={state} />
       </main>
