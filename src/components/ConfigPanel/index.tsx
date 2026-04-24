@@ -103,12 +103,27 @@ export function ConfigPanel({ state, onLoad }: Props) {
             <div className="space-y-3 mb-4">
               <p className="text-xs text-gray-600">{t('config.description')}</p>
 
-              <button
-                onClick={handleExport}
-                className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                {t('config.exportJson')}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    const json = exportConfigAsJson(state)
+                    navigator.clipboard.writeText(json).then(() => {
+                      showToast(t('config.copiedToClipboard'))
+                      setShowPanel(false)
+                    })
+                  }}
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  title="Copy configuration JSON to clipboard"
+                >
+                  {t('config.copyJson')}
+                </button>
+                <button
+                  onClick={handleExport}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  {t('config.exportJson')}
+                </button>
+              </div>
 
               <div className="relative">
                 <input
