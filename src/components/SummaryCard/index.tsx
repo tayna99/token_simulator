@@ -139,7 +139,10 @@ export function SummaryCard({ state }: Props) {
       >
         <p className="text-gray-800 leading-relaxed text-sm">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">
-          Prices based on official API docs · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          {state.currentModel.priceUpdatedAt || state.candidateModel.priceUpdatedAt
+            ? `Prices updated ${state.currentModel.priceUpdatedAt || 'N/A'} · Source: official API docs`
+            : `Prices based on official API docs · ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+          }
         </p>
       </div>
       <Toast toast={toast} onClose={hideToast} />

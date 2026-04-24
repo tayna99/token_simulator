@@ -12,6 +12,7 @@ export interface Model {
   releaseDate: string  // YYYY-MM format
   cacheDiscount: number  // 0-1 (e.g. 0.9 = 90% off cached tokens)
   batchDiscount: number  // 0-1 (e.g. 0.5 = 50% off with batch API)
+  priceUpdatedAt?: string  // YYYY-MM date of last price verification
 }
 
 export const MODELS: Model[] = [
