@@ -23,6 +23,7 @@ import { BudgetAlert } from './components/BudgetAlert'
 import { ROICalculator } from './components/ROICalculator'
 import { TokenEfficiency } from './components/TokenEfficiency'
 import { ModelMatrix } from './components/ModelMatrix'
+import { PerformanceTiers } from './components/PerformanceTiers'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -209,6 +210,16 @@ function App() {
         <CostSensitivity state={state} />
 
         <ModelSearch
+          state={state}
+          onSelectCandidate={modelId => {
+            const model = getModelById(modelId)
+            if (model) {
+              setState(s => ({ ...s, candidateModel: model }))
+            }
+          }}
+        />
+
+        <PerformanceTiers
           state={state}
           onSelectCandidate={modelId => {
             const model = getModelById(modelId)
