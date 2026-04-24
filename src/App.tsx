@@ -11,6 +11,7 @@ import { BudgetCap } from './components/BudgetCap'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
+import { ConfigPanel } from './components/ConfigPanel'
 import { ROLE_PACK } from './lib/roleLanguage'
 
 export type Role = 'developer' | 'pm' | 'ceo'
@@ -69,7 +70,8 @@ function App() {
             <h1 className="text-lg md:text-xl font-semibold text-gray-900">{t('header.title')}</h1>
             <p className="text-xs md:text-sm text-gray-500">{t('header.subtitle')}</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-4 md:gap-4 items-start sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 items-start sm:items-end">
+            <ConfigPanel state={state} onLoad={p => setState(s => ({ ...s, ...p }))} />
             <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
               <button
                 onClick={() => i18n.changeLanguage('en')}
@@ -94,7 +96,7 @@ function App() {
                 KO
               </button>
             </div>
-            <div className="text-right">
+            <div>
               <p className="text-xs text-gray-500 mb-2">{t('header.role')}</p>
               <RoleSelector value={state.role} onChange={r => setState(s => ({ ...s, role: r }))} />
             </div>

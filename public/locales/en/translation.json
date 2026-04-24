@@ -13,7 +13,19 @@
     "title": "Configuration",
     "period": "Time Period",
     "currentModel": "Current Model",
-    "candidateModel": "Candidate Model"
+    "candidateModel": "Candidate Model",
+    "saveLoad": "Save/Load",
+    "manage": "Save & Load Configuration",
+    "description": "Export your current analysis setup as JSON to save, share, or document your exact configuration.",
+    "exportJson": "Export as JSON",
+    "importJson": "Import from JSON",
+    "exported": "Configuration exported!",
+    "imported": "Configuration loaded!",
+    "importFailed": "Failed to import configuration. Check file format.",
+    "invalidFormat": "Invalid configuration format.",
+    "modelNotFound": "One or more models not found in current dataset.",
+    "tipTitle": "Tip:",
+    "tipContent": "Save configurations for different scenarios, share with team members, or use to reproduce specific analyses."
   },
   "periods": {
     "day": "Day",

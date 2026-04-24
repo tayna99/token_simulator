@@ -13,7 +13,19 @@
     "title": "설정",
     "period": "기간",
     "currentModel": "현재 모델",
-    "candidateModel": "후보 모델"
+    "candidateModel": "후보 모델",
+    "saveLoad": "저장/로드",
+    "manage": "설정 저장 & 불러오기",
+    "description": "현재 분석 설정을 JSON으로 내보내 저장, 공유 또는 문서화할 수 있습니다.",
+    "exportJson": "JSON으로 내보내기",
+    "importJson": "JSON에서 불러오기",
+    "exported": "설정이 내보내졌습니다!",
+    "imported": "설정이 불러워졌습니다!",
+    "importFailed": "설정 불러오기 실패. 파일 형식을 확인하세요.",
+    "invalidFormat": "유효하지 않은 설정 형식입니다.",
+    "modelNotFound": "현재 데이터셋에서 하나 이상의 모델을 찾을 수 없습니다.",
+    "tipTitle": "팁:",
+    "tipContent": "다양한 시나리오에 대한 설정을 저장하고, 팀원과 공유하거나, 특정 분석을 재현하는 데 사용하세요."
   },
   "periods": {
     "day": "일",
