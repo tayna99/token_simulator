@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { calculateCapacity } from '../../lib/budget'
-import { fmtCurrency } from '../../lib/format'
+import { fmtCurrency, fmtTokens } from '../../lib/format'
 import { ROLE_PACK } from '../../lib/roleLanguage'
 import type { SimState } from '../../App'
 
@@ -85,14 +85,14 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
               <div className="font-semibold">
                 {cap.maxMonthlyRequests === Infinity
                   ? '∞'
-                  : cap.maxMonthlyRequests.toLocaleString('en-US')}
+                  : fmtTokens(cap.maxMonthlyRequests)}
               </div>
             </div>
             {maxUsers > 0 && (
               <div className="flex-1 rounded bg-gray-50 p-3">
                 <div className="text-xs text-gray-500">Max active users</div>
                 <div className="font-semibold">
-                  {maxUsers.toLocaleString('en-US')}
+                  {fmtTokens(maxUsers)}
                 </div>
               </div>
             )}
