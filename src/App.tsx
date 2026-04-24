@@ -20,6 +20,7 @@ import { CostSensitivity } from './components/CostSensitivity'
 import { ModelSearch } from './components/ModelSearch'
 import { ExportAnalysis } from './components/ExportAnalysis'
 import { BudgetAlert } from './components/BudgetAlert'
+import { ROICalculator } from './components/ROICalculator'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -236,6 +237,8 @@ function App() {
         <OptimizationTips state={state} />
 
         <BudgetAlert state={state} />
+
+        <ROICalculator state={state} />
 
         <SummaryCard state={state} />
       </main>
