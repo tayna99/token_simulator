@@ -61,6 +61,9 @@
     "monthlyCost": "Monthly Cost",
     "annualized": "Annualized",
     "reset": "Reset to defaults",
+    "on": "On",
+    "off": "Off",
+    "editHint": "Click cells to edit",
     "tooltips": {
       "bestTraffic": "Optimistic growth (e.g., +30% requests with better efficiency)",
       "baseTraffic": "Current usage baseline",

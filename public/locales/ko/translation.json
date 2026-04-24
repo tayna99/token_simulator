@@ -61,6 +61,9 @@
     "monthlyCost": "월간 비용",
     "annualized": "연간",
     "reset": "기본값으로 재설정",
+    "on": "켜짐",
+    "off": "꺼짐",
+    "editHint": "셀을 클릭하여 편집",
     "tooltips": {
       "bestTraffic": "낙관적 성장 (예: 요청 +30%, 효율 개선)",
       "baseTraffic": "현재 사용량 기준",

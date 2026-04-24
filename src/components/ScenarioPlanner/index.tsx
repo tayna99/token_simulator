@@ -122,7 +122,7 @@ export function ScenarioPlanner({ state }: Props) {
               {scenarios.map(s => (
                 <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
                   {s.label === 'Base' ? (
-                    <span title="Base inherits from current config">{results.find(r => r.label === s.label)?.batchEnabled ? 'On' : 'Off'}</span>
+                    <span title="Base inherits from current config">{results.find(r => r.label === s.label)?.batchEnabled ? t('scenario.on') : t('scenario.off')}</span>
                   ) : (
                     <input
                       type="checkbox"
