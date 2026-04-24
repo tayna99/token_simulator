@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getModelById } from '../../data/models'
-import { exportConfigAsJson, validateConfigExport, type ConfigExport } from '../../lib/configManager'
+import { exportConfigAsJson, exportConfigAsUrl, validateConfigExport, type ConfigExport } from '../../lib/configManager'
 import { useToast } from '../../hooks/useToast'
 import { Toast } from '../ui/Toast'
 import type { SimState } from '../../App'
@@ -103,7 +103,7 @@ export function ConfigPanel({ state, onLoad }: Props) {
             <div className="space-y-3 mb-4">
               <p className="text-xs text-gray-600">{t('config.description')}</p>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => {
                     const json = exportConfigAsJson(state)
@@ -112,14 +112,27 @@ export function ConfigPanel({ state, onLoad }: Props) {
                       setShowPanel(false)
                     })
                   }}
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  className="px-3 py-2 text-xs md:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                   title="Copy configuration JSON to clipboard"
                 >
                   {t('config.copyJson')}
                 </button>
                 <button
+                  onClick={() => {
+                    const url = exportConfigAsUrl(state)
+                    navigator.clipboard.writeText(url).then(() => {
+                      showToast(t('config.copiedShareLink'))
+                      setShowPanel(false)
+                    })
+                  }}
+                  className="px-3 py-2 text-xs md:text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                  title="Copy shareable link to clipboard"
+                >
+                  {t('config.shareLink')}
+                </button>
+                <button
                   onClick={handleExport}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  className="px-3 py-2 text-xs md:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                 >
                   {t('config.exportJson')}
                 </button>

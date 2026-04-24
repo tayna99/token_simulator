@@ -45,8 +45,25 @@ export function exportConfigAsJson(state: SimState): string {
 
 export function exportConfigAsUrl(state: SimState): string {
   const config = exportConfig(state)
-  const encoded = btoa(JSON.stringify(config))
-  return `${window.location.origin}${window.location.pathname}?config=${encoded}`
+  const encoded = encodeURIComponent(JSON.stringify(config))
+  return `${window.location.href.split('?')[0]}?config=${encoded}`
+}
+
+export function loadConfigFromUrl(): ConfigExport | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const configParam = params.get('config')
+  if (!configParam) return null
+
+  try {
+    const decoded = JSON.parse(decodeURIComponent(configParam))
+    if (validateConfigExport(decoded)) {
+      return decoded
+    }
+  } catch {
+    console.warn('Failed to decode config from URL')
+  }
+  return null
 }
 
 export function validateConfigExport(data: unknown): data is ConfigExport {

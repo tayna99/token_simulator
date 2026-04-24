@@ -12,6 +12,7 @@ import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
 import { ConfigPanel } from './components/ConfigPanel'
+import { loadConfigFromUrl } from './lib/configManager'
 import { ROLE_PACK } from './lib/roleLanguage'
 
 export type Role = 'developer' | 'pm' | 'ceo'
@@ -33,18 +34,41 @@ export interface SimState {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const [state, setState] = useState<SimState>({
-    role: 'pm',
-    currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
-    candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
-    period: 'month',
-    periodInputTokens: 50_000_000,
-    periodOutputTokens: 5_000_000,
-    cacheHitRate: 0.5,
-    batchEnabled: false,
-    monthlyRequests: 100_000,
-    activeUsers: 1000,
-    monthlyBudgetUsd: null,
+  const [state, setState] = useState<SimState>(() => {
+    const urlConfig = loadConfigFromUrl()
+    if (urlConfig) {
+      const current = getModelById(urlConfig.state.currentModelId)
+      const candidate = getModelById(urlConfig.state.candidateModelId)
+      if (current && candidate) {
+        return {
+          role: urlConfig.state.role,
+          currentModel: current,
+          candidateModel: candidate,
+          period: urlConfig.state.period,
+          periodInputTokens: urlConfig.state.periodInputTokens,
+          periodOutputTokens: urlConfig.state.periodOutputTokens,
+          cacheHitRate: urlConfig.state.cacheHitRate,
+          batchEnabled: urlConfig.state.batchEnabled,
+          monthlyRequests: urlConfig.state.monthlyRequests,
+          activeUsers: urlConfig.state.activeUsers,
+          monthlyBudgetUsd: urlConfig.state.monthlyBudgetUsd,
+        }
+      }
+    }
+
+    return {
+      role: 'pm',
+      currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
+      candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
+      period: 'month',
+      periodInputTokens: 50_000_000,
+      periodOutputTokens: 5_000_000,
+      cacheHitRate: 0.5,
+      batchEnabled: false,
+      monthlyRequests: 100_000,
+      activeUsers: 1000,
+      monthlyBudgetUsd: null,
+    }
   })
 
   const handlePreset = (p: WorkloadPreset) => {
