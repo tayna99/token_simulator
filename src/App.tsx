@@ -13,6 +13,7 @@ import { ModelFeatures } from './components/ModelFeatures'
 import { BatchAnalyzer } from './components/BatchAnalyzer'
 import { CacheAnalyzer } from './components/CacheAnalyzer'
 import { CostProjection } from './components/CostProjection'
+import { ModelRecommendation } from './components/ModelRecommendation'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -181,6 +182,16 @@ function App() {
         <CacheAnalyzer state={state} />
 
         <CostProjection state={state} />
+
+        <ModelRecommendation
+          state={state}
+          onSelectModel={modelId => {
+            const model = getModelById(modelId)
+            if (model && model.id !== state.candidateModel.id) {
+              setState(s => ({ ...s, candidateModel: model }))
+            }
+          }}
+        />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
