@@ -54,9 +54,12 @@
     "best": "최고",
     "base": "기본",
     "worst": "최악",
+    "parameter": "파라미터",
     "traffic": "트래픽",
     "cache": "캐시 히트율",
     "batch": "배치 모드",
+    "monthlyCost": "월간 비용",
+    "annualized": "연간",
     "reset": "기본값으로 재설정",
     "tooltips": {
       "bestTraffic": "낙관적 성장 (예: 요청 +30%, 효율 개선)",

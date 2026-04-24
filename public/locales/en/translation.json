@@ -54,9 +54,12 @@
     "best": "Best",
     "base": "Base",
     "worst": "Worst",
+    "parameter": "Parameter",
     "traffic": "Traffic",
     "cache": "Cache Hit Rate",
     "batch": "Batch Mode",
+    "monthlyCost": "Monthly Cost",
+    "annualized": "Annualized",
     "reset": "Reset to defaults",
     "tooltips": {
       "bestTraffic": "Optimistic growth (e.g., +30% requests with better efficiency)",

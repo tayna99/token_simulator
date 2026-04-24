@@ -1,5 +1,6 @@
 // src/components/ScenarioPlanner/index.tsx
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { calculateCost } from '../../lib/calculator'
 import { fmtCurrency, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function ScenarioPlanner({ state }: Props) {
+  const { t } = useTranslation()
   const [scenarios, setScenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS)
 
   const results = scenarios.map(s => {
@@ -60,13 +62,13 @@ export function ScenarioPlanner({ state }: Props) {
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-base font-semibold text-gray-800 mb-4">Scenario Planner</h2>
+      <h2 className="text-base font-semibold text-gray-800 mb-4">{t('scenario.title')}</h2>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr>
-              <th className="text-left text-gray-500 font-medium py-2 pr-4">Parameter</th>
+              <th className="text-left text-gray-500 font-medium py-2 pr-4">{t('scenario.parameter')}</th>
               {scenarios.map(s => (
                 <th
                   key={s.label}
@@ -80,7 +82,7 @@ export function ScenarioPlanner({ state }: Props) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             <tr>
-              <td className="py-2 pr-4 text-gray-600">Traffic</td>
+              <td className="py-2 pr-4 text-gray-600">{t('scenario.traffic')}</td>
               {scenarios.map(s => (
                 <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
                   <input
@@ -96,7 +98,7 @@ export function ScenarioPlanner({ state }: Props) {
               ))}
             </tr>
             <tr>
-              <td className="py-2 pr-4 text-gray-600">Cache Hit Rate</td>
+              <td className="py-2 pr-4 text-gray-600">{t('scenario.cache')}</td>
               {scenarios.map(s => (
                 <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
                   {s.label === 'Base' ? (
@@ -116,7 +118,7 @@ export function ScenarioPlanner({ state }: Props) {
               ))}
             </tr>
             <tr>
-              <td className="py-2 pr-4 text-gray-600">Batch Mode</td>
+              <td className="py-2 pr-4 text-gray-600">{t('scenario.batch')}</td>
               {scenarios.map(s => (
                 <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
                   {s.label === 'Base' ? (
@@ -133,7 +135,7 @@ export function ScenarioPlanner({ state }: Props) {
               ))}
             </tr>
             <tr className="border-t-2 border-gray-300">
-              <td className="py-3 pr-4 font-semibold text-gray-800">Monthly Cost</td>
+              <td className="py-3 pr-4 font-semibold text-gray-800">{t('scenario.monthlyCost')}</td>
               {results.map(r => (
                 <td
                   key={r.label}
@@ -145,7 +147,7 @@ export function ScenarioPlanner({ state }: Props) {
               ))}
             </tr>
             <tr>
-              <td className="py-2 pr-4 text-gray-600">Annualized</td>
+              <td className="py-2 pr-4 text-gray-600">{t('scenario.annualized')}</td>
               {results.map(r => (
                 <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
                   {fmtCurrency(r.result.annualCost)}
@@ -161,7 +163,7 @@ export function ScenarioPlanner({ state }: Props) {
           onClick={resetScenarios}
           className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
         >
-          Reset to defaults
+          {t('scenario.reset')}
         </button>
       </div>
     </section>
