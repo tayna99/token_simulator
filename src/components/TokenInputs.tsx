@@ -45,6 +45,16 @@ function presetTooltip(p: WorkloadPreset): string {
   return `${inTokens} in / ${outTokens} out · cache ${cachePct}%${batchPart}`
 }
 
+function presetMatches(p: WorkloadPreset, input: number, output: number, cache: number, batch: boolean): boolean {
+  const cacheTolerance = 0.05 // Allow ±5% tolerance for cache
+  return (
+    p.monthlyInputTokens === input &&
+    p.monthlyOutputTokens === output &&
+    Math.abs(p.defaultCacheHitRate - cache) <= cacheTolerance &&
+    p.defaultBatchEnabled === batch
+  )
+}
+
 export function TokenInputs({
   periodInputTokens, periodOutputTokens,
   cacheHitRate, batchEnabled,
@@ -64,16 +74,24 @@ export function TokenInputs({
       <div>
         <p className="text-sm font-medium text-gray-700 mb-2">{t('tokenInputs.preset')}</p>
         <div className="flex flex-wrap gap-2">
-          {PRESETS.map(p => (
-            <Tooltip key={p.id} content={presetTooltip(p)}>
-              <button
-                onClick={() => onPresetSelect(p)}
-                className="px-3 py-1 text-xs border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 transition-colors"
-              >
-                {p.name}
-              </button>
-            </Tooltip>
-          ))}
+          {PRESETS.map(p => {
+            const isActive = presetMatches(p, periodInputTokens, periodOutputTokens, cacheHitRate, batchEnabled)
+            return (
+              <Tooltip key={p.id} content={presetTooltip(p)}>
+                <button
+                  onClick={() => onPresetSelect(p)}
+                  className={`px-3 py-1 text-xs border rounded-full transition-colors ${
+                    isActive
+                      ? 'bg-blue-100 border-blue-400 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-blue-50 hover:border-blue-400'
+                  }`}
+                >
+                  {p.name}
+                  {isActive && ' ✓'}
+                </button>
+              </Tooltip>
+            )
+          })}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
