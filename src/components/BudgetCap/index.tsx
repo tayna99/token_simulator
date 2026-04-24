@@ -57,18 +57,22 @@ export function BudgetCap({ state, onBudgetChange }: Props) {
           >
             {t('budgetCap.label')}
           </label>
-          <input
-            id="monthly-budget"
-            type="number"
-            min={0}
-            placeholder="e.g. 500"
-            value={state.monthlyBudgetUsd ?? ''}
-            onChange={e => {
-              const v = e.target.value
-              onBudgetChange(v === '' ? null : Math.max(0, Number(v)))
-            }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-          />
+          <div className="flex items-center">
+            <span className="text-gray-500 text-sm mr-2">$</span>
+            <input
+              id="monthly-budget"
+              type="number"
+              min={0}
+              placeholder="500"
+              value={state.monthlyBudgetUsd ?? ''}
+              onChange={e => {
+                const v = e.target.value
+                onBudgetChange(v === '' ? null : Math.max(0, Number(v)))
+              }}
+              aria-label="Monthly budget in USD"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+          </div>
         </div>
         {cap && state.monthlyBudgetUsd !== null && (
           <>
