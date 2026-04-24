@@ -53,6 +53,8 @@ export function TokenInputs({
   const { t } = useTranslation()
   const [inputStr, setInputStr] = useState(() => formatInput(periodInputTokens))
   const [outputStr, setOutputStr] = useState(() => formatInput(periodOutputTokens))
+  const [showInputInvalidMsg, setShowInputInvalidMsg] = useState(false)
+  const [showOutputInvalidMsg, setShowOutputInvalidMsg] = useState(false)
 
   useEffect(() => { setInputStr(formatInput(periodInputTokens)) }, [periodInputTokens])
   useEffect(() => { setOutputStr(formatInput(periodOutputTokens)) }, [periodOutputTokens])
@@ -85,12 +87,17 @@ export function TokenInputs({
             inputMode="numeric"
             value={inputStr}
             onChange={e => {
+              const hasInvalidChars = /[^\d]/.test(e.target.value) && e.target.value !== ''
+              setShowInputInvalidMsg(hasInvalidChars)
               const n = sanitize(e.target.value)
               setInputStr(formatInput(n))
               onInputChange(n)
             }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
+          {showInputInvalidMsg && (
+            <p className="text-xs text-red-600 mt-1">Numbers only</p>
+          )}
           {isExtremeValue(periodInputTokens) && (
             <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
           )}
@@ -105,12 +112,17 @@ export function TokenInputs({
             inputMode="numeric"
             value={outputStr}
             onChange={e => {
+              const hasInvalidChars = /[^\d]/.test(e.target.value) && e.target.value !== ''
+              setShowOutputInvalidMsg(hasInvalidChars)
               const n = sanitize(e.target.value)
               setOutputStr(formatInput(n))
               onOutputChange(n)
             }}
             className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
+          {showOutputInvalidMsg && (
+            <p className="text-xs text-red-600 mt-1">Numbers only</p>
+          )}
           {isExtremeValue(periodOutputTokens) && (
             <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
           )}
