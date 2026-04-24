@@ -104,4 +104,27 @@ describe('MigrationPanel', () => {
     // Delta section must NOT render
     expect(screen.queryByTestId('monthly-delta')).not.toBeInTheDocument()
   })
+
+  it('shows break-even line when candidate saves money', () => {
+    render(<MigrationPanel state={BASE_STATE} />)
+    expect(screen.getByText(/migration pays back/i)).toBeInTheDocument()
+  })
+
+  it('shows ▼ icon for savings', () => {
+    render(<MigrationPanel state={BASE_STATE} />)
+    // Gemini flash < Sonnet → savings → ▼
+    const delta = screen.getByTestId('monthly-delta')
+    expect(delta.textContent).toMatch(/▼/)
+  })
+
+  it('shows ▲ for cost increase', () => {
+    const expensiveState = {
+      ...BASE_STATE,
+      currentModel: MODELS.find(m => m.id === 'gemini-3.1-flash')!,
+      candidateModel: MODELS.find(m => m.id === 'claude-sonnet-4.6')!,
+    }
+    render(<MigrationPanel state={expensiveState} />)
+    const delta = screen.getByTestId('monthly-delta')
+    expect(delta.textContent).toMatch(/▲/)
+  })
 })
