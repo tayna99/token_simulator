@@ -45,6 +45,7 @@ export function ModelSelector({ label, value, onChange }: Props) {
           const m = MODELS.find(m => m.id === e.target.value)
           if (m) onChange(m)
         }}
+        aria-label={`Select ${label.toLowerCase()}: model name with input/output prices per 1M tokens`}
         className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         {Array.from(providers.entries()).map(([provider, models]) => (
