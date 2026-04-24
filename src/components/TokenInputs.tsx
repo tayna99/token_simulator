@@ -97,9 +97,12 @@ export function TokenInputs({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
-            {t('tokenInputs.inputTokens')}
-          </label>
+          <div className="flex items-center gap-2 mb-1">
+            <label htmlFor="monthly-input-tokens" className="text-sm font-medium text-gray-700">
+              {t('tokenInputs.inputTokens')}
+            </label>
+            <span className="text-xs text-gray-500" title="Tokens you send to the model (includes prompts and context)">(?)</span>
+          </div>
           <input
             id="monthly-input-tokens"
             type="text"
@@ -122,9 +125,12 @@ export function TokenInputs({
           )}
         </div>
         <div>
-          <label htmlFor="monthly-output-tokens" className="text-sm font-medium text-gray-700">
-            {t('tokenInputs.outputTokens')}
-          </label>
+          <div className="flex items-center gap-2 mb-1">
+            <label htmlFor="monthly-output-tokens" className="text-sm font-medium text-gray-700">
+              {t('tokenInputs.outputTokens')}
+            </label>
+            <span className="text-xs text-gray-500" title="Tokens the model generates in responses">(?)</span>
+          </div>
           <input
             id="monthly-output-tokens"
             type="text"
@@ -149,9 +155,12 @@ export function TokenInputs({
       </div>
       <div className="flex gap-6 items-end">
         <div className="flex-1">
-          <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
-            {t('tokenInputs.cacheHitRate')}
-          </label>
+          <div className="flex items-center gap-2 mb-1">
+            <label htmlFor="cache-hit-rate" className="text-sm font-medium text-gray-700">
+              {t('tokenInputs.cacheHitRate')}
+            </label>
+            <span className="text-xs text-gray-500" title="Percentage of requests that hit the cache (cheaper tokens)">(?)</span>
+          </div>
           <div className="flex gap-2 mt-1 items-center">
             <input
               id="cache-hit-rate"
