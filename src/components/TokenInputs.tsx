@@ -123,6 +123,9 @@ export function TokenInputs({
           {isExtremeValue(periodInputTokens) && (
             <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
           )}
+          {periodInputTokens > 0 && !isExtremeValue(periodInputTokens) && (
+            <p className="text-xs text-green-600 mt-1">✓ Valid</p>
+          )}
         </div>
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -150,6 +153,9 @@ export function TokenInputs({
           )}
           {isExtremeValue(periodOutputTokens) && (
             <p className="text-xs text-amber-600 mt-1">{t('tokenInputs.extremeWarning')}</p>
+          )}
+          {periodOutputTokens > 0 && !isExtremeValue(periodOutputTokens) && (
+            <p className="text-xs text-green-600 mt-1">✓ Valid</p>
           )}
         </div>
       </div>
