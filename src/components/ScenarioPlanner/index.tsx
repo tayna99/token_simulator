@@ -122,15 +122,18 @@ export function ScenarioPlanner({ state }: Props) {
               <td className="py-2 pr-4 text-gray-600">{t('scenario.traffic')}</td>
               {scenarios.map(s => (
                 <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={s.trafficMultiplier}
-                    onChange={e => handleScenarioChange(s.label, 'trafficMultiplier', parseFloat(e.target.value))}
-                    className="w-16 text-center border border-gray-300 rounded px-1 py-0.5 text-xs"
-                    aria-label={`${s.label} traffic multiplier`}
-                  />
+                  <div className="flex flex-col items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={s.trafficMultiplier}
+                      onChange={e => handleScenarioChange(s.label, 'trafficMultiplier', parseFloat(e.target.value))}
+                      className="w-16 text-center border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      aria-label={`${s.label} traffic multiplier`}
+                    />
+                    <span className="text-xs text-gray-500">{(s.trafficMultiplier * 100).toFixed(0)}%</span>
+                  </div>
                 </td>
               ))}
             </tr>
@@ -141,15 +144,18 @@ export function ScenarioPlanner({ state }: Props) {
                   {s.label === 'Base' ? (
                     <span title="Base inherits from current config">{fmtPercent(results.find(r => r.label === s.label)?.cacheHitRate ?? 0)}</span>
                   ) : (
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={s.cacheHitRate * 100}
-                      onChange={e => handleScenarioChange(s.label, 'cacheHitRate', parseFloat(e.target.value) / 100)}
-                      className="w-16 md:w-24"
-                      aria-label={`${s.label} cache hit rate`}
-                    />
+                    <div className="flex flex-col items-center gap-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={s.cacheHitRate * 100}
+                        onChange={e => handleScenarioChange(s.label, 'cacheHitRate', parseFloat(e.target.value) / 100)}
+                        className="w-16 md:w-24"
+                        aria-label={`${s.label} cache hit rate`}
+                      />
+                      <span className="text-xs text-gray-500">{(s.cacheHitRate * 100).toFixed(0)}%</span>
+                    </div>
                   )}
                 </td>
               ))}
