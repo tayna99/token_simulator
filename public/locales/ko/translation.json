@@ -48,7 +48,8 @@
     "cacheSlider": "캐시 히트율 슬라이더",
     "cachePercent": "캐시 히트율 퍼센트",
     "saveAsPreset": "프리셋으로 저장",
-    "presetName": "프리셋 이름:"
+    "presetName": "프리셋 이름:",
+    "customPreset": "사용자정의"
   },
   "presets": {
     "basicChat": "기본 채팅",

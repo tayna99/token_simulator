@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
 import { fmtTokens } from '../lib/format'
-import { saveCustomPreset, createPresetFromCurrent } from '../lib/customPresets'
+import { getCustomPresets, saveCustomPreset, createPresetFromCurrent, deleteCustomPreset, type CustomPreset } from '../lib/customPresets'
 import { Tooltip } from './ui/Tooltip'
 
 interface Props {
@@ -68,6 +68,7 @@ export function TokenInputs({
   const [showOutputInvalidMsg, setShowOutputInvalidMsg] = useState(false)
   const [savePresetName, setSavePresetName] = useState('')
   const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => getCustomPresets())
 
   useEffect(() => { setInputStr(formatInput(periodInputTokens)) }, [periodInputTokens])
   useEffect(() => { setOutputStr(formatInput(periodOutputTokens)) }, [periodOutputTokens])
@@ -82,8 +83,21 @@ export function TokenInputs({
       batchEnabled
     )
     saveCustomPreset(preset)
+    setCustomPresets(getCustomPresets())
     setSavePresetName('')
     setShowSaveDialog(false)
+  }
+
+  const handleApplyCustomPreset = (preset: CustomPreset) => {
+    onInputChange(preset.inputTokens)
+    onOutputChange(preset.outputTokens)
+    onCacheChange(preset.cacheHitRate)
+    onBatchChange(preset.batchEnabled)
+  }
+
+  const handleDeleteCustomPreset = (id: string) => {
+    deleteCustomPreset(id)
+    setCustomPresets(getCustomPresets())
   }
 
   return (
@@ -117,6 +131,37 @@ export function TokenInputs({
                   {isActive && ' ✓'}
                 </button>
               </Tooltip>
+            )
+          })}
+          {customPresets.map(p => {
+            const isActive = periodInputTokens === p.inputTokens &&
+              periodOutputTokens === p.outputTokens &&
+              Math.abs(cacheHitRate - p.cacheHitRate) <= 0.05 &&
+              batchEnabled === p.batchEnabled
+            return (
+              <div key={p.id} className="group relative">
+                <button
+                  onClick={() => handleApplyCustomPreset(p)}
+                  aria-pressed={isActive}
+                  className={`px-3 py-1 text-xs border rounded-full transition-colors ${
+                    isActive
+                      ? 'bg-green-100 border-green-400 text-green-700 font-medium'
+                      : 'border-amber-300 bg-amber-50 hover:bg-amber-100 hover:border-amber-400'
+                  }`}
+                  title={`${t('tokenInputs.customPreset')}: ${p.name}`}
+                >
+                  ★ {p.name}
+                  {isActive && ' ✓'}
+                </button>
+                <button
+                  onClick={() => handleDeleteCustomPreset(p.id)}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete preset"
+                  aria-label={`Delete ${p.name} preset`}
+                >
+                  ×
+                </button>
+              </div>
             )
           })}
         </div>

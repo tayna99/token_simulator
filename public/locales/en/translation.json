@@ -48,7 +48,8 @@
     "cacheSlider": "Cache hit rate slider",
     "cachePercent": "Cache hit rate percent",
     "saveAsPreset": "Save as Preset",
-    "presetName": "Preset name:"
+    "presetName": "Preset name:",
+    "customPreset": "Custom"
   },
   "presets": {
     "basicChat": "Basic Chat",
