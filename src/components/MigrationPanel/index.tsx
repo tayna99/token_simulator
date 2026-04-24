@@ -27,8 +27,8 @@ export function MigrationPanel({ state }: Props) {
   const result = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })
@@ -37,11 +37,22 @@ export function MigrationPanel({ state }: Props) {
   const deltaColor = isSaving ? 'text-green-600' : 'text-red-600'
   const deltaBg = isSaving ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
 
+  // Break-even analysis
+  const MIGRATION_EFFORT_HOURS = 40
+  const ENGINEER_HOURLY = 150
+  const effortCost = MIGRATION_EFFORT_HOURS * ENGINEER_HOURLY
+  const breakEvenMonths = isSaving
+    ? Math.ceil(effortCost / Math.abs(result.monthlyDelta))
+    : null
+
+  // Directional arrows
+  const arrow = isSaving ? '▼' : '▲'
+
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
       <h2 className="text-base font-semibold text-gray-800 mb-4">Migration Comparison</h2>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Current</p>
           <p className="font-semibold text-gray-900">{state.currentModel.name}</p>
@@ -62,20 +73,20 @@ export function MigrationPanel({ state }: Props) {
       </div>
 
       <div className={`rounded-lg border p-4 ${deltaBg}`}>
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mb-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Monthly Delta</p>
             <p
               data-testid="monthly-delta"
               className={`text-xl font-bold ${deltaColor}`}
             >
-              {fmtDelta(result.monthlyDelta)}
+              <span translate="no">{arrow} {fmtDelta(result.monthlyDelta)}</span>
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Annual Delta</p>
             <p className={`text-xl font-bold ${deltaColor}`}>
-              {fmtDelta(result.annualDelta)}
+              <span translate="no">{arrow} {fmtDelta(result.annualDelta)}</span>
             </p>
           </div>
           <div>
@@ -85,6 +96,14 @@ export function MigrationPanel({ state }: Props) {
             </p>
           </div>
         </div>
+
+        {breakEvenMonths !== null && (
+          <div className="pt-4 border-t border-current border-opacity-20 text-center">
+            <p className="text-sm font-medium">
+              Migration pays back in <span className="font-bold">{breakEvenMonths} month{breakEvenMonths !== 1 ? 's' : ''}</span>
+            </p>
+          </div>
+        )}
       </div>
     </section>
   )

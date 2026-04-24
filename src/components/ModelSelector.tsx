@@ -1,4 +1,4 @@
-import { MODELS, type Model } from '../data/models'
+import { MODELS, type Model, type Provider } from '../data/models'
 import { fmtPricePerMillion } from '../lib/format'
 
 interface Props {
@@ -7,8 +7,31 @@ interface Props {
   onChange: (model: Model) => void
 }
 
+const PROVIDER_NAMES: Record<Provider, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  google: 'Google',
+  xai: 'xAI',
+  microsoft: 'Microsoft',
+  meta: 'Meta',
+  mistral: 'Mistral',
+  deepseek: 'DeepSeek',
+  alibaba: 'Alibaba',
+  moonshot: 'Moonshot',
+}
+
 export function ModelSelector({ label, value, onChange }: Props) {
   const id = `model-select-${label.replace(/\s+/g, '-').toLowerCase()}`
+
+  // Group models by provider
+  const providers = new Map<Provider, Model[]>()
+  for (const model of MODELS) {
+    if (!providers.has(model.provider)) {
+      providers.set(model.provider, [])
+    }
+    providers.get(model.provider)!.push(model)
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-gray-700">{label}</label>
@@ -21,10 +44,14 @@ export function ModelSelector({ label, value, onChange }: Props) {
         }}
         className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        {MODELS.map(m => (
-          <option key={m.id} value={m.id}>
-            {m.name} — {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
-          </option>
+        {Array.from(providers.entries()).map(([provider, models]) => (
+          <optgroup key={provider} label={PROVIDER_NAMES[provider]}>
+            {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name} — {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </div>

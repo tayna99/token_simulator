@@ -1,0 +1,40 @@
+{
+  "date": "2026-04-23",
+  "window": "7d",
+  "metrics": {
+    "commits": 27,
+    "contributors": 1,
+    "prs_merged": 1,
+    "insertions": 12720,
+    "deletions": 119,
+    "net_loc": 12601,
+    "non_scaffold_insertions": 4061,
+    "test_loc_added": 249,
+    "test_ratio_excluding_scaffold": 0.061,
+    "active_days": 2,
+    "sessions": 3,
+    "deep_sessions": 1,
+    "avg_session_minutes": 26,
+    "feat_pct": 0.41,
+    "fix_pct": 0.15,
+    "docs_pct": 0.19,
+    "chore_pct": 0.11,
+    "merge_pct": 0.07,
+    "refactor_pct": 0.04,
+    "test_pct": 0.04,
+    "ai_assisted_commits": 0,
+    "peak_hour": 11,
+    "test_files_total": 5
+  },
+  "authors": {
+    "tayna99": {
+      "commits": 27,
+      "insertions": 12720,
+      "deletions": 119,
+      "top_areas": ["src/components/", "src/lib/", "docs/superpowers/"]
+    }
+  },
+  "version_range": ["0.0.0", "0.0.0"],
+  "streak_days": 2,
+  "tweetable": "First 2 days of the LLM Cost Planner: shipped v1, got feedback, diagnosed it, deployed round 1 fix. 27 commits, 3 sessions, 46/46 tests, 1 PR, prod live. Peak: 11am."
+}

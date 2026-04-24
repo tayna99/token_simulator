@@ -3,6 +3,8 @@ import { useRef } from 'react'
 import { toPng } from 'html-to-image'
 import { calculateCost, calculateMigrationDelta } from '../../lib/calculator'
 import { fmtCurrency, fmtTokens, fmtPercent } from '../../lib/format'
+import { useToast } from '../../hooks/useToast'
+import { Toast } from '../ui/Toast'
 import type { SimState } from '../../App'
 
 interface Props {
@@ -12,8 +14,8 @@ interface Props {
 function buildSummaryText(state: SimState): string {
   const current = calculateCost({
     model: state.currentModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })
@@ -21,8 +23,8 @@ function buildSummaryText(state: SimState): string {
   const migration = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
-    monthlyInputTokens: state.monthlyInputTokens,
-    monthlyOutputTokens: state.monthlyOutputTokens,
+    monthlyInputTokens: state.periodInputTokens,
+    monthlyOutputTokens: state.periodOutputTokens,
     cacheHitRate: state.cacheHitRate,
     batchEnabled: state.batchEnabled,
   })
@@ -37,7 +39,7 @@ function buildSummaryText(state: SimState): string {
   const absAnnual = fmtCurrency(Math.abs(migration.annualDelta))
   const percent = fmtPercent(Math.abs(migration.savingPercent) / 100, 1)
 
-  return `On ${state.currentModel.name} with ${fmtTokens(state.monthlyInputTokens)} input / ${fmtTokens(state.monthlyOutputTokens)} output tokens/month` +
+  return `On ${state.currentModel.name} with ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output tokens/month` +
     `${cacheText}${batchText}, estimated monthly cost is ${fmtCurrency(current.monthlyCost)} ` +
     `(${fmtCurrency(current.annualCost)}/yr). ` +
     `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +
@@ -46,11 +48,13 @@ function buildSummaryText(state: SimState): string {
 
 export function SummaryCard({ state }: Props) {
   const cardRef = useRef<HTMLDivElement>(null)
+  const { toast, show: showToast, hide: hideToast } = useToast()
   const summaryText = buildSummaryText(state)
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(summaryText)
+      showToast('Copied to clipboard!')
     } catch {
       window.prompt('Copy the text below:', summaryText)
     }
@@ -100,6 +104,7 @@ export function SummaryCard({ state }: Props) {
           Prices based on official API docs · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </p>
       </div>
+      <Toast toast={toast} onClose={hideToast} />
     </section>
   )
 }

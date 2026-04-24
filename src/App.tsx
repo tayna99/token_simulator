@@ -5,46 +5,78 @@ import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
 import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
+import { CostBreakdown } from './components/CostBreakdown'
+import { BudgetCap } from './components/BudgetCap'
 import { SummaryCard } from './components/SummaryCard'
+import { RoleSelector } from './components/RoleSelector'
+import { PeriodSelector } from './components/PeriodSelector'
+import { ROLE_PACK } from './lib/roleLanguage'
+
+export type Role = 'developer' | 'pm' | 'ceo'
+export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
 export interface SimState {
+  role: Role
   currentModel: Model
   candidateModel: Model
-  monthlyInputTokens: number
-  monthlyOutputTokens: number
+  period: Period
+  periodInputTokens: number
+  periodOutputTokens: number
   cacheHitRate: number
   batchEnabled: boolean
+  monthlyRequests: number
+  activeUsers: number
+  monthlyBudgetUsd: number | null
 }
 
 function App() {
   const [state, setState] = useState<SimState>({
+    role: 'pm',
     currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
     candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
-    monthlyInputTokens: 50_000_000,
-    monthlyOutputTokens: 5_000_000,
+    period: 'month',
+    periodInputTokens: 50_000_000,
+    periodOutputTokens: 5_000_000,
     cacheHitRate: 0.5,
     batchEnabled: false,
+    monthlyRequests: 100_000,
+    activeUsers: 1000,
+    monthlyBudgetUsd: null,
   })
 
   const handlePreset = (p: WorkloadPreset) => {
     setState(s => ({
       ...s,
-      monthlyInputTokens: p.monthlyInputTokens,
-      monthlyOutputTokens: p.monthlyOutputTokens,
+      periodInputTokens: p.monthlyInputTokens,
+      periodOutputTokens: p.monthlyOutputTokens,
       cacheHitRate: p.defaultCacheHitRate,
       batchEnabled: p.defaultBatchEnabled,
+      monthlyRequests: p.monthlyRequestsDefault || s.monthlyRequests,
+      activeUsers: p.activeUsersDefault || s.activeUsers,
     }))
   }
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <h1 className="text-xl font-semibold text-gray-900">LLM Cost Planner</h1>
-        <p className="text-sm text-gray-500">Migration ROI · Scenario Planning · Stakeholder Export</p>
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">LLM Cost Planner</h1>
+          <p className="text-sm text-gray-500">Migration ROI · Scenario Planning · Stakeholder Export</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-gray-500 mb-2">Role</p>
+          <RoleSelector value={state.role} onChange={r => setState(s => ({ ...s, role: r }))} />
+        </div>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-8">
         <section className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-6">
-          <h2 className="text-base font-semibold text-gray-800">Configuration</h2>
+          <div className="flex items-end justify-between">
+            <h2 className="text-base font-semibold text-gray-800">Configuration</h2>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 mb-1">Time Period</p>
+              <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <ModelSelector
               label="Current Model"
@@ -58,20 +90,34 @@ function App() {
             />
           </div>
           <TokenInputs
-            monthlyInputTokens={state.monthlyInputTokens}
-            monthlyOutputTokens={state.monthlyOutputTokens}
+            periodInputTokens={state.periodInputTokens}
+            periodOutputTokens={state.periodOutputTokens}
             cacheHitRate={state.cacheHitRate}
             batchEnabled={state.batchEnabled}
-            onInputChange={v => setState(s => ({ ...s, monthlyInputTokens: v }))}
-            onOutputChange={v => setState(s => ({ ...s, monthlyOutputTokens: v }))}
+            onInputChange={v => setState(s => ({ ...s, periodInputTokens: v }))}
+            onOutputChange={v => setState(s => ({ ...s, periodOutputTokens: v }))}
             onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}
             onBatchChange={v => setState(s => ({ ...s, batchEnabled: v }))}
             onPresetSelect={handlePreset}
           />
         </section>
 
-        <MigrationPanel state={state} />
-        <ScenarioPlanner state={state} />
+        {/* Role-aware panel ordering */}
+        {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
+          switch (panelName) {
+            case 'migration':
+              return <MigrationPanel key="migration" state={state} />
+            case 'breakdown':
+              return <CostBreakdown key="breakdown" state={state} />
+            case 'budget':
+              return <BudgetCap key="budget" state={state} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />
+            case 'scenario':
+              return <ScenarioPlanner key="scenario" state={state} />
+            default:
+              return null
+          }
+        })}
+
         <SummaryCard state={state} />
       </main>
     </div>

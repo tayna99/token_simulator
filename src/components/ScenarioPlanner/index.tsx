@@ -1,19 +1,20 @@
 // src/components/ScenarioPlanner/index.tsx
+import { useState } from 'react'
 import { calculateCost } from '../../lib/calculator'
 import { fmtCurrency, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
 
-interface ScenarioDef {
+interface Scenario {
   label: 'Best' | 'Base' | 'Worst'
   trafficMultiplier: number
-  cacheHitRate: (base: number) => number
-  batchEnabled: (base: boolean) => boolean
+  cacheHitRate: number
+  batchEnabled: boolean
 }
 
-const SCENARIOS: ScenarioDef[] = [
-  { label: 'Best',  trafficMultiplier: 0.7, cacheHitRate: () => 0.8, batchEnabled: () => true },
-  { label: 'Base',  trafficMultiplier: 1.0, cacheHitRate: b => b,     batchEnabled: b => b },
-  { label: 'Worst', trafficMultiplier: 2.0, cacheHitRate: () => 0.2, batchEnabled: () => false },
+const DEFAULT_SCENARIOS: Scenario[] = [
+  { label: 'Best', trafficMultiplier: 0.7, cacheHitRate: 0.8, batchEnabled: true },
+  { label: 'Base', trafficMultiplier: 1.0, cacheHitRate: 0.5, batchEnabled: false },
+  { label: 'Worst', trafficMultiplier: 2.0, cacheHitRate: 0.2, batchEnabled: false },
 ]
 
 interface Props {
@@ -21,22 +22,35 @@ interface Props {
 }
 
 export function ScenarioPlanner({ state }: Props) {
-  const results = SCENARIOS.map(s => {
-    const cacheHitRate = s.cacheHitRate(state.cacheHitRate)
-    const batchEnabled = s.batchEnabled(state.batchEnabled)
+  const [scenarios, setScenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS)
+
+  const results = scenarios.map(s => {
+    // Use scenario values, but "Base" can inherit from state
+    const cacheHitRate = s.label === 'Base' ? state.cacheHitRate : s.cacheHitRate
+    const batchEnabled = s.label === 'Base' ? state.batchEnabled : s.batchEnabled
     return {
       ...s,
       cacheHitRate,
       batchEnabled,
       result: calculateCost({
         model: state.currentModel,
-        monthlyInputTokens: state.monthlyInputTokens * s.trafficMultiplier,
-        monthlyOutputTokens: state.monthlyOutputTokens * s.trafficMultiplier,
+        monthlyInputTokens: state.periodInputTokens * s.trafficMultiplier,
+        monthlyOutputTokens: state.periodOutputTokens * s.trafficMultiplier,
         cacheHitRate,
         batchEnabled,
       }),
     }
   })
+
+  const handleScenarioChange = (label: 'Best' | 'Base' | 'Worst', key: keyof Scenario, value: number | boolean) => {
+    setScenarios(prev =>
+      prev.map(s => (s.label === label ? { ...s, [key]: value } : s))
+    )
+  }
+
+  const resetScenarios = () => {
+    setScenarios(DEFAULT_SCENARIOS)
+  }
 
   const colColors: Record<string, string> = {
     Best:  'text-green-700 bg-green-50',
@@ -53,8 +67,12 @@ export function ScenarioPlanner({ state }: Props) {
           <thead>
             <tr>
               <th className="text-left text-gray-500 font-medium py-2 pr-4">Parameter</th>
-              {SCENARIOS.map(s => (
-                <th key={s.label} className={`text-center py-2 px-4 rounded-t-lg ${colColors[s.label]}`}>
+              {scenarios.map(s => (
+                <th
+                  key={s.label}
+                  className={`text-center py-2 px-4 rounded-t-lg ${colColors[s.label]}`}
+                  title={`${s.label}: Traffic ${(s.trafficMultiplier * 100).toFixed(0)}%, Cache ${(s.cacheHitRate * 100).toFixed(0)}%, Batch ${s.batchEnabled ? 'On' : 'Off'}. Click cells to edit.`}
+                >
                   {s.label}
                 </th>
               ))}
@@ -63,28 +81,54 @@ export function ScenarioPlanner({ state }: Props) {
           <tbody className="divide-y divide-gray-100">
             <tr>
               <td className="py-2 pr-4 text-gray-600">Traffic</td>
-              {results.map(r => (
-                <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
-                  {r.trafficMultiplier < 1
-                    ? `−${Math.round((1 - r.trafficMultiplier) * 100)}%`
-                    : r.trafficMultiplier === 1 ? 'Current'
-                    : `+${Math.round((r.trafficMultiplier - 1) * 100)}%`}
+              {scenarios.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={s.trafficMultiplier}
+                    onChange={e => handleScenarioChange(s.label, 'trafficMultiplier', parseFloat(e.target.value))}
+                    className="w-16 text-center border border-gray-300 rounded px-1 py-0.5 text-xs"
+                    aria-label={`${s.label} traffic multiplier`}
+                  />
                 </td>
               ))}
             </tr>
             <tr>
               <td className="py-2 pr-4 text-gray-600">Cache Hit Rate</td>
-              {results.map(r => (
-                <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
-                  {fmtPercent(r.cacheHitRate)}
+              {scenarios.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  {s.label === 'Base' ? (
+                    <span title="Base inherits from current config">{fmtPercent(results.find(r => r.label === s.label)?.cacheHitRate ?? 0)}</span>
+                  ) : (
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={s.cacheHitRate * 100}
+                      onChange={e => handleScenarioChange(s.label, 'cacheHitRate', parseFloat(e.target.value) / 100)}
+                      className="w-24"
+                      aria-label={`${s.label} cache hit rate`}
+                    />
+                  )}
                 </td>
               ))}
             </tr>
             <tr>
               <td className="py-2 pr-4 text-gray-600">Batch Mode</td>
-              {results.map(r => (
-                <td key={r.label} className={`text-center py-2 px-4 ${colColors[r.label]}`}>
-                  {r.batchEnabled ? 'On' : 'Off'}
+              {scenarios.map(s => (
+                <td key={s.label} className={`text-center py-2 px-4 ${colColors[s.label]}`}>
+                  {s.label === 'Base' ? (
+                    <span title="Base inherits from current config">{results.find(r => r.label === s.label)?.batchEnabled ? 'On' : 'Off'}</span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={s.batchEnabled}
+                      onChange={e => handleScenarioChange(s.label, 'batchEnabled', e.target.checked)}
+                      aria-label={`${s.label} batch mode`}
+                    />
+                  )}
                 </td>
               ))}
             </tr>
@@ -110,6 +154,15 @@ export function ScenarioPlanner({ state }: Props) {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={resetScenarios}
+          className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+        >
+          Reset to defaults
+        </button>
       </div>
     </section>
   )
