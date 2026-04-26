@@ -28,6 +28,7 @@ import { RequirementsFilter } from './components/RequirementsFilter'
 import { FeatureCostBreakdown } from './components/FeatureCostBreakdown'
 import { TeamCostAnalysis } from './components/TeamCostAnalysis'
 import { CustomPricingInput } from './components/CustomPricingInput'
+import { ComplianceRequirements } from './components/ComplianceRequirements'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -248,6 +249,8 @@ function App() {
         <TeamCostAnalysis state={state} />
 
         <CustomPricingInput state={state} />
+
+        <ComplianceRequirements state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
