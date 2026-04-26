@@ -29,6 +29,7 @@ import { FeatureCostBreakdown } from './components/FeatureCostBreakdown'
 import { TeamCostAnalysis } from './components/TeamCostAnalysis'
 import { CustomPricingInput } from './components/CustomPricingInput'
 import { ComplianceRequirements } from './components/ComplianceRequirements'
+import { UseCaseRecommendations } from './components/UseCaseRecommendations'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -251,6 +252,16 @@ function App() {
         <CustomPricingInput state={state} />
 
         <ComplianceRequirements state={state} />
+
+        <UseCaseRecommendations
+          state={state}
+          onSelectCandidate={modelId => {
+            const model = getModelById(modelId)
+            if (model) {
+              setState(s => ({ ...s, candidateModel: model }))
+            }
+          }}
+        />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
