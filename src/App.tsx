@@ -25,6 +25,7 @@ import { TokenEfficiency } from './components/TokenEfficiency'
 import { ModelMatrix } from './components/ModelMatrix'
 import { PerformanceTiers } from './components/PerformanceTiers'
 import { RequirementsFilter } from './components/RequirementsFilter'
+import { FeatureCostBreakdown } from './components/FeatureCostBreakdown'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -239,6 +240,8 @@ function App() {
             }
           }}
         />
+
+        <FeatureCostBreakdown state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
