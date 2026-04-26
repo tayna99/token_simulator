@@ -32,6 +32,7 @@ import { ComplianceRequirements } from './components/ComplianceRequirements'
 import { UseCaseRecommendations } from './components/UseCaseRecommendations'
 import { MigrationPlaybook } from './components/MigrationPlaybook'
 import { OptimizationOpportunities } from './components/OptimizationOpportunities'
+import { ModelPerformanceBenchmarks } from './components/ModelPerformanceBenchmarks'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -268,6 +269,8 @@ function App() {
         <MigrationPlaybook state={state} />
 
         <OptimizationOpportunities state={state} />
+
+        <ModelPerformanceBenchmarks state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
