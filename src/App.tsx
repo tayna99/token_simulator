@@ -27,6 +27,7 @@ import { PerformanceTiers } from './components/PerformanceTiers'
 import { RequirementsFilter } from './components/RequirementsFilter'
 import { FeatureCostBreakdown } from './components/FeatureCostBreakdown'
 import { TeamCostAnalysis } from './components/TeamCostAnalysis'
+import { CustomPricingInput } from './components/CustomPricingInput'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -245,6 +246,8 @@ function App() {
         <FeatureCostBreakdown state={state} />
 
         <TeamCostAnalysis state={state} />
+
+        <CustomPricingInput state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
