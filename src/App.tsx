@@ -24,6 +24,7 @@ import { ROICalculator } from './components/ROICalculator'
 import { TokenEfficiency } from './components/TokenEfficiency'
 import { ModelMatrix } from './components/ModelMatrix'
 import { PerformanceTiers } from './components/PerformanceTiers'
+import { RequirementsFilter } from './components/RequirementsFilter'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -220,6 +221,16 @@ function App() {
         />
 
         <PerformanceTiers
+          state={state}
+          onSelectCandidate={modelId => {
+            const model = getModelById(modelId)
+            if (model) {
+              setState(s => ({ ...s, candidateModel: model }))
+            }
+          }}
+        />
+
+        <RequirementsFilter
           state={state}
           onSelectCandidate={modelId => {
             const model = getModelById(modelId)
