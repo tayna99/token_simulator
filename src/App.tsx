@@ -33,6 +33,7 @@ import { UseCaseRecommendations } from './components/UseCaseRecommendations'
 import { MigrationPlaybook } from './components/MigrationPlaybook'
 import { OptimizationOpportunities } from './components/OptimizationOpportunities'
 import { ModelPerformanceBenchmarks } from './components/ModelPerformanceBenchmarks'
+import { SavingsPaybackTimeline } from './components/SavingsPaybackTimeline'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -271,6 +272,8 @@ function App() {
         <OptimizationOpportunities state={state} />
 
         <ModelPerformanceBenchmarks state={state} />
+
+        <SavingsPaybackTimeline state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
