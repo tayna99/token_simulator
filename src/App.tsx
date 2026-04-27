@@ -43,6 +43,7 @@ import { BreakevenAnalysis } from './components/BreakevenAnalysis'
 import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
 import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
 import { CostAttributionByFeature } from './components/CostAttributionByFeature'
+import { ModelComparisonMatrix } from './components/ModelComparisonMatrix'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -301,6 +302,8 @@ function App() {
         <CostOptimizationRoadmap state={state} />
 
         <CostAttributionByFeature state={state} />
+
+        <ModelComparisonMatrix state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
