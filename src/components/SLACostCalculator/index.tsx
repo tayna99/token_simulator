@@ -16,53 +16,53 @@ interface Props {
   state: SimState
 }
 
+const SLA_TIERS: SLATier[] = [
+  {
+    name: 'Basic',
+    uptime: 99.0,
+    latencyP99: 2000,
+    costMultiplier: 1.0,
+    description: '99.0% uptime, 2s P99 latency',
+    useCase: 'Non-critical batch processing',
+  },
+  {
+    name: 'Standard',
+    uptime: 99.5,
+    latencyP99: 1000,
+    costMultiplier: 1.15,
+    description: '99.5% uptime, 1s P99 latency',
+    useCase: 'Standard API endpoints',
+  },
+  {
+    name: 'Premium',
+    uptime: 99.9,
+    latencyP99: 500,
+    costMultiplier: 1.35,
+    description: '99.9% uptime, 500ms P99 latency',
+    useCase: 'Production APIs, customer-facing',
+  },
+  {
+    name: 'Enterprise',
+    uptime: 99.95,
+    latencyP99: 200,
+    costMultiplier: 1.65,
+    description: '99.95% uptime, 200ms P99 latency',
+    useCase: 'Mission-critical systems',
+  },
+  {
+    name: 'Ultra-Premium',
+    uptime: 99.99,
+    latencyP99: 50,
+    costMultiplier: 2.2,
+    description: '99.99% uptime, 50ms P99 latency',
+    useCase: 'Financial/trading systems',
+  },
+]
+
 export function SLACostCalculator({ state }: Props) {
   const [selectedUptime, setSelectedUptime] = useState(99.9)
   const [selectedLatency, setSelectedLatency] = useState(500)
   const [redundancyFactor, setRedundancyFactor] = useState(1.0)
-
-  const slaTiers: SLATier[] = [
-    {
-      name: 'Basic',
-      uptime: 99.0,
-      latencyP99: 2000,
-      costMultiplier: 1.0,
-      description: '99.0% uptime, 2s P99 latency',
-      useCase: 'Non-critical batch processing',
-    },
-    {
-      name: 'Standard',
-      uptime: 99.5,
-      latencyP99: 1000,
-      costMultiplier: 1.15,
-      description: '99.5% uptime, 1s P99 latency',
-      useCase: 'Standard API endpoints',
-    },
-    {
-      name: 'Premium',
-      uptime: 99.9,
-      latencyP99: 500,
-      costMultiplier: 1.35,
-      description: '99.9% uptime, 500ms P99 latency',
-      useCase: 'Production APIs, customer-facing',
-    },
-    {
-      name: 'Enterprise',
-      uptime: 99.95,
-      latencyP99: 200,
-      costMultiplier: 1.65,
-      description: '99.95% uptime, 200ms P99 latency',
-      useCase: 'Mission-critical systems',
-    },
-    {
-      name: 'Ultra-Premium',
-      uptime: 99.99,
-      latencyP99: 50,
-      costMultiplier: 2.2,
-      description: '99.99% uptime, 50ms P99 latency',
-      useCase: 'Financial/trading systems',
-    },
-  ]
 
   const analysis = useMemo(() => {
     const currentCost = calculateCost({
@@ -74,7 +74,7 @@ export function SLACostCalculator({ state }: Props) {
     }).monthlyCost
 
     // Find closest SLA tier based on uptime/latency
-    const closestTier = slaTiers.reduce((closest, tier) => {
+    const closestTier = SLA_TIERS.reduce((closest, tier) => {
       const uptimeDiff = Math.abs(tier.uptime - selectedUptime)
       const latencyDiff = Math.abs(tier.latencyP99 - selectedLatency)
       const score = uptimeDiff + (latencyDiff / 100)

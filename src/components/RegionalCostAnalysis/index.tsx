@@ -16,19 +16,19 @@ interface Props {
   state: SimState
 }
 
+const REGIONS: Region[] = [
+  { name: 'US East', code: 'us-east', description: 'Northern Virginia', pricingMultiplier: 1.0, latency: '50ms avg', dataResidency: 'US' },
+  { name: 'US West', code: 'us-west', description: 'Oregon/California', pricingMultiplier: 1.05, latency: '60ms avg', dataResidency: 'US' },
+  { name: 'EU West', code: 'eu-west', description: 'Ireland/London', pricingMultiplier: 1.15, latency: '80ms avg', dataResidency: 'EU' },
+  { name: 'EU Central', code: 'eu-central', description: 'Frankfurt', pricingMultiplier: 1.20, latency: '90ms avg', dataResidency: 'EU' },
+  { name: 'APAC Singapore', code: 'apac-sg', description: 'Singapore', pricingMultiplier: 1.30, latency: '150ms avg', dataResidency: 'APAC' },
+  { name: 'APAC Tokyo', code: 'apac-tokyo', description: 'Tokyo', pricingMultiplier: 1.35, latency: '140ms avg', dataResidency: 'APAC' },
+  { name: 'APAC Sydney', code: 'apac-sydney', description: 'Sydney', pricingMultiplier: 1.40, latency: '180ms avg', dataResidency: 'APAC' },
+]
+
 export function RegionalCostAnalysis({ state }: Props) {
   const [analysisYears, setAnalysisYears] = useState(1)
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['us-east', 'us-west', 'eu-west', 'apac-sg'])
-
-  const regions: Region[] = [
-    { name: 'US East', code: 'us-east', description: 'Northern Virginia', pricingMultiplier: 1.0, latency: '50ms avg', dataResidency: 'US' },
-    { name: 'US West', code: 'us-west', description: 'Oregon/California', pricingMultiplier: 1.05, latency: '60ms avg', dataResidency: 'US' },
-    { name: 'EU West', code: 'eu-west', description: 'Ireland/London', pricingMultiplier: 1.15, latency: '80ms avg', dataResidency: 'EU' },
-    { name: 'EU Central', code: 'eu-central', description: 'Frankfurt', pricingMultiplier: 1.20, latency: '90ms avg', dataResidency: 'EU' },
-    { name: 'APAC Singapore', code: 'apac-sg', description: 'Singapore', pricingMultiplier: 1.30, latency: '150ms avg', dataResidency: 'APAC' },
-    { name: 'APAC Tokyo', code: 'apac-tokyo', description: 'Tokyo', pricingMultiplier: 1.35, latency: '140ms avg', dataResidency: 'APAC' },
-    { name: 'APAC Sydney', code: 'apac-sydney', description: 'Sydney', pricingMultiplier: 1.40, latency: '180ms avg', dataResidency: 'APAC' },
-  ]
 
   const analysis = useMemo(() => {
     const currentBaseCost = calculateCost({
@@ -50,7 +50,7 @@ export function RegionalCostAnalysis({ state }: Props) {
     const months = analysisYears * 12
 
     // Calculate costs for each region
-    const regionalAnalysis = regions.map(region => {
+    const regionalAnalysis = REGIONS.map(region => {
       const currentCost = currentBaseCost * region.pricingMultiplier
       const candidateCost = candidateBaseCost * region.pricingMultiplier
       const monthlySavings = currentCost - candidateCost

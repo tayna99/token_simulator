@@ -23,7 +23,7 @@ export function CostTrendAnalyzer({ state }: Props) {
 
     // Generate historical data (simulating past 12 months with varying growth)
     const historicalData = []
-    let baseCost = currentCost / Math.pow(1 + growthRate / 100, historyMonths / 12)
+    const baseCost = currentCost / Math.pow(1 + growthRate / 100, historyMonths / 12)
 
     for (let m = -historyMonths; m <= 0; m++) {
       const monthCost = baseCost * Math.pow(1 + growthRate / 100, (historyMonths + m) / 12)

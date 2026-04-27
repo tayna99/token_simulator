@@ -111,7 +111,13 @@ export function SavingsPaybackTimeline({ state }: Props) {
     })
 
     return events.sort((a, b) => a.month - b.month)
-  }, [state])
+  }, [
+    state.batchEnabled,
+    state.cacheHitRate,
+    state.currentModel,
+    state.periodInputTokens,
+    state.periodOutputTokens,
+  ])
 
   // Calculate projected costs over time
   const projections = useMemo(() => {

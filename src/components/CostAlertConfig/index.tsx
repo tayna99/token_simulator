@@ -69,12 +69,13 @@ export function CostAlertConfig({ state }: Props) {
           triggered = costPerRequest > alert.threshold
           message = `Current: ${fmtCurrency(costPerRequest)}/request, Limit: ${fmtCurrency(alert.threshold)}/request`
           break
-        case 'growth_rate':
+        case 'growth_rate': {
           // Simulate 10% month-over-month growth
           const projectedNextMonth = currentCost * 1.1
           triggered = (((projectedNextMonth - currentCost) / currentCost) * 100) > alert.threshold
           message = `Projected growth: 10%, Limit: ${alert.threshold}%`
           break
+        }
       }
 
       return {
@@ -260,7 +261,7 @@ export function CostAlertConfig({ state }: Props) {
               <label className="block text-xs font-medium text-gray-700 mb-1">Alert Type</label>
               <select
                 value={newAlertType}
-                onChange={e => setNewAlertType(e.target.value as any)}
+                onChange={e => setNewAlertType(e.target.value as AlertRule['type'])}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs"
               >
                 <option value="monthly_budget">Monthly Budget</option>

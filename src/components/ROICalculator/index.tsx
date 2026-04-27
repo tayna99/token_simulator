@@ -53,7 +53,7 @@ export function ROICalculator({ state }: Props) {
       threeyearSavings,
       threeyearROI,
     }
-  }, [state, migrationEffort, engineerRate, testingEffort, otherCosts])
+  }, [state, isSameModel, migrationEffort, engineerRate, testingEffort, otherCosts])
 
   if (isSameModel || !roi) {
     return null
