@@ -42,6 +42,7 @@ import { TCOCalculator } from './components/TCOCalculator'
 import { BreakevenAnalysis } from './components/BreakevenAnalysis'
 import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
 import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
+import { CostAttributionByFeature } from './components/CostAttributionByFeature'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -298,6 +299,8 @@ function App() {
         <RegionalCostAnalysis state={state} />
 
         <CostOptimizationRoadmap state={state} />
+
+        <CostAttributionByFeature state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
