@@ -38,6 +38,7 @@ import { ScenarioManager } from './components/ScenarioManager'
 import { BudgetForecast } from './components/BudgetForecast'
 import { ProviderComparisonDashboard } from './components/ProviderComparisonDashboard'
 import { CostPerBusinessMetric } from './components/CostPerBusinessMetric'
+import { TCOCalculator } from './components/TCOCalculator'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -286,6 +287,8 @@ function App() {
         <ProviderComparisonDashboard state={state} />
 
         <CostPerBusinessMetric state={state} />
+
+        <TCOCalculator state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
