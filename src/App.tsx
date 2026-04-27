@@ -40,6 +40,7 @@ import { ProviderComparisonDashboard } from './components/ProviderComparisonDash
 import { CostPerBusinessMetric } from './components/CostPerBusinessMetric'
 import { TCOCalculator } from './components/TCOCalculator'
 import { BreakevenAnalysis } from './components/BreakevenAnalysis'
+import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -292,6 +293,8 @@ function App() {
         <TCOCalculator state={state} />
 
         <BreakevenAnalysis state={state} />
+
+        <RegionalCostAnalysis state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
