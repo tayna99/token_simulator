@@ -48,6 +48,7 @@ import { CostAlertConfig } from './components/CostAlertConfig'
 import { SLACostCalculator } from './components/SLACostCalculator'
 import { RequestPatternAnalyzer } from './components/RequestPatternAnalyzer'
 import { CostTrendAnalyzer } from './components/CostTrendAnalyzer'
+import { CostAllocationByTeam } from './components/CostAllocationByTeam'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -316,6 +317,8 @@ function App() {
         <RequestPatternAnalyzer state={state} />
 
         <CostTrendAnalyzer state={state} />
+
+        <CostAllocationByTeam state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
