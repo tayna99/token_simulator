@@ -12,10 +12,20 @@ export interface Model {
   releaseDate: string  // YYYY-MM format
   cacheDiscount: number  // 0-1 (e.g. 0.9 = 90% off cached tokens)
   batchDiscount: number  // 0-1 (e.g. 0.5 = 50% off with batch API)
-  priceSourceUrl?: string  // Official pricing page URL
+  sourceUrl: string
+  sourceLabel: string
+  lastVerifiedAt: string
+  supportsCaching: boolean
+  supportsBatch: boolean
+  pricingNotes?: string
+  priceSourceUrl?: string  // Temporary compatibility alias for existing components.
 }
 
-export const MODELS: Model[] = [
+type RawModel = Omit<Model, 'sourceUrl' | 'sourceLabel' | 'lastVerifiedAt' | 'supportsCaching' | 'supportsBatch'> & {
+  priceSourceUrl: string
+}
+
+const RAW_MODELS: RawModel[] = [
   { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'openai', inputPrice: 2.5, outputPrice: 15, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
   { id: 'gpt-5.4-mini', name: 'GPT-5.4 mini', provider: 'openai', inputPrice: 0.75, outputPrice: 4.5, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
   { id: 'gpt-5.4-nano', name: 'GPT-5.4 nano', provider: 'openai', inputPrice: 0.2, outputPrice: 1.25, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
@@ -77,6 +87,15 @@ export const MODELS: Model[] = [
     inputPrice: 0.60, outputPrice: 2.00, contextWindow: 2000000,
     releaseDate: '2025-11', cacheDiscount: 0, batchDiscount: 0, priceSourceUrl: 'https://platform.moonshot.cn/pricing' },
 ]
+
+export const MODELS: Model[] = RAW_MODELS.map(model => ({
+  ...model,
+  sourceUrl: model.priceSourceUrl,
+  sourceLabel: 'Official pricing page',
+  lastVerifiedAt: '2026-04-22',
+  supportsCaching: model.cacheDiscount > 0,
+  supportsBatch: model.batchDiscount > 0,
+}))
 
 export function getModelById(id: string): Model | undefined {
   return MODELS.find(m => m.id === id)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtCurrency, fmtPercent, fmtTokens, fmtPricePerMillion, fmtDelta } from './format'
+import { fmtCurrency, fmtPercent, fmtTokens, fmtPricePerMillion, fmtDelta, fmtNumber } from './format'
 
 describe('fmtCurrency', () => {
   it('formats integer dollars with $ prefix', () => {
@@ -90,5 +90,19 @@ describe('fmtPricePerMillion', () => {
   it('returns "—" if either price is NaN', () => {
     expect(fmtPricePerMillion(NaN, 5)).toBe('—')
     expect(fmtPricePerMillion(5, NaN)).toBe('—')
+  })
+})
+
+describe('fmtNumber', () => {
+  it('formats full numbers with grouping separators', () => {
+    expect(fmtNumber(1234567)).toBe('1,234,567')
+  })
+
+  it('supports decimal places', () => {
+    expect(fmtNumber(1234.567, 2)).toBe('1,234.57')
+  })
+
+  it('returns "?? for NaN', () => {
+    expect(fmtNumber(NaN)).toBe('—')
   })
 })

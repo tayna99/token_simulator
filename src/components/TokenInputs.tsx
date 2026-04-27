@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PRESETS, type WorkloadPreset } from '../data/presets'
-import { fmtTokens } from '../lib/format'
+import { fmtNumber, fmtTokens } from '../lib/format'
 import { getCustomPresets, saveCustomPreset, createPresetFromCurrent, deleteCustomPreset, type CustomPreset } from '../lib/customPresets'
 import { Tooltip } from './ui/Tooltip'
 
@@ -35,7 +35,7 @@ function isExtremeValue(n: number): boolean {
 
 function formatInput(n: number): string {
   if (!Number.isFinite(n)) return '0'
-  return n.toLocaleString('en-US')
+  return fmtNumber(n)
 }
 
 function presetTooltip(p: WorkloadPreset): string {

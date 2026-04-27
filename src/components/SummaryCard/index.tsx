@@ -32,6 +32,7 @@ function buildSummaryText(state: SimState, tone: SummaryTone = 'executive'): str
     batchEnabled: state.batchEnabled,
   })
 
+  const isSameModel = state.currentModel.id === state.candidateModel.id
   const isSaving = migration.monthlyDelta < 0
   const direction = isSaving ? 'save' : 'cost an additional'
   const absDelta = fmtCurrency(Math.abs(migration.monthlyDelta))
@@ -41,16 +42,18 @@ function buildSummaryText(state: SimState, tone: SummaryTone = 'executive'): str
   if (tone === 'technical') {
     const cacheText = state.cacheHitRate > 0 ? `, cache ${fmtPercent(state.cacheHitRate)}` : ''
     const batchText = state.batchEnabled ? ', batch enabled' : ''
+
     return (
       `Configuration: ${state.currentModel.name} vs ${state.candidateModel.name}\n` +
       `Monthly volume: ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output${cacheText}${batchText}\n` +
       `Current cost: ${fmtCurrency(current.monthlyCost)}/month (${fmtCurrency(current.annualCost)}/year)\n` +
       `Candidate cost: ${fmtCurrency(migration.candidateCost.monthlyCost)}/month (${fmtCurrency(migration.candidateCost.annualCost)}/year)\n` +
-      `Delta: ${direction} ${absDelta}/month (${percent}), ${absAnnual} annualized`
+      (isSameModel
+        ? `Delta: same model selected, migration delta is ${fmtCurrency(0)}/month`
+        : `Delta: ${direction} ${absDelta}/month (${percent}), ${absAnnual} annualized`)
     )
   }
 
-  // Executive summary (default)
   const cacheText = state.cacheHitRate > 0
     ? `, ${fmtPercent(state.cacheHitRate)} cache hit`
     : ''
@@ -59,8 +62,14 @@ function buildSummaryText(state: SimState, tone: SummaryTone = 'executive'): str
   return `On ${state.currentModel.name} with ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output tokens/month` +
     `${cacheText}${batchText}, estimated monthly cost is ${fmtCurrency(current.monthlyCost)} ` +
     `(${fmtCurrency(current.annualCost)}/yr). ` +
-    `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +
-    `(${percent}), annualized ${absAnnual}.`
+    (isSameModel
+      ? `Current and candidate are the same model; migration delta is ${fmtCurrency(0)}/month.`
+      : `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +
+        `(${percent}), annualized ${absAnnual}.`)
+}
+
+function provenanceText(model: SimState['currentModel']): string {
+  return `${model.name} on ${model.lastVerifiedAt}`
 }
 
 export function SummaryCard({ state }: Props) {
@@ -148,11 +157,12 @@ export function SummaryCard({ state }: Props) {
       <div
         ref={cardRef}
         lang="en"
+        data-testid="summary-card-body"
         className="bg-gray-50 border border-gray-200 rounded-lg p-3 md:p-5"
       >
         <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-wrap">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">
-          {t('summary.sourceLabel')} · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          Static pricing catalog curated in-repo
           {state.currentModel.priceSourceUrl && (
             <>
               {' '}· <a
@@ -161,7 +171,7 @@ export function SummaryCard({ state }: Props) {
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:underline"
               >
-                {state.currentModel.name}
+                {provenanceText(state.currentModel)}
               </a>
             </>
           )}
@@ -173,7 +183,7 @@ export function SummaryCard({ state }: Props) {
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:underline"
               >
-                {state.candidateModel.name}
+                {provenanceText(state.candidateModel)}
               </a>
             </>
           )}

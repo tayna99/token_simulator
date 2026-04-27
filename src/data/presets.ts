@@ -1,74 +1,171 @@
+import { deriveMonthlyWorkload, type WorkloadInputs } from '../lib/workload'
+
 export interface WorkloadPreset {
   id: string
   name: string
+  workload: WorkloadInputs
+  defaultCacheHitRate: number
+  defaultBatchEnabled: boolean
+  description: string
   monthlyInputTokens: number
   monthlyOutputTokens: number
-  defaultCacheHitRate: number  // 0-1
-  defaultBatchEnabled: boolean
   monthlyRequestsDefault: number
   activeUsersDefault: number
-  description: string
+}
+
+function preset(
+  id: string,
+  name: string,
+  workload: WorkloadInputs,
+  defaultCacheHitRate: number,
+  defaultBatchEnabled: boolean,
+  description: string,
+): WorkloadPreset {
+  const derived = deriveMonthlyWorkload(workload)
+  return {
+    id,
+    name,
+    workload,
+    defaultCacheHitRate,
+    defaultBatchEnabled,
+    description,
+    monthlyInputTokens: derived.monthlyInputTokens,
+    monthlyOutputTokens: derived.monthlyOutputTokens,
+    monthlyRequestsDefault: derived.monthlyRequests,
+    activeUsersDefault: workload.activeUsers,
+  }
 }
 
 export const PRESETS: WorkloadPreset[] = [
-  { id: 'basic-chat', name: 'Basic Chat',
-    monthlyInputTokens: 1_000_000, monthlyOutputTokens: 500_000,
-    defaultCacheHitRate: 0.3, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 10_000, activeUsersDefault: 200,
-    description: '짧은 Q&A, 적은 볼륨 — 초기 프로토타입에 적합' },
-  { id: 'document-analysis', name: 'Document Analysis',
-    monthlyInputTokens: 50_000_000, monthlyOutputTokens: 5_000_000,
-    defaultCacheHitRate: 0.8, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 20_000, activeUsersDefault: 500,
-    description: '긴 문서 요약/질의 — 시스템 프롬프트 재사용으로 cache 높음' },
-  { id: 'code-generation', name: 'Code Generation',
-    monthlyInputTokens: 10_000_000, monthlyOutputTokens: 15_000_000,
-    defaultCacheHitRate: 0.4, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 100_000, activeUsersDefault: 300,
-    description: 'IDE/agent 대량 생성 — output 지배' },
-  { id: 'batch-processing', name: 'Batch Processing',
-    monthlyInputTokens: 100_000_000, monthlyOutputTokens: 50_000_000,
-    defaultCacheHitRate: 0.2, defaultBatchEnabled: true,
-    monthlyRequestsDefault: 1_000_000, activeUsersDefault: 0,
-    description: 'ETL/오프라인 작업 — batch 할인 필수' },
-  { id: 'data-extraction', name: 'Data Extraction',
-    monthlyInputTokens: 200_000_000, monthlyOutputTokens: 100_000_000,
-    defaultCacheHitRate: 0.6, defaultBatchEnabled: true,
-    monthlyRequestsDefault: 500_000, activeUsersDefault: 0,
-    description: '구조화 추출 — 스키마 cache + batch 조합' },
-  { id: 'summarization', name: 'Summarization',
-    monthlyInputTokens: 500_000_000, monthlyOutputTokens: 50_000_000,
-    defaultCacheHitRate: 0.5, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 100_000, activeUsersDefault: 1_000,
-    description: 'input 위주, output tiny — input 가격이 비용 지배' },
-  { id: 'coding-agent', name: 'Coding Agent (IDE)',
-    monthlyInputTokens: 30_000_000, monthlyOutputTokens: 5_000_000,
-    defaultCacheHitRate: 0.4, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 500_000, activeUsersDefault: 500,
-    description: 'Cursor/Copilot autocomplete — 고빈도, 짧은 컨텍스트' },
-  { id: 'rag-chatbot', name: 'RAG Chatbot',
-    monthlyInputTokens: 200_000_000, monthlyOutputTokens: 10_000_000,
-    defaultCacheHitRate: 0.7, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 300_000, activeUsersDefault: 5_000,
-    description: '벡터 retrieval + Q&A — cache 히트가 비용 지배' },
-  { id: 'customer-support', name: 'Customer Support',
-    monthlyInputTokens: 100_000_000, monthlyOutputTokens: 20_000_000,
-    defaultCacheHitRate: 0.6, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 200_000, activeUsersDefault: 50_000,
-    description: '멀티턴 고객 응대 — 미들 볼륨, 템플릿 응답 cache' },
-  { id: 'meeting-summary', name: 'Meeting Summary',
-    monthlyInputTokens: 50_000_000, monthlyOutputTokens: 3_000_000,
-    defaultCacheHitRate: 0.1, defaultBatchEnabled: true,
-    monthlyRequestsDefault: 2_000, activeUsersDefault: 500,
-    description: '긴 트랜스크립트 → 요약, 일일 batch — batch 할인 적합' },
-  { id: 'content-moderation', name: 'Content Moderation',
-    monthlyInputTokens: 500_000_000, monthlyOutputTokens: 5_000_000,
-    defaultCacheHitRate: 0.2, defaultBatchEnabled: true,
-    monthlyRequestsDefault: 10_000_000, activeUsersDefault: 0,
-    description: '초소형 per-call × 극대량 — 작은 모델이 정답' },
-  { id: 'semantic-search', name: 'Semantic Search',
-    monthlyInputTokens: 200_000_000, monthlyOutputTokens: 1_000_000,
-    defaultCacheHitRate: 0.3, defaultBatchEnabled: false,
-    monthlyRequestsDefault: 50_000_000, activeUsersDefault: 100_000,
-    description: '검색 re-ranking — input 위주, 출력 tiny' },
+  preset('basic-chat', 'Basic Chat', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 30,
+    retryRate: 0,
+    requestsPerDay: 333,
+    activeUsers: 200,
+    requestsPerUserPerDay: 1.67,
+    avgInputTokensPerRequest: 100,
+    avgOutputTokensPerRequest: 50,
+  }, 0.3, false, 'Small Q&A workload with light context and short responses.'),
+
+  preset('document-analysis', 'Document Analysis', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 20,
+    retryRate: 0,
+    requestsPerDay: 1_000,
+    activeUsers: 500,
+    requestsPerUserPerDay: 2,
+    avgInputTokensPerRequest: 2_500,
+    avgOutputTokensPerRequest: 250,
+  }, 0.8, false, 'Document summarization and question answering with high input reuse.'),
+
+  preset('code-generation', 'Code Generation', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 25,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 300,
+    requestsPerUserPerDay: 13.33,
+    avgInputTokensPerRequest: 100,
+    avgOutputTokensPerRequest: 150,
+  }, 0.4, false, 'IDE and agent code generation with output-heavy responses.'),
+
+  preset('batch-processing', 'Batch Processing', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 30,
+    retryRate: 0,
+    requestsPerDay: 33_333,
+    activeUsers: 0,
+    requestsPerUserPerDay: 0,
+    avgInputTokensPerRequest: 100,
+    avgOutputTokensPerRequest: 50,
+  }, 0.2, true, 'Offline ETL and scheduled analysis where batch processing is acceptable.'),
+
+  preset('data-extraction', 'Data Extraction', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 25,
+    retryRate: 0,
+    requestsPerDay: 20_000,
+    activeUsers: 0,
+    requestsPerUserPerDay: 0,
+    avgInputTokensPerRequest: 400,
+    avgOutputTokensPerRequest: 200,
+  }, 0.6, true, 'Structured extraction from repeated schemas with cache and batch leverage.'),
+
+  preset('summarization', 'Summarization', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 20,
+    retryRate: 0,
+    requestsPerDay: 5_000,
+    activeUsers: 1_000,
+    requestsPerUserPerDay: 5,
+    avgInputTokensPerRequest: 5_000,
+    avgOutputTokensPerRequest: 500,
+  }, 0.5, false, 'Input-heavy summarization with relatively compact outputs.'),
+
+  preset('coding-agent', 'Coding Agent (IDE)', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 25,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 500,
+    requestsPerUserPerDay: 40,
+    avgInputTokensPerRequest: 60,
+    avgOutputTokensPerRequest: 10,
+  }, 0.4, false, 'Developer agent interactions with frequent short requests.'),
+
+  preset('rag-chatbot', 'RAG Chatbot', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 30,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 5_000,
+    requestsPerUserPerDay: 2,
+    avgInputTokensPerRequest: 667,
+    avgOutputTokensPerRequest: 33,
+  }, 0.7, false, 'Retrieval-augmented support chatbot with repeated context.'),
+
+  preset('customer-support', 'Customer Support', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 20,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 50_000,
+    requestsPerUserPerDay: 0.2,
+    avgInputTokensPerRequest: 500,
+    avgOutputTokensPerRequest: 100,
+  }, 0.6, false, 'Support automation with moderate request volume and reusable instructions.'),
+
+  preset('meeting-summary', 'Meeting Summary', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 20,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 500,
+    requestsPerUserPerDay: 0.2,
+    avgInputTokensPerRequest: 25_000,
+    avgOutputTokensPerRequest: 1_500,
+  }, 0.1, true, 'Transcript summarization suitable for scheduled batch runs.'),
+
+  preset('content-moderation', 'Content Moderation', {
+    volumeBasis: 'requestsPerDay',
+    activeDaysPerMonth: 30,
+    retryRate: 0,
+    requestsPerDay: 333_333,
+    activeUsers: 0,
+    requestsPerUserPerDay: 0,
+    avgInputTokensPerRequest: 50,
+    avgOutputTokensPerRequest: 1,
+  }, 0.2, true, 'High-volume classification with tiny outputs.'),
+
+  preset('semantic-search', 'Semantic Search', {
+    volumeBasis: 'activeUsers',
+    activeDaysPerMonth: 25,
+    retryRate: 0,
+    requestsPerDay: 0,
+    activeUsers: 100_000,
+    requestsPerUserPerDay: 20,
+    avgInputTokensPerRequest: 4,
+    avgOutputTokensPerRequest: 0.02,
+  }, 0.3, false, 'Search and reranking style workload with very small generations.'),
 ]

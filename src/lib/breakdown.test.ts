@@ -6,6 +6,11 @@ const MOCK: Model = {
   id: 'm', name: 'M', provider: 'anthropic',
   inputPrice: 3, outputPrice: 15, contextWindow: 100000,
   releaseDate: '2026-01', cacheDiscount: 0.9, batchDiscount: 0.5,
+  sourceUrl: 'https://example.com/pricing',
+  sourceLabel: 'Test pricing',
+  lastVerifiedAt: '2026-04-22',
+  supportsCaching: true,
+  supportsBatch: true,
 }
 
 describe('calculateBreakdown', () => {

@@ -4,57 +4,29 @@ import { MODELS, getModelById, type Model } from './data/models'
 import { type WorkloadPreset } from './data/presets'
 import { ModelSelector } from './components/ModelSelector'
 import { TokenInputs } from './components/TokenInputs'
+import { WorkloadBuilder } from './components/WorkloadBuilder'
+import { DecisionSummaryStrip } from './components/DecisionSummaryStrip'
 import { MigrationPanel } from './components/MigrationPanel'
 import { ScenarioPlanner } from './components/ScenarioPlanner'
 import { CostBreakdown } from './components/CostBreakdown'
-import { BudgetCap } from './components/BudgetCap'
-import { OptimizationTips } from './components/OptimizationTips'
-import { ModelFeatures } from './components/ModelFeatures'
+import { BudgetGuardrails } from './components/BudgetGuardrails'
 import { BatchAnalyzer } from './components/BatchAnalyzer'
 import { CacheAnalyzer } from './components/CacheAnalyzer'
-import { CostProjection } from './components/CostProjection'
-import { ModelRecommendation } from './components/ModelRecommendation'
-import { ProviderComparison } from './components/ProviderComparison'
-import { WorkloadImpact } from './components/WorkloadImpact'
-import { CostSensitivity } from './components/CostSensitivity'
-import { ModelSearch } from './components/ModelSearch'
 import { ExportAnalysis } from './components/ExportAnalysis'
-import { BudgetAlert } from './components/BudgetAlert'
-import { ROICalculator } from './components/ROICalculator'
 import { TokenEfficiency } from './components/TokenEfficiency'
-import { ModelMatrix } from './components/ModelMatrix'
-import { PerformanceTiers } from './components/PerformanceTiers'
 import { RequirementsFilter } from './components/RequirementsFilter'
-import { FeatureCostBreakdown } from './components/FeatureCostBreakdown'
-import { TeamCostAnalysis } from './components/TeamCostAnalysis'
-import { CustomPricingInput } from './components/CustomPricingInput'
-import { ComplianceRequirements } from './components/ComplianceRequirements'
-import { UseCaseRecommendations } from './components/UseCaseRecommendations'
-import { MigrationPlaybook } from './components/MigrationPlaybook'
-import { OptimizationOpportunities } from './components/OptimizationOpportunities'
-import { ModelPerformanceBenchmarks } from './components/ModelPerformanceBenchmarks'
-import { SavingsPaybackTimeline } from './components/SavingsPaybackTimeline'
-import { ScenarioManager } from './components/ScenarioManager'
-import { BudgetForecast } from './components/BudgetForecast'
-import { ProviderComparisonDashboard } from './components/ProviderComparisonDashboard'
 import { CostPerBusinessMetric } from './components/CostPerBusinessMetric'
-import { TCOCalculator } from './components/TCOCalculator'
-import { BreakevenAnalysis } from './components/BreakevenAnalysis'
-import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
 import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
 import { CostAttributionByFeature } from './components/CostAttributionByFeature'
 import { ModelComparisonMatrix } from './components/ModelComparisonMatrix'
-import { CostAlertConfig } from './components/CostAlertConfig'
-import { SLACostCalculator } from './components/SLACostCalculator'
 import { RequestPatternAnalyzer } from './components/RequestPatternAnalyzer'
-import { CostTrendAnalyzer } from './components/CostTrendAnalyzer'
-import { CostAllocationByTeam } from './components/CostAllocationByTeam'
+import { SavingsTracker } from './components/SavingsTracker'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
 import { ConfigPanel } from './components/ConfigPanel'
 import { loadConfigFromUrl } from './lib/configManager'
-import { ROLE_PACK } from './lib/roleLanguage'
+import { toLegacySimState, type PlannerState } from './lib/plannerState'
 
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -75,7 +47,7 @@ export interface SimState {
 
 function App() {
   const { t, i18n } = useTranslation()
-  const [state, setState] = useState<SimState>(() => {
+  const [state, setState] = useState<PlannerState>(() => {
     const urlConfig = loadConfigFromUrl()
     if (urlConfig) {
       const current = getModelById(urlConfig.state.currentModelId)
@@ -86,12 +58,30 @@ function App() {
           currentModel: current,
           candidateModel: candidate,
           period: urlConfig.state.period,
-          periodInputTokens: urlConfig.state.periodInputTokens,
-          periodOutputTokens: urlConfig.state.periodOutputTokens,
+          inputMode: 'directTokens',
+          workload: {
+            volumeBasis: 'requestsPerDay',
+            activeDaysPerMonth: 30,
+            retryRate: 0,
+            requestsPerDay: Math.round(urlConfig.state.monthlyRequests / 30),
+            activeUsers: urlConfig.state.activeUsers,
+            requestsPerUserPerDay: urlConfig.state.activeUsers > 0
+              ? urlConfig.state.monthlyRequests / urlConfig.state.activeUsers / 30
+              : 0,
+            avgInputTokensPerRequest: urlConfig.state.monthlyRequests > 0
+              ? urlConfig.state.periodInputTokens / urlConfig.state.monthlyRequests
+              : 0,
+            avgOutputTokensPerRequest: urlConfig.state.monthlyRequests > 0
+              ? urlConfig.state.periodOutputTokens / urlConfig.state.monthlyRequests
+              : 0,
+          },
+          directTokens: {
+            monthlyInputTokens: urlConfig.state.periodInputTokens,
+            monthlyOutputTokens: urlConfig.state.periodOutputTokens,
+            monthlyRequests: urlConfig.state.monthlyRequests,
+          },
           cacheHitRate: urlConfig.state.cacheHitRate,
           batchEnabled: urlConfig.state.batchEnabled,
-          monthlyRequests: urlConfig.state.monthlyRequests,
-          activeUsers: urlConfig.state.activeUsers,
           monthlyBudgetUsd: urlConfig.state.monthlyBudgetUsd,
         }
       }
@@ -102,12 +92,24 @@ function App() {
       currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
       candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
       period: 'month',
-      periodInputTokens: 50_000_000,
-      periodOutputTokens: 5_000_000,
+      inputMode: 'workload',
+      workload: {
+        volumeBasis: 'requestsPerDay',
+        activeDaysPerMonth: 30,
+        retryRate: 0,
+        requestsPerDay: 3333,
+        activeUsers: 1000,
+        requestsPerUserPerDay: 3.33,
+        avgInputTokensPerRequest: 500,
+        avgOutputTokensPerRequest: 50,
+      },
+      directTokens: {
+        monthlyInputTokens: 50_000_000,
+        monthlyOutputTokens: 5_000_000,
+        monthlyRequests: 100_000,
+      },
       cacheHitRate: 0.5,
       batchEnabled: false,
-      monthlyRequests: 100_000,
-      activeUsers: 1000,
       monthlyBudgetUsd: null,
     }
   })
@@ -115,17 +117,22 @@ function App() {
   const handlePreset = (p: WorkloadPreset) => {
     setState(s => ({
       ...s,
-      periodInputTokens: p.monthlyInputTokens,
-      periodOutputTokens: p.monthlyOutputTokens,
+      inputMode: 'workload',
+      workload: p.workload,
+      directTokens: {
+        ...s.directTokens,
+        monthlyInputTokens: p.monthlyInputTokens,
+        monthlyOutputTokens: p.monthlyOutputTokens,
+        monthlyRequests: p.monthlyRequestsDefault || s.directTokens.monthlyRequests,
+      },
       cacheHitRate: p.defaultCacheHitRate,
       batchEnabled: p.defaultBatchEnabled,
-      monthlyRequests: p.monthlyRequestsDefault || s.monthlyRequests,
-      activeUsers: p.activeUsersDefault || s.activeUsers,
     }))
   }
 
+  const legacyState = toLegacySimState(state)
   const isSameModel = state.currentModel.id === state.candidateModel.id
-  const configSummary = `Analyzing ${state.currentModel.name} → ${state.candidateModel.name} with ${Math.round(state.cacheHitRate * 100)}% cache hit rate${state.batchEnabled ? ' + batch mode' : ''}`
+  const configSummary = `Analyzing ${state.currentModel.name} to ${state.candidateModel.name} with ${Math.round(state.cacheHitRate * 100)}% cache hit rate${state.batchEnabled ? ' + batch mode' : ''}`
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
@@ -136,7 +143,24 @@ function App() {
             <p className="text-xs md:text-sm text-gray-500">{t('header.subtitle')}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 items-start sm:items-end">
-            <ConfigPanel state={state} onLoad={p => setState(s => ({ ...s, ...p }))} />
+            <ConfigPanel
+              state={legacyState}
+              onLoad={p => setState(s => ({
+                ...s,
+                role: p.role ?? s.role,
+                currentModel: p.currentModel ?? s.currentModel,
+                candidateModel: p.candidateModel ?? s.candidateModel,
+                period: p.period ?? s.period,
+                directTokens: {
+                  monthlyInputTokens: p.periodInputTokens ?? s.directTokens.monthlyInputTokens,
+                  monthlyOutputTokens: p.periodOutputTokens ?? s.directTokens.monthlyOutputTokens,
+                  monthlyRequests: p.monthlyRequests ?? s.directTokens.monthlyRequests,
+                },
+                cacheHitRate: p.cacheHitRate ?? s.cacheHitRate,
+                batchEnabled: p.batchEnabled ?? s.batchEnabled,
+                monthlyBudgetUsd: p.monthlyBudgetUsd ?? s.monthlyBudgetUsd,
+              }))}
+            />
             <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
               <button
                 onClick={() => i18n.changeLanguage('en')}
@@ -177,11 +201,11 @@ function App() {
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
-              <PeriodSelector value={state.period} onChange={p => setState(s => ({ ...s, period: p }))} />
+              <PeriodSelector value={state.period ?? 'month'} onChange={p => setState(s => ({ ...s, period: p }))} />
             </div>
           </div>
           <div className="text-xs bg-gray-50 border border-gray-200 rounded p-3 text-gray-600">
-            {!isSameModel ? configSummary : `⚠️ ${t('errors.sameModel')}`}
+            {!isSameModel ? configSummary : t('errors.sameModel')}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <ModelSelector
@@ -197,158 +221,95 @@ function App() {
               disabledModelId={state.currentModel.id}
             />
           </div>
-          <TokenInputs
-            periodInputTokens={state.periodInputTokens}
-            periodOutputTokens={state.periodOutputTokens}
-            cacheHitRate={state.cacheHitRate}
-            batchEnabled={state.batchEnabled}
-            onInputChange={v => setState(s => ({ ...s, periodInputTokens: v }))}
-            onOutputChange={v => setState(s => ({ ...s, periodOutputTokens: v }))}
-            onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}
-            onBatchChange={v => setState(s => ({ ...s, batchEnabled: v }))}
-            onPresetSelect={handlePreset}
-          />
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Input mode</p>
+            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden mb-4">
+              <button
+                type="button"
+                onClick={() => setState(s => ({ ...s, inputMode: 'workload' }))}
+                aria-pressed={state.inputMode === 'workload'}
+                className={`px-3 py-1.5 text-xs font-medium ${state.inputMode === 'workload' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                Workload Builder
+              </button>
+              <button
+                type="button"
+                onClick={() => setState(s => ({ ...s, inputMode: 'directTokens' }))}
+                aria-pressed={state.inputMode === 'directTokens'}
+                className={`border-l border-gray-300 px-3 py-1.5 text-xs font-medium ${state.inputMode === 'directTokens' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+              >
+                Direct Tokens (Advanced)
+              </button>
+            </div>
+            {state.inputMode === 'workload' ? (
+              <WorkloadBuilder
+                value={state.workload}
+                onChange={workload => setState(s => ({ ...s, workload }))}
+              />
+            ) : (
+              <TokenInputs
+                periodInputTokens={state.directTokens.monthlyInputTokens}
+                periodOutputTokens={state.directTokens.monthlyOutputTokens}
+                cacheHitRate={state.cacheHitRate}
+                batchEnabled={state.batchEnabled}
+                onInputChange={v => setState(s => ({ ...s, inputMode: 'directTokens', directTokens: { ...s.directTokens, monthlyInputTokens: v } }))}
+                onOutputChange={v => setState(s => ({ ...s, inputMode: 'directTokens', directTokens: { ...s.directTokens, monthlyOutputTokens: v } }))}
+                onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}
+                onBatchChange={v => setState(s => ({ ...s, batchEnabled: v }))}
+                onPresetSelect={handlePreset}
+              />
+            )}
+          </div>
         </section>
 
-        <ModelFeatures state={state} />
+        <DecisionSummaryStrip state={legacyState} />
 
-        <BatchAnalyzer state={state} />
+        <MigrationPanel state={legacyState} />
 
-        <CacheAnalyzer state={state} />
+        <SavingsTracker state={legacyState} />
 
-        <CostProjection state={state} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
+          <CacheAnalyzer state={legacyState} />
+          <BatchAnalyzer state={legacyState} />
+        </div>
 
-        <ModelRecommendation
-          state={state}
-          onSelectModel={modelId => {
-            const model = getModelById(modelId)
-            if (model && model.id !== state.candidateModel.id) {
-              setState(s => ({ ...s, candidateModel: model }))
-            }
-          }}
-        />
+        <ScenarioPlanner state={legacyState} />
 
-        <ProviderComparison state={state} />
+        <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+          <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
+            Developer Diagnostics
+          </summary>
+          <div className="mt-4 flex flex-col gap-4 md:gap-8">
+            <RequestPatternAnalyzer state={legacyState} />
+            <CostAttributionByFeature state={legacyState} />
+            <CostPerBusinessMetric state={legacyState} />
+            <ModelComparisonMatrix state={legacyState} />
+            <RequirementsFilter
+              state={legacyState}
+              onSelectCandidate={modelId => {
+                const model = getModelById(modelId)
+                if (model) {
+                  setState(s => ({ ...s, candidateModel: model }))
+                }
+              }}
+            />
+            <TokenEfficiency state={legacyState} />
+            <CostBreakdown state={legacyState} />
+            <CostOptimizationRoadmap state={legacyState} />
+          </div>
+        </details>
 
-        <WorkloadImpact state={state} />
+        <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+          <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
+            Guardrails
+          </summary>
+          <div className="mt-4 flex flex-col gap-4 md:gap-8">
+            <BudgetGuardrails state={legacyState} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />
+          </div>
+        </details>
 
-        <CostSensitivity state={state} />
-
-        <ModelSearch
-          state={state}
-          onSelectCandidate={modelId => {
-            const model = getModelById(modelId)
-            if (model) {
-              setState(s => ({ ...s, candidateModel: model }))
-            }
-          }}
-        />
-
-        <PerformanceTiers
-          state={state}
-          onSelectCandidate={modelId => {
-            const model = getModelById(modelId)
-            if (model) {
-              setState(s => ({ ...s, candidateModel: model }))
-            }
-          }}
-        />
-
-        <RequirementsFilter
-          state={state}
-          onSelectCandidate={modelId => {
-            const model = getModelById(modelId)
-            if (model) {
-              setState(s => ({ ...s, candidateModel: model }))
-            }
-          }}
-        />
-
-        <FeatureCostBreakdown state={state} />
-
-        <TeamCostAnalysis state={state} />
-
-        <CustomPricingInput state={state} />
-
-        <ComplianceRequirements state={state} />
-
-        <UseCaseRecommendations
-          state={state}
-          onSelectCandidate={modelId => {
-            const model = getModelById(modelId)
-            if (model) {
-              setState(s => ({ ...s, candidateModel: model }))
-            }
-          }}
-        />
-
-        <MigrationPlaybook state={state} />
-
-        <OptimizationOpportunities state={state} />
-
-        <ModelPerformanceBenchmarks state={state} />
-
-        <SavingsPaybackTimeline state={state} />
-
-        <ScenarioManager state={state} />
-
-        <BudgetForecast state={state} />
-
-        <ProviderComparisonDashboard state={state} />
-
-        <CostPerBusinessMetric state={state} />
-
-        <TCOCalculator state={state} />
-
-        <BreakevenAnalysis state={state} />
-
-        <RegionalCostAnalysis state={state} />
-
-        <CostOptimizationRoadmap state={state} />
-
-        <CostAttributionByFeature state={state} />
-
-        <ModelComparisonMatrix state={state} />
-
-        <CostAlertConfig state={state} />
-
-        <SLACostCalculator state={state} />
-
-        <RequestPatternAnalyzer state={state} />
-
-        <CostTrendAnalyzer state={state} />
-
-        <CostAllocationByTeam state={state} />
-
-        {/* Role-aware panel ordering */}
-        {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
-          switch (panelName) {
-            case 'migration':
-              return <MigrationPanel key="migration" state={state} />
-            case 'breakdown':
-              return <CostBreakdown key="breakdown" state={state} />
-            case 'budget':
-              return <BudgetCap key="budget" state={state} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />
-            case 'scenario':
-              return <ScenarioPlanner key="scenario" state={state} />
-            default:
-              return null
-          }
-        })}
-
-        <ExportAnalysis state={state} />
-
-        <OptimizationTips state={state} />
-
-        <BudgetAlert state={state} />
-
-        <ROICalculator state={state} />
-
-        <TokenEfficiency state={state} />
-
-        <ModelMatrix state={state} />
-
-        <SummaryCard state={state} />
+        <ExportAnalysis state={legacyState} />
+        <SummaryCard state={legacyState} />
       </main>
     </div>
   )

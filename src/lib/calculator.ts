@@ -4,6 +4,7 @@ export interface CalcInput {
   model: Model
   monthlyInputTokens: number
   monthlyOutputTokens: number
+  monthlyRequests?: number
   cacheHitRate: number   // 0-1
   batchEnabled: boolean
 }
@@ -13,11 +14,30 @@ export interface CalcResult {
   annualCost: number
   inputCost: number
   outputCost: number
+  cachedInputCost: number
+  uncachedInputCost: number
+  monthlyRequests: number
+  costPerRequest: number
+  cacheSavings: number
+  batchSavings: number
 }
 
-export function calculateCost(input: CalcInput): CalcResult {
-  const { model, monthlyInputTokens, monthlyOutputTokens, cacheHitRate, batchEnabled } = input
+type BaseCalcResult = Omit<CalcResult, 'cacheSavings' | 'batchSavings'>
 
+function finiteNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function finiteRatio(value: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0
+}
+
+function baseCost(input: CalcInput): BaseCalcResult {
+  const { model, batchEnabled } = input
+  const monthlyInputTokens = finiteNonNegative(input.monthlyInputTokens)
+  const monthlyOutputTokens = finiteNonNegative(input.monthlyOutputTokens)
+  const monthlyRequests = finiteNonNegative(input.monthlyRequests ?? 0)
+  const cacheHitRate = finiteRatio(input.cacheHitRate)
   const cachedInputTokens = monthlyInputTokens * cacheHitRate
   const uncachedInputTokens = monthlyInputTokens * (1 - cacheHitRate)
   const batchMult = batchEnabled ? (1 - model.batchDiscount) : 1
@@ -30,7 +50,28 @@ export function calculateCost(input: CalcInput): CalcResult {
 
   const monthlyCost = inputCost + outputCost
 
-  return { monthlyCost, annualCost: monthlyCost * 12, inputCost, outputCost }
+  return {
+    monthlyCost,
+    annualCost: monthlyCost * 12,
+    inputCost,
+    outputCost,
+    cachedInputCost,
+    uncachedInputCost,
+    monthlyRequests,
+    costPerRequest: monthlyRequests > 0 ? monthlyCost / monthlyRequests : 0,
+  }
+}
+
+export function calculateCost(input: CalcInput): CalcResult {
+  const current = baseCost(input)
+  const cacheBaseline = baseCost({ ...input, cacheHitRate: 0 })
+  const batchBaseline = baseCost({ ...input, batchEnabled: false })
+
+  return {
+    ...current,
+    cacheSavings: Math.max(0, cacheBaseline.monthlyCost - current.monthlyCost),
+    batchSavings: input.batchEnabled ? Math.max(0, batchBaseline.monthlyCost - current.monthlyCost) : 0,
+  }
 }
 
 export interface MigrationInput {
@@ -38,6 +79,7 @@ export interface MigrationInput {
   candidateModel: Model
   monthlyInputTokens: number
   monthlyOutputTokens: number
+  monthlyRequests?: number
   cacheHitRate: number
   batchEnabled: boolean
 }

@@ -6,12 +6,22 @@ const MOCK_ANTHROPIC: Model = {
   id: 'mock-anthropic', name: 'Mock Anthropic', provider: 'anthropic',
   inputPrice: 3, outputPrice: 15, contextWindow: 200000, releaseDate: '2026-01',
   cacheDiscount: 0.9, batchDiscount: 0.5,
+  sourceUrl: 'https://example.com/anthropic',
+  sourceLabel: 'Test pricing',
+  lastVerifiedAt: '2026-04-22',
+  supportsCaching: true,
+  supportsBatch: true,
 }
 
 const MOCK_OPENAI: Model = {
   id: 'mock-openai', name: 'Mock OpenAI', provider: 'openai',
   inputPrice: 2.5, outputPrice: 15, contextWindow: 128000, releaseDate: '2026-01',
   cacheDiscount: 0.5, batchDiscount: 0.5,
+  sourceUrl: 'https://example.com/openai',
+  sourceLabel: 'Test pricing',
+  lastVerifiedAt: '2026-04-22',
+  supportsCaching: true,
+  supportsBatch: true,
 }
 
 describe('calculateCost', () => {
@@ -76,6 +86,51 @@ describe('calculateCost', () => {
     })
     expect(result.monthlyCost).toBeCloseTo(3, 4)
   })
+
+  it('returns cost per request when monthlyRequests is provided', () => {
+    const result = calculateCost({
+      model: MOCK_ANTHROPIC,
+      monthlyInputTokens: 1_000_000,
+      monthlyOutputTokens: 500_000,
+      monthlyRequests: 100,
+      cacheHitRate: 0,
+      batchEnabled: false,
+    })
+
+    expect(result.monthlyCost).toBeCloseTo(10.5, 4)
+    expect(result.costPerRequest).toBeCloseTo(0.105, 4)
+  })
+
+  it('returns zero cost per request for zero requests', () => {
+    const result = calculateCost({
+      model: MOCK_ANTHROPIC,
+      monthlyInputTokens: 1_000_000,
+      monthlyOutputTokens: 500_000,
+      monthlyRequests: 0,
+      cacheHitRate: 0,
+      batchEnabled: false,
+    })
+
+    expect(result.costPerRequest).toBe(0)
+  })
+
+  it('returns cache and batch savings using explicit baselines', () => {
+    const result = calculateCost({
+      model: MOCK_ANTHROPIC,
+      monthlyInputTokens: 2_000_000,
+      monthlyOutputTokens: 1_000_000,
+      monthlyRequests: 1_000,
+      cacheHitRate: 0.5,
+      batchEnabled: true,
+    })
+
+    expect(result.uncachedInputCost).toBeCloseTo(1.5, 4)
+    expect(result.cachedInputCost).toBeCloseTo(0.15, 4)
+    expect(result.inputCost).toBeCloseTo(1.65, 4)
+    expect(result.outputCost).toBeCloseTo(7.5, 4)
+    expect(result.cacheSavings).toBeCloseTo(1.35, 4)
+    expect(result.batchSavings).toBeCloseTo(9.15, 4)
+  })
 })
 
 describe('calculateMigrationDelta', () => {
@@ -105,5 +160,21 @@ describe('calculateMigrationDelta', () => {
       batchEnabled: false,
     })
     expect(result.monthlyDelta).toBeCloseTo(5, 2)
+  })
+
+  it('returns zero migration delta for the same model', () => {
+    const result = calculateMigrationDelta({
+      currentModel: MOCK_ANTHROPIC,
+      candidateModel: MOCK_ANTHROPIC,
+      monthlyInputTokens: 10_000_000,
+      monthlyOutputTokens: 2_000_000,
+      monthlyRequests: 10_000,
+      cacheHitRate: 0.5,
+      batchEnabled: true,
+    })
+
+    expect(result.monthlyDelta).toBe(0)
+    expect(result.annualDelta).toBe(0)
+    expect(result.savingPercent).toBe(0)
   })
 })

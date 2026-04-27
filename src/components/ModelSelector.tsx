@@ -1,5 +1,5 @@
 import { MODELS, type Model, type Provider } from '../data/models'
-import { fmtPricePerMillion } from '../lib/format'
+import { fmtPricePerMillion, fmtTokens } from '../lib/format'
 
 interface Props {
   label: string
@@ -23,6 +23,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
 
 export function ModelSelector({ label, value, onChange, disabledModelId }: Props) {
   const id = `model-select-${label.replace(/\s+/g, '-').toLowerCase()}`
+  const selectedModel = MODELS.find(m => m.id === value)
 
   // Group models by provider
   const providers = new Map<Provider, Model[]>()
@@ -59,6 +60,32 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
           </optgroup>
         ))}
       </select>
+      {selectedModel && (
+        <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-medium text-gray-800">{PROVIDER_NAMES[selectedModel.provider]}</span>
+            <span>Context {fmtTokens(selectedModel.contextWindow)}</span>
+            <span>{fmtPricePerMillion(selectedModel.inputPrice, selectedModel.outputPrice)}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span>Verified {selectedModel.lastVerifiedAt}</span>
+            <a
+              href={selectedModel.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              Pricing source
+            </a>
+            <span className="rounded border border-gray-300 bg-white px-2 py-0.5">
+              {selectedModel.supportsCaching ? 'Cache supported' : 'No cache support'}
+            </span>
+            <span className="rounded border border-gray-300 bg-white px-2 py-0.5">
+              {selectedModel.supportsBatch ? 'Batch supported' : 'No batch support'}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

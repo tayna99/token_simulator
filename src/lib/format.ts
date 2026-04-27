@@ -52,6 +52,14 @@ export function fmtTokens(n: number): string {
   return n.toLocaleString('en-US')
 }
 
+export function fmtNumber(n: number, decimals = 0): string {
+  if (!isValid(n)) return INVALID
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
 export function fmtPricePerMillion(input: number, output: number): string {
   if (!isValid(input) || !isValid(output)) return INVALID
   const fmt = (p: number) => `$${p.toFixed(2)}`

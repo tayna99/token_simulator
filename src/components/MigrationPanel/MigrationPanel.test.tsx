@@ -110,6 +110,24 @@ describe('MigrationPanel', () => {
     expect(screen.getByTestId('break-even')).toBeInTheDocument()
   })
 
+  it('shows cost breakdown rows and changed-most explanation', () => {
+    render(<MigrationPanel state={{ ...BASE_STATE, cacheHitRate: 0.5, batchEnabled: true }} />)
+
+    expect(screen.getByText(/input cost/i)).toBeInTheDocument()
+    expect(screen.getByText(/output cost/i)).toBeInTheDocument()
+    expect(screen.getByText(/cache savings/i)).toBeInTheDocument()
+    expect(screen.getByText(/batch savings/i)).toBeInTheDocument()
+    expect(screen.getByText(/changed most/i)).toBeInTheDocument()
+  })
+
+  it('updates cache savings when cache hit rate changes', () => {
+    const { rerender } = render(<MigrationPanel state={{ ...BASE_STATE, cacheHitRate: 0 }} />)
+    expect(screen.getByTestId('current-cache-savings')).toHaveTextContent('$0')
+
+    rerender(<MigrationPanel state={{ ...BASE_STATE, cacheHitRate: 0.5 }} />)
+    expect(screen.getByTestId('current-cache-savings')).not.toHaveTextContent('$0')
+  })
+
   it('shows ▼ icon for savings', () => {
     render(<MigrationPanel state={BASE_STATE} />)
     // Gemini flash < Sonnet → savings → ▼

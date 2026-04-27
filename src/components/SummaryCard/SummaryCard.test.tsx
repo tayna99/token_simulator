@@ -39,4 +39,30 @@ describe('SummaryCard', () => {
     render(<SummaryCard state={BASE_STATE} />)
     expect(screen.getByRole('button', { name: /export png/i })).toBeInTheDocument()
   })
+
+  it('uses static pricing provenance instead of current month freshness', () => {
+    render(<SummaryCard state={BASE_STATE} />)
+    expect(screen.getByText(/Static pricing catalog curated in-repo/i)).toBeInTheDocument()
+    expect(screen.getByText(/Claude Sonnet 4.6 on 2026-04-22/i)).toBeInTheDocument()
+    expect(screen.queryByText(/April 2026/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps summary text marked as English', () => {
+    render(<SummaryCard state={BASE_STATE} />)
+    expect(screen.getByTestId('summary-card-body')).toHaveAttribute('lang', 'en')
+  })
+
+  it('does not claim switching savings for same-model state', () => {
+    render(<SummaryCard state={{ ...BASE_STATE, candidateModel: BASE_STATE.currentModel }} />)
+    expect(screen.getByText(/migration delta is \$0/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Switching to/i)).not.toBeInTheDocument()
+  })
+
+  it('updates summary when token volume changes', () => {
+    const { rerender } = render(<SummaryCard state={BASE_STATE} />)
+    expect(screen.getByText(/50M input/)).toBeInTheDocument()
+
+    rerender(<SummaryCard state={{ ...BASE_STATE, periodInputTokens: 100_000_000 }} />)
+    expect(screen.getByText(/100M input/)).toBeInTheDocument()
+  })
 })
