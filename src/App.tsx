@@ -34,6 +34,7 @@ import { MigrationPlaybook } from './components/MigrationPlaybook'
 import { OptimizationOpportunities } from './components/OptimizationOpportunities'
 import { ModelPerformanceBenchmarks } from './components/ModelPerformanceBenchmarks'
 import { SavingsPaybackTimeline } from './components/SavingsPaybackTimeline'
+import { ScenarioManager } from './components/ScenarioManager'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -274,6 +275,8 @@ function App() {
         <ModelPerformanceBenchmarks state={state} />
 
         <SavingsPaybackTimeline state={state} />
+
+        <ScenarioManager state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
