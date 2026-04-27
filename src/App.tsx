@@ -41,6 +41,7 @@ import { CostPerBusinessMetric } from './components/CostPerBusinessMetric'
 import { TCOCalculator } from './components/TCOCalculator'
 import { BreakevenAnalysis } from './components/BreakevenAnalysis'
 import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
+import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -295,6 +296,8 @@ function App() {
         <BreakevenAnalysis state={state} />
 
         <RegionalCostAnalysis state={state} />
+
+        <CostOptimizationRoadmap state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
