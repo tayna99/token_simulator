@@ -1,7 +1,7 @@
 {
   "header": {
     "title": "LLM Cost Planner",
-    "subtitle": "Migration ROI · Scenario Planning · Stakeholder Export",
+    "subtitle": "Workload pricing, model migration, and developer-ready export",
     "role": "Role"
   },
   "roles": {
@@ -14,6 +14,9 @@
     "period": "Time Period",
     "currentModel": "Current Model",
     "candidateModel": "Candidate Model",
+    "summary": "Analyzing {{current}} to {{candidate}} with {{cacheRate}} cache hit rate{{batchSuffix}}",
+    "batchSuffix": " + batch mode",
+    "help": "Set up your workload: models, token volumes, optimization options, and time period for analysis",
     "saveLoad": "Save/Load",
     "manage": "Save & Load Configuration",
     "description": "Export your current analysis setup as JSON to save, share, or document your exact configuration.",
@@ -31,6 +34,43 @@
     "tipTitle": "Tip:",
     "tipContent": "Save configurations for different scenarios, share with team members, or use to reproduce specific analyses."
   },
+  "inputMode": {
+    "label": "Input mode",
+    "workload": "Workload Builder",
+    "directTokens": "Direct Tokens (Advanced)"
+  },
+  "model": {
+    "priceHelp": "Prices shown as: input price / output price per 1M tokens",
+    "selectAria": "Select {{label}}: model name with input/output prices per 1M tokens",
+    "context": "Context",
+    "verified": "Verified",
+    "pricingSource": "Pricing source",
+    "cacheSupported": "Cache supported",
+    "cacheUnsupported": "No cache support",
+    "batchSupported": "Batch supported",
+    "batchUnsupported": "No batch support"
+  },
+  "workload": {
+    "volumeBasis": "Volume basis",
+    "requestsPerDay": "Requests/day",
+    "activeUsers": "Active users",
+    "requestsPerUserPerDay": "Requests/user/day",
+    "activeDaysPerMonth": "Active days/month",
+    "retryRate": "Retry rate",
+    "avgInputTokensPerRequest": "Avg input tokens/request",
+    "avgOutputTokensPerRequest": "Avg output tokens/request",
+    "monthlyRequests": "Monthly requests",
+    "monthlyInputTokens": "Monthly input tokens",
+    "monthlyOutputTokens": "Monthly output tokens"
+  },
+  "decision": {
+    "currentMonthly": "Current monthly",
+    "candidateMonthly": "Candidate monthly",
+    "monthlyDelta": "Monthly delta",
+    "annualDelta": "Annual delta",
+    "currentPerRequest": "Current/request",
+    "candidatePerRequest": "Candidate/request"
+  },
   "periods": {
     "day": "Day",
     "week": "Week",
@@ -44,24 +84,23 @@
     "outputTokens": "Monthly Output Tokens",
     "cacheHitRate": "Cache Hit Rate",
     "batchMode": "Batch Mode",
-    "extremeWarning": "⚠️ Unusually large — verify unit",
+    "extremeWarning": "Unusually large - verify unit",
     "cacheSlider": "Cache hit rate slider",
     "cachePercent": "Cache hit rate percent",
     "saveAsPreset": "Save as Preset",
     "presetName": "Preset name:",
     "customPreset": "Custom"
   },
-  "presets": {
-    "basicChat": "Basic Chat",
-    "codeGeneration": "Code Generation",
-    "dataAnalysis": "Data Analysis",
-    "imageProcessing": "Image Processing",
-    "highFrequency": "High Frequency",
-    "longContext": "Long Context",
-    "reasoning": "Reasoning"
-  },
   "migration": {
     "title": "Migration Comparison",
+    "breakdown": "Breakdown",
+    "inputCost": "Input cost",
+    "outputCost": "Output cost",
+    "uncachedInput": "Uncached input",
+    "cachedInput": "Cached input",
+    "cacheSavings": "Cache savings",
+    "batchSavings": "Batch savings",
+    "changedMost": "Changed most",
     "monthly": "Monthly delta",
     "annual": "Annual savings",
     "percent": "% savings",
@@ -82,18 +121,38 @@
     "reset": "Reset to defaults",
     "on": "On",
     "off": "Off",
-    "editHint": "Click cells to edit",
     "tooltips": {
-      "bestTraffic": "Optimistic growth (e.g., +30% requests with better efficiency)",
+      "bestTraffic": "Optimistic growth with better efficiency",
       "baseTraffic": "Current usage baseline",
-      "worstTraffic": "Pessimistic scenario (e.g., -30% requests or higher latency)",
+      "worstTraffic": "Pessimistic usage or lower efficiency",
       "bestCache": "Best-case cache hit rate with improved caching strategy",
       "baseCache": "Current cache hit rate baseline",
-      "worstCache": "Worst-case when cache is ineffective",
-      "bestBatch": "Batch API enabled for compatible workloads",
-      "baseBatch": "Current batch mode state",
-      "worstBatch": "Batch not available or disabled"
+      "worstCache": "Worst-case when cache is ineffective"
     }
+  },
+  "guardrails": {
+    "title": "Budget & Quota Guardrails",
+    "monthlyBudget": "Monthly budget",
+    "currentSpend": "Current spend",
+    "manualAlertThreshold": "Manual alert threshold",
+    "monthlyRequestQuota": "Monthly request quota",
+    "noBudgetSet": "No budget set",
+    "setBudget": "Set budget",
+    "capacityPending": "Capacity pending",
+    "aboveCurrentSpend": "20% above current spend",
+    "budgetThreshold": "80% of budget",
+    "setBudgetHint": "Set a monthly budget to calculate request quota and overage risk.",
+    "withinBudget": "Within budget by",
+    "impliedUserQuota": "Implied user quota",
+    "overBudget": "Over budget by",
+    "overBudgetHint": "Reduce traffic, switch models, or raise budget."
+  },
+  "budgetCap": {
+    "title": "Budget Capacity",
+    "label": "Monthly Budget (USD)",
+    "maxRequests": "Max requests",
+    "maxUsers": "Max active users",
+    "costPerRequest": "Cost per request"
   },
   "costBreakdown": {
     "title": "Cost Analysis",
@@ -105,12 +164,33 @@
     "batchSavings": "Batch savings",
     "batchBaseline": "vs no-batch baseline"
   },
-  "budgetCap": {
-    "title": "Budget Capacity",
-    "label": "Monthly Budget (USD)",
-    "maxRequests": "Max requests",
-    "maxUsers": "Max active users",
-    "costPerRequest": "Cost per request"
+  "cacheAnalyzer": {
+    "title": "Prompt Caching Impact",
+    "discountRate": "Cache Discount Rate",
+    "monthlySavings": "Monthly Savings @80%",
+    "annualSavings": "Annual Savings @80%",
+    "costReduction": "cost reduction on cached tokens",
+    "fromTo": "from {{from}} to 80%",
+    "tipPrefix": "Tip:",
+    "tip": "Prompt caching stores frequently-used contexts like system prompts, documentation, or conversation history. Increase your cache hit rate above to see the impact."
+  },
+  "batchAnalyzer": {
+    "title": "Batch Processing Impact",
+    "discountRate": "Batch Discount Rate",
+    "monthlySavings": "Monthly Savings",
+    "annualSavings": "Annual Savings",
+    "onOutputTokens": "on output tokens",
+    "reduction": "{{percent}} reduction",
+    "notePrefix": "Note:",
+    "note": "Batch processing is ideal for non-real-time workloads. Enable it above to see the updated costs."
+  },
+  "savings": {
+    "title": "Savings Tracker",
+    "description": "Projected savings from switching the selected workload to {{model}}.",
+    "lowerMonthlyCost": "{{percent}} lower monthly cost",
+    "currentMonthlyCost": "Current monthly cost",
+    "monthlyProjectedSavings": "Monthly projected savings",
+    "annualProjectedSavings": "Annual projected savings"
   },
   "summary": {
     "title": "Board-Ready Summary",
@@ -121,17 +201,7 @@
     "copied": "Copied to clipboard!",
     "exported": "Summary exported as PNG!",
     "exportFailed": "Export failed. Try again or use a screenshot.",
-    "pricesUpdated": "Prices updated",
-    "sourceLabel": "Prices based on official API docs",
-    "dateFormat": "long"
-  },
-  "optimization": {
-    "title": "Optimization Tips",
-    "cacheTitle": "Improve cache hit rate",
-    "cacheDescription": "Increasing cache hit rate from {{rate}} would save {{saving}} per month (~{{percent}}%)",
-    "batchTitle": "Enable batch processing",
-    "batchDescription": "Batch API could save {{saving}} per month (~{{percent}}%)",
-    "optimized": "Great optimization settings!"
+    "sourceLabel": "Prices based on official API docs"
   },
   "errors": {
     "sameModel": "Current and candidate are the same model"

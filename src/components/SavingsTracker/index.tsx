@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { calculateMigrationDelta } from '../../lib/calculator'
 import { fmtCurrency, fmtPercent } from '../../lib/format'
 import type { SimState } from '../../App'
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function SavingsTracker({ state }: Props) {
+  const { t } = useTranslation()
   const delta = calculateMigrationDelta({
     currentModel: state.currentModel,
     candidateModel: state.candidateModel,
@@ -30,30 +32,30 @@ export function SavingsTracker({ state }: Props) {
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-sm md:text-base font-semibold text-gray-800">
-            Savings Tracker
+            {t('savings.title')}
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            Projected savings from switching the selected workload to {state.candidateModel.name}.
+            {t('savings.description', { model: state.candidateModel.name })}
           </p>
         </div>
         <div className="text-xs text-gray-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-          {fmtPercent(savingRatio, 1)} lower monthly cost
+          {t('savings.lowerMonthlyCost', { percent: fmtPercent(savingRatio, 1) })}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-          <div className="text-xs text-gray-500">Current monthly cost</div>
+          <div className="text-xs text-gray-500">{t('savings.currentMonthlyCost')}</div>
           <div className="text-lg font-semibold text-gray-900">{fmtCurrency(delta.currentCost.monthlyCost)}</div>
         </div>
 
         <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-          <div className="text-xs text-green-700">Monthly projected savings</div>
+          <div className="text-xs text-green-700">{t('savings.monthlyProjectedSavings')}</div>
           <div className="text-lg font-semibold text-green-900">{fmtCurrency(monthlySavings)}</div>
         </div>
 
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
-          <div className="text-xs text-emerald-700">Annual projected savings</div>
+          <div className="text-xs text-emerald-700">{t('savings.annualProjectedSavings')}</div>
           <div className="text-lg font-semibold text-emerald-900">{fmtCurrency(annualSavings)}</div>
         </div>
       </div>

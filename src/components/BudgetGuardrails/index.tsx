@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { calculateCost } from '../../lib/calculator'
 import { calculateCapacity } from '../../lib/budget'
 import { fmtCurrency, fmtPercent, fmtTokens } from '../../lib/format'
@@ -15,6 +16,7 @@ function finiteBudget(value: string): number | null {
 }
 
 export function BudgetGuardrails({ state, onBudgetChange }: Props) {
+  const { t } = useTranslation()
   const current = calculateCost({
     model: state.currentModel,
     monthlyInputTokens: state.periodInputTokens,
@@ -53,12 +55,12 @@ export function BudgetGuardrails({ state, onBudgetChange }: Props) {
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
       <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-        Budget & Quota Guardrails
+        {t('guardrails.title')}
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
         <label className="block">
-          <span className="block text-xs font-medium text-gray-700 mb-2">Monthly budget</span>
+          <span className="block text-xs font-medium text-gray-700 mb-2">{t('guardrails.monthlyBudget')}</span>
           <div className="flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2">
             <span className="text-sm text-gray-500 mr-1">$</span>
             <input
@@ -66,7 +68,7 @@ export function BudgetGuardrails({ state, onBudgetChange }: Props) {
               min={0}
               value={budget ?? ''}
               onChange={event => onBudgetChange(finiteBudget(event.target.value))}
-              aria-label="Monthly budget"
+              aria-label={t('guardrails.monthlyBudget')}
               className="w-full text-sm outline-none"
               placeholder="500"
             />
@@ -74,23 +76,23 @@ export function BudgetGuardrails({ state, onBudgetChange }: Props) {
         </label>
 
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-          <div className="text-xs text-gray-500">Current spend</div>
+          <div className="text-xs text-gray-500">{t('guardrails.currentSpend')}</div>
           <div className="text-lg font-semibold text-gray-900">{fmtCurrency(current.monthlyCost)}</div>
-          <div className="text-xs text-gray-600">{budget ? fmtPercent(budgetRatio, 1) : 'No budget set'}</div>
+          <div className="text-xs text-gray-600">{budget ? fmtPercent(budgetRatio, 1) : t('guardrails.noBudgetSet')}</div>
         </div>
 
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-          <div className="text-xs text-gray-500">Manual alert threshold</div>
+          <div className="text-xs text-gray-500">{t('guardrails.manualAlertThreshold')}</div>
           <div className="text-lg font-semibold text-gray-900">{fmtCurrency(alertThreshold)}</div>
-          <div className="text-xs text-gray-600">{budget === null ? '20% above current spend' : '80% of budget'}</div>
+          <div className="text-xs text-gray-600">{budget === null ? t('guardrails.aboveCurrentSpend') : t('guardrails.budgetThreshold')}</div>
         </div>
 
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-          <div className="text-xs text-gray-500">Monthly request quota</div>
+          <div className="text-xs text-gray-500">{t('guardrails.monthlyRequestQuota')}</div>
           <div className="text-lg font-semibold text-gray-900">
-            {capacity ? fmtTokens(capacity.maxMonthlyRequests) : 'Set budget'}
+            {capacity ? fmtTokens(capacity.maxMonthlyRequests) : t('guardrails.setBudget')}
           </div>
-          <div className="text-xs text-gray-600">{capacity ? `${fmtCurrency(capacity.costPerRequestUsd, 4)}/request` : 'Capacity pending'}</div>
+          <div className="text-xs text-gray-600">{capacity ? `${fmtCurrency(capacity.costPerRequestUsd, 4)}/request` : t('guardrails.capacityPending')}</div>
         </div>
       </div>
 
@@ -101,12 +103,12 @@ export function BudgetGuardrails({ state, onBudgetChange }: Props) {
             ? 'border-green-200 bg-green-50 text-green-800'
             : 'border-red-200 bg-red-50 text-red-800'
       }`}>
-        {budget === null && 'Set a monthly budget to calculate request quota and overage risk.'}
+        {budget === null && t('guardrails.setBudgetHint')}
         {budget !== null && remaining !== null && remaining >= 0 && (
-          <>Within budget by <strong>{fmtCurrency(remaining)}</strong>. {maxUsers > 0 && <>Implied user quota: <strong>{fmtTokens(maxUsers)}</strong>.</>}</>
+          <>{t('guardrails.withinBudget')} <strong>{fmtCurrency(remaining)}</strong>. {maxUsers > 0 && <>{t('guardrails.impliedUserQuota')}: <strong>{fmtTokens(maxUsers)}</strong>.</>}</>
         )}
         {budget !== null && remaining !== null && remaining < 0 && (
-          <>Over budget by <strong>{fmtCurrency(Math.abs(remaining))}</strong>. Reduce traffic, switch models, or raise budget.</>
+          <>{t('guardrails.overBudget')} <strong>{fmtCurrency(Math.abs(remaining))}</strong>. {t('guardrails.overBudgetHint')}</>
         )}
       </div>
     </section>

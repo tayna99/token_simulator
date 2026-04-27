@@ -22,4 +22,19 @@ describe('ModelSelector', () => {
     expect(screen.getByText(/cache/i)).toBeInTheDocument()
     expect(screen.getByText(/batch/i)).toBeInTheDocument()
   })
+
+  it('renders GPT-5.5 price, context, and long-context pricing note', () => {
+    render(
+      <ModelSelector
+        label="Candidate model"
+        value="gpt-5.5"
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/GPT-5.5/i)).toBeInTheDocument()
+    expect(screen.getByText(/Context 1M/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/\$5.00 \/ \$30.00 per 1M tokens/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/under 270K/i)).toBeInTheDocument()
+  })
 })

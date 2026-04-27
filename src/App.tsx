@@ -132,7 +132,12 @@ function App() {
 
   const legacyState = toLegacySimState(state)
   const isSameModel = state.currentModel.id === state.candidateModel.id
-  const configSummary = `Analyzing ${state.currentModel.name} to ${state.candidateModel.name} with ${Math.round(state.cacheHitRate * 100)}% cache hit rate${state.batchEnabled ? ' + batch mode' : ''}`
+  const configSummary = t('config.summary', {
+    current: state.currentModel.name,
+    candidate: state.candidateModel.name,
+    cacheRate: `${Math.round(state.cacheHitRate * 100)}%`,
+    batchSuffix: state.batchEnabled ? t('config.batchSuffix') : '',
+  })
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
@@ -197,7 +202,7 @@ function App() {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-2">
             <div className="flex items-center gap-2">
               <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('config.title')}</h2>
-              <span className="text-xs text-gray-500" title="Set up your workload: models, token volumes, optimization options, and time period for analysis">(?)</span>
+              <span className="text-xs text-gray-500" title={t('config.help')}>(?)</span>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
@@ -222,7 +227,7 @@ function App() {
             />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Input mode</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">{t('inputMode.label')}</p>
             <div className="inline-flex rounded-md border border-gray-300 overflow-hidden mb-4">
               <button
                 type="button"
@@ -230,7 +235,7 @@ function App() {
                 aria-pressed={state.inputMode === 'workload'}
                 className={`px-3 py-1.5 text-xs font-medium ${state.inputMode === 'workload' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
-                Workload Builder
+                {t('inputMode.workload')}
               </button>
               <button
                 type="button"
@@ -238,7 +243,7 @@ function App() {
                 aria-pressed={state.inputMode === 'directTokens'}
                 className={`border-l border-gray-300 px-3 py-1.5 text-xs font-medium ${state.inputMode === 'directTokens' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
               >
-                Direct Tokens (Advanced)
+                {t('inputMode.directTokens')}
               </button>
             </div>
             {state.inputMode === 'workload' ? (
@@ -301,7 +306,7 @@ function App() {
 
         <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
           <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
-            Guardrails
+            {t('guardrails.title')}
           </summary>
           <div className="mt-4 flex flex-col gap-4 md:gap-8">
             <BudgetGuardrails state={legacyState} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />

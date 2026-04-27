@@ -48,10 +48,10 @@ export function MigrationPanel({ state }: Props) {
 
   const arrow = isSaving ? '▼' : '▲'
   const breakdownDiffs = [
-    { label: 'input cost', summaryLabel: 'input', value: result.candidateCost.inputCost - result.currentCost.inputCost },
-    { label: 'output cost', summaryLabel: 'output', value: result.candidateCost.outputCost - result.currentCost.outputCost },
-    { label: 'cache savings', summaryLabel: 'cache', value: result.candidateCost.cacheSavings - result.currentCost.cacheSavings },
-    { label: 'batch savings', summaryLabel: 'batch', value: result.candidateCost.batchSavings - result.currentCost.batchSavings },
+    { label: t('migration.inputCost'), summaryLabel: 'input', value: result.candidateCost.inputCost - result.currentCost.inputCost },
+    { label: t('migration.outputCost'), summaryLabel: 'output', value: result.candidateCost.outputCost - result.currentCost.outputCost },
+    { label: t('migration.cacheSavings'), summaryLabel: 'cache', value: result.candidateCost.cacheSavings - result.currentCost.cacheSavings },
+    { label: t('migration.batchSavings'), summaryLabel: 'batch', value: result.candidateCost.batchSavings - result.currentCost.batchSavings },
   ]
   const changedMost = breakdownDiffs.reduce((best, item) =>
     Math.abs(item.value) > Math.abs(best.value) ? item : best
@@ -88,41 +88,41 @@ export function MigrationPanel({ state }: Props) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-3 py-2 text-left font-medium">Breakdown</th>
+              <th className="px-3 py-2 text-left font-medium">{t('migration.breakdown')}</th>
               <th className="px-3 py-2 text-right font-medium">{t('config.currentModel')}</th>
               <th className="px-3 py-2 text-right font-medium">{t('config.candidateModel')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             <tr>
-              <td className="px-3 py-2 text-gray-600">Input cost</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.inputCost')}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.currentCost.inputCost)}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.inputCost)}</td>
             </tr>
             <tr>
-              <td className="px-3 py-2 text-gray-600">Output cost</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.outputCost')}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.currentCost.outputCost)}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.outputCost)}</td>
             </tr>
             <tr>
-              <td className="px-3 py-2 text-gray-600">Uncached input</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.uncachedInput')}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.currentCost.uncachedInputCost)}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.uncachedInputCost)}</td>
             </tr>
             <tr>
-              <td className="px-3 py-2 text-gray-600">Cached input</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.cachedInput')}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.currentCost.cachedInputCost)}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.cachedInputCost)}</td>
             </tr>
             <tr>
-              <td className="px-3 py-2 text-gray-600">Cache savings</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.cacheSavings')}</td>
               <td data-testid="current-cache-savings" className="px-3 py-2 text-right text-gray-900">
                 {fmtCurrency(result.currentCost.cacheSavings)}
               </td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.cacheSavings)}</td>
             </tr>
             <tr>
-              <td className="px-3 py-2 text-gray-600">Batch savings</td>
+              <td className="px-3 py-2 text-gray-600">{t('migration.batchSavings')}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.currentCost.batchSavings)}</td>
               <td className="px-3 py-2 text-right text-gray-900">{fmtCurrency(result.candidateCost.batchSavings)}</td>
             </tr>
@@ -131,7 +131,7 @@ export function MigrationPanel({ state }: Props) {
       </div>
 
       <p className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-        Changed most: <span className="font-semibold">{changedMost.summaryLabel}</span> ({fmtDelta(changedMost.value)}).
+        {t('migration.changedMost')}: <span className="font-semibold">{changedMost.summaryLabel}</span> ({fmtDelta(changedMost.value)}).
       </p>
 
       <div className={`rounded-lg border p-3 md:p-4 ${deltaBg}`}>

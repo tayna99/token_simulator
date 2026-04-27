@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { deriveMonthlyWorkload, type VolumeBasis, type WorkloadInputs } from '../../lib/workload'
 import { fmtPercent, fmtTokens } from '../../lib/format'
 
@@ -12,6 +13,7 @@ function toNumber(raw: string): number {
 }
 
 export function WorkloadBuilder({ value, onChange }: Props) {
+  const { t } = useTranslation()
   const derived = deriveMonthlyWorkload(value)
   const update = (patch: Partial<WorkloadInputs>) => onChange({ ...value, ...patch })
   const setBasis = (volumeBasis: VolumeBasis) => update({ volumeBasis })
@@ -19,7 +21,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Volume basis</p>
+        <p className="text-sm font-medium text-gray-700 mb-2">{t('workload.volumeBasis')}</p>
         <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
           <button
             type="button"
@@ -29,7 +31,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
               value.volumeBasis === 'requestsPerDay' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
             }`}
           >
-            Requests/day
+            {t('workload.requestsPerDay')}
           </button>
           <button
             type="button"
@@ -39,7 +41,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
               value.volumeBasis === 'activeUsers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
             }`}
           >
-            Active users
+            {t('workload.activeUsers')}
           </button>
         </div>
       </div>
@@ -47,7 +49,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {value.volumeBasis === 'requestsPerDay' ? (
           <label className="text-sm font-medium text-gray-700">
-            Requests/day
+            {t('workload.requestsPerDay')}
             <input
               type="number"
               min={0}
@@ -59,7 +61,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
         ) : (
           <>
             <label className="text-sm font-medium text-gray-700">
-              Active users
+              {t('workload.activeUsers')}
               <input
                 type="number"
                 min={0}
@@ -69,7 +71,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
               />
             </label>
             <label className="text-sm font-medium text-gray-700">
-              Requests/user/day
+              {t('workload.requestsPerUserPerDay')}
               <input
                 type="number"
                 min={0}
@@ -82,7 +84,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
         )}
 
         <label className="text-sm font-medium text-gray-700">
-          Active days/month
+          {t('workload.activeDaysPerMonth')}
           <input
             type="number"
             min={0}
@@ -92,7 +94,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
           />
         </label>
         <label className="text-sm font-medium text-gray-700">
-          Retry rate
+          {t('workload.retryRate')}
           <input
             type="number"
             min={0}
@@ -103,7 +105,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
           <span className="mt-1 block text-xs text-gray-500">{fmtPercent(value.retryRate)}</span>
         </label>
         <label className="text-sm font-medium text-gray-700">
-          Avg input tokens/request
+          {t('workload.avgInputTokensPerRequest')}
           <input
             type="number"
             min={0}
@@ -113,7 +115,7 @@ export function WorkloadBuilder({ value, onChange }: Props) {
           />
         </label>
         <label className="text-sm font-medium text-gray-700">
-          Avg output tokens/request
+          {t('workload.avgOutputTokensPerRequest')}
           <input
             type="number"
             min={0}
@@ -126,15 +128,15 @@ export function WorkloadBuilder({ value, onChange }: Props) {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Monthly requests</p>
+          <p className="text-xs text-gray-500">{t('workload.monthlyRequests')}</p>
           <p className="text-lg font-semibold text-gray-900">{fmtTokens(derived.monthlyRequests)}</p>
         </div>
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Monthly input tokens</p>
+          <p className="text-xs text-gray-500">{t('workload.monthlyInputTokens')}</p>
           <p className="text-lg font-semibold text-gray-900">{fmtTokens(derived.monthlyInputTokens)}</p>
         </div>
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Monthly output tokens</p>
+          <p className="text-xs text-gray-500">{t('workload.monthlyOutputTokens')}</p>
           <p className="text-lg font-semibold text-gray-900">{fmtTokens(derived.monthlyOutputTokens)}</p>
         </div>
       </div>

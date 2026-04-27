@@ -26,6 +26,7 @@ type RawModel = Omit<Model, 'sourceUrl' | 'sourceLabel' | 'lastVerifiedAt' | 'su
 }
 
 const RAW_MODELS: RawModel[] = [
+  { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'openai', inputPrice: 5, outputPrice: 30, contextWindow: 1000000, releaseDate: '2026-04', cacheDiscount: 0.9, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/', pricingNotes: 'Standard pricing shown for context lengths under 270K; verify long-context pricing before committing large-context production workloads.' },
   { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'openai', inputPrice: 2.5, outputPrice: 15, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
   { id: 'gpt-5.4-mini', name: 'GPT-5.4 mini', provider: 'openai', inputPrice: 0.75, outputPrice: 4.5, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
   { id: 'gpt-5.4-nano', name: 'GPT-5.4 nano', provider: 'openai', inputPrice: 0.2, outputPrice: 1.25, contextWindow: 128000, releaseDate: '2026-04', cacheDiscount: 0.5, batchDiscount: 0.5, priceSourceUrl: 'https://openai.com/api/pricing/' },
@@ -92,7 +93,7 @@ export const MODELS: Model[] = RAW_MODELS.map(model => ({
   ...model,
   sourceUrl: model.priceSourceUrl,
   sourceLabel: 'Official pricing page',
-  lastVerifiedAt: '2026-04-22',
+  lastVerifiedAt: model.id === 'gpt-5.5' ? '2026-04-27' : '2026-04-22',
   supportsCaching: model.cacheDiscount > 0,
   supportsBatch: model.batchDiscount > 0,
 }))

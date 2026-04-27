@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { calculateCost } from '../../lib/calculator'
 import { fmtCurrency } from '../../lib/format'
 import type { SimState } from '../../App'
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function CacheAnalyzer({ state }: Props) {
+  const { t } = useTranslation()
   if (state.cacheHitRate >= 0.8 || state.periodInputTokens === 0 || state.currentModel.cacheDiscount === 0) {
     return null
   }
@@ -41,22 +43,22 @@ export function CacheAnalyzer({ state }: Props) {
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
       <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-        Prompt Caching Impact
+        {t('cacheAnalyzer.title')}
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-3">
-          <div className="text-xs text-indigo-600 font-medium mb-1">Cache Discount Rate</div>
+          <div className="text-xs text-indigo-600 font-medium mb-1">{t('cacheAnalyzer.discountRate')}</div>
           <div className="text-2xl font-bold text-indigo-900">
             {((1 - cacheDiscount) * 100).toFixed(0)}%
           </div>
           <div className="text-xs text-indigo-600 mt-1">
-            cost reduction on cached tokens
+            {t('cacheAnalyzer.costReduction')}
           </div>
         </div>
 
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-          <div className="text-xs text-blue-600 font-medium mb-1">Monthly Savings @80%</div>
+          <div className="text-xs text-blue-600 font-medium mb-1">{t('cacheAnalyzer.monthlySavings')}</div>
           <div className="text-2xl font-bold text-blue-900">
             {fmtCurrency(monthlySavings)}
           </div>
@@ -66,19 +68,19 @@ export function CacheAnalyzer({ state }: Props) {
         </div>
 
         <div className="rounded-lg bg-cyan-50 border border-cyan-200 p-3">
-          <div className="text-xs text-cyan-600 font-medium mb-1">Annual Savings @80%</div>
+          <div className="text-xs text-cyan-600 font-medium mb-1">{t('cacheAnalyzer.annualSavings')}</div>
           <div className="text-2xl font-bold text-cyan-900">
             {fmtCurrency(annualSavings)}
           </div>
           <div className="text-xs text-cyan-600 mt-1">
-            from {(state.cacheHitRate * 100).toFixed(0)}% to 80%
+            {t('cacheAnalyzer.fromTo', { from: `${(state.cacheHitRate * 100).toFixed(0)}%` })}
           </div>
         </div>
       </div>
 
       <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4">
         <p className="text-sm text-gray-700">
-          <strong>Tip:</strong> Prompt caching stores frequently-used contexts (like system prompts, documentation, or conversation history). This reduces costs by up to <strong>{((1 - cacheDiscount) * 100).toFixed(0)}%</strong> on cached input tokens. Increase your cache hit rate above to see the impact.
+          <strong>{t('cacheAnalyzer.tipPrefix')}</strong> {t('cacheAnalyzer.tip')} <strong>{((1 - cacheDiscount) * 100).toFixed(0)}%</strong>.
         </p>
       </div>
     </section>

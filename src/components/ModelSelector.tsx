@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { MODELS, type Model, type Provider } from '../data/models'
 import { fmtPricePerMillion, fmtTokens } from '../lib/format'
 
@@ -22,10 +23,10 @@ const PROVIDER_NAMES: Record<Provider, string> = {
 }
 
 export function ModelSelector({ label, value, onChange, disabledModelId }: Props) {
+  const { t } = useTranslation()
   const id = `model-select-${label.replace(/\s+/g, '-').toLowerCase()}`
   const selectedModel = MODELS.find(m => m.id === value)
 
-  // Group models by provider
   const providers = new Map<Provider, Model[]>()
   for (const model of MODELS) {
     if (!providers.has(model.provider)) {
@@ -38,7 +39,7 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <label htmlFor={id} className="text-sm font-medium text-gray-700">{label}</label>
-        <span className="text-xs text-gray-500" title="Prices shown as: input price / output price per 1M tokens">ℹ️</span>
+        <span className="text-xs text-gray-500" title={t('model.priceHelp')}>i</span>
       </div>
       <select
         id={id}
@@ -47,14 +48,14 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
           const m = MODELS.find(m => m.id === e.target.value)
           if (m) onChange(m)
         }}
-        aria-label={`Select ${label.toLowerCase()}: model name with input/output prices per 1M tokens`}
+        aria-label={t('model.selectAria', { label: label.toLowerCase() })}
         className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         {Array.from(providers.entries()).map(([provider, models]) => (
           <optgroup key={provider} label={PROVIDER_NAMES[provider]}>
             {models.map(m => (
               <option key={m.id} value={m.id} disabled={m.id === disabledModelId}>
-                {m.name} — {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
+                {m.name} - {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
               </option>
             ))}
           </optgroup>
@@ -64,26 +65,31 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
         <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-medium text-gray-800">{PROVIDER_NAMES[selectedModel.provider]}</span>
-            <span>Context {fmtTokens(selectedModel.contextWindow)}</span>
+            <span>{t('model.context')} {fmtTokens(selectedModel.contextWindow)}</span>
             <span>{fmtPricePerMillion(selectedModel.inputPrice, selectedModel.outputPrice)}</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span>Verified {selectedModel.lastVerifiedAt}</span>
+            <span>{t('model.verified')} {selectedModel.lastVerifiedAt}</span>
             <a
               href={selectedModel.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:underline"
             >
-              Pricing source
+              {t('model.pricingSource')}
             </a>
             <span className="rounded border border-gray-300 bg-white px-2 py-0.5">
-              {selectedModel.supportsCaching ? 'Cache supported' : 'No cache support'}
+              {selectedModel.supportsCaching ? t('model.cacheSupported') : t('model.cacheUnsupported')}
             </span>
             <span className="rounded border border-gray-300 bg-white px-2 py-0.5">
-              {selectedModel.supportsBatch ? 'Batch supported' : 'No batch support'}
+              {selectedModel.supportsBatch ? t('model.batchSupported') : t('model.batchUnsupported')}
             </span>
           </div>
+          {selectedModel.pricingNotes && (
+            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+              {selectedModel.pricingNotes}
+            </p>
+          )}
         </div>
       )}
     </div>
