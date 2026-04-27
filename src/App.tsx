@@ -44,6 +44,7 @@ import { RegionalCostAnalysis } from './components/RegionalCostAnalysis'
 import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
 import { CostAttributionByFeature } from './components/CostAttributionByFeature'
 import { ModelComparisonMatrix } from './components/ModelComparisonMatrix'
+import { CostAlertConfig } from './components/CostAlertConfig'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -304,6 +305,8 @@ function App() {
         <CostAttributionByFeature state={state} />
 
         <ModelComparisonMatrix state={state} />
+
+        <CostAlertConfig state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
