@@ -36,6 +36,7 @@ import { ModelPerformanceBenchmarks } from './components/ModelPerformanceBenchma
 import { SavingsPaybackTimeline } from './components/SavingsPaybackTimeline'
 import { ScenarioManager } from './components/ScenarioManager'
 import { BudgetForecast } from './components/BudgetForecast'
+import { ProviderComparisonDashboard } from './components/ProviderComparisonDashboard'
 import { SummaryCard } from './components/SummaryCard'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
@@ -280,6 +281,8 @@ function App() {
         <ScenarioManager state={state} />
 
         <BudgetForecast state={state} />
+
+        <ProviderComparisonDashboard state={state} />
 
         {/* Role-aware panel ordering */}
         {ROLE_PACK[state.role].emphasisOrder.map(panelName => {
