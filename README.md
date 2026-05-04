@@ -275,6 +275,39 @@ http://127.0.0.1:4173/token_simulator/
 - Vitest
 - Testing Library
 
+## 폴더 구조
+
+MVP 확장 방향에 맞춰 `src/features`를 제품 기능 단위로 나눕니다.
+
+```txt
+src/app
+src/features/usage
+src/features/current-cost
+src/features/alternatives
+src/features/savings
+src/features/unit-economics
+src/features/report
+src/features/guardrails
+src/domain
+src/shared
+```
+
+각 feature 폴더의 의미는 다음과 같습니다.
+
+- `usage`: 사용량 가져오기, CSV import, workload 입력
+- `current-cost`: 현재 비용 계산
+- `alternatives`: 후보 모델 비교
+- `savings`: 캐싱/배치/출력제한/라우팅 추천
+- `unit-economics`: ticket/report/user당 원가와 마진
+- `report`: PM/CEO/개발자용 요약
+- `guardrails`: 예산 초과, 비용 폭증 알림
+
+`src/domain`은 화면과 무관한 순수 계산 규칙을 위한 영역입니다. 예를 들어 비용 계산, 품질 부담, 가격/마진 계산처럼 UI가 없어도 테스트 가능한 로직이 여기에 들어갈 수 있습니다.
+
+중요한 안전장치도 있습니다. `src/lib/calculator.ts`와 `src/lib/format.ts`는 프로젝트 헌법상 공식 경로라서 바로 없애지 않습니다. 필요하면 내부 구현만 `src/domain/`으로 옮기고, 기존 경로는 re-export로 유지합니다. 이렇게 해야 테스트와 기존 컴포넌트를 덜 깨고 점진적으로 바꿀 수 있습니다.
+
+자세한 구조 설명은 [docs/architecture/folder-structure.md](docs/architecture/folder-structure.md)를 참고하세요.
+
 ## 설계 원칙
 
 - 모든 비용 계산은 공통 계산 경로를 통과합니다.
