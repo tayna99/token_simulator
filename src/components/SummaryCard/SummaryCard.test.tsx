@@ -1,8 +1,9 @@
 // src/components/SummaryCard/SummaryCard.test.tsx
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import { SummaryCard } from './index'
 import { MODELS } from '../../data/models'
+import i18n from '../../i18n'
 
 const BASE_STATE = {
   role: 'pm' as const,
@@ -19,6 +20,14 @@ const BASE_STATE = {
 }
 
 describe('SummaryCard', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
   it('renders model name in summary text', () => {
     render(<SummaryCard state={BASE_STATE} />)
     expect(screen.getByText(/On Claude Sonnet 4.6 with/)).toBeInTheDocument()
@@ -64,5 +73,40 @@ describe('SummaryCard', () => {
 
     rerender(<SummaryCard state={{ ...BASE_STATE, periodInputTokens: 100_000_000 }} />)
     expect(screen.getByText(/100M input/)).toBeInTheDocument()
+  })
+
+  it('uses PM framing for rollout trade-offs', () => {
+    render(<SummaryCard state={{ ...BASE_STATE, role: 'pm' }} />)
+    expect(screen.getByText(/PM summary/i)).toBeInTheDocument()
+    expect(screen.getByText(/rollout/i)).toBeInTheDocument()
+  })
+
+  it('uses developer framing for assumptions and breakdown', () => {
+    render(<SummaryCard state={{ ...BASE_STATE, role: 'developer' }} />)
+    expect(screen.getByText(/Developer breakdown/i)).toBeInTheDocument()
+    expect(screen.getByText(/input\/output/i)).toBeInTheDocument()
+  })
+
+  it('uses CEO framing for annualized savings and risk', () => {
+    render(<SummaryCard state={{ ...BASE_STATE, role: 'ceo' }} />)
+    expect(screen.getByText(/CEO savings summary/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/risk/i).length).toBeGreaterThan(0)
+  })
+
+  it('states that quality and risk values are editable assumptions', () => {
+    render(<SummaryCard state={BASE_STATE} />)
+    expect(screen.getByText(/Quality and risk values are editable assumptions/i)).toBeInTheDocument()
+  })
+
+  it('renders Korean stakeholder summary templates when Korean is active', async () => {
+    await i18n.changeLanguage('ko')
+
+    render(<SummaryCard state={{ ...BASE_STATE, role: 'ceo' }} />)
+
+    expect(screen.getByTestId('summary-card-body')).toHaveAttribute('lang', 'ko')
+    expect(screen.getByText(/CEO 요약/i)).toBeInTheDocument()
+    expect(screen.getByText(/품질\/지연시간\/운영 리스크 검증/i)).toBeInTheDocument()
+    expect(screen.getByText(/가격 카탈로그 기준/i)).toBeInTheDocument()
+    expect(screen.getByText(/품질과 리스크 값은 벤치마크가 아니라 조정 가능한 가정입니다/i)).toBeInTheDocument()
   })
 })

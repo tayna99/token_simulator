@@ -1,17 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MODELS, getModelById, type Model } from './data/models'
-import { type WorkloadPreset } from './data/presets'
-import { ModelSelector } from './components/ModelSelector'
-import { TokenInputs } from './components/TokenInputs'
-import { WorkloadBuilder } from './components/WorkloadBuilder'
-import { DecisionSummaryStrip } from './components/DecisionSummaryStrip'
-import { MigrationPanel } from './components/MigrationPanel'
-import { ScenarioPlanner } from './components/ScenarioPlanner'
+import { USE_CASE_PRESETS, type UseCasePresetId } from './data/workloadPresets'
+import { getQualityProfile } from './data/qualityProfiles'
+import { UsageSetup } from './components/UsageSetup'
+import { CurrentCostPanel } from './components/CurrentCostPanel'
+import { AlternativeComparison } from './components/AlternativeComparison'
+import { SavingsLeverTable } from './components/SavingsLeverTable'
 import { CostBreakdown } from './components/CostBreakdown'
 import { BudgetGuardrails } from './components/BudgetGuardrails'
-import { BatchAnalyzer } from './components/BatchAnalyzer'
-import { CacheAnalyzer } from './components/CacheAnalyzer'
 import { ExportAnalysis } from './components/ExportAnalysis'
 import { TokenEfficiency } from './components/TokenEfficiency'
 import { RequirementsFilter } from './components/RequirementsFilter'
@@ -20,13 +17,14 @@ import { CostOptimizationRoadmap } from './components/CostOptimizationRoadmap'
 import { CostAttributionByFeature } from './components/CostAttributionByFeature'
 import { ModelComparisonMatrix } from './components/ModelComparisonMatrix'
 import { RequestPatternAnalyzer } from './components/RequestPatternAnalyzer'
-import { SavingsTracker } from './components/SavingsTracker'
 import { SummaryCard } from './components/SummaryCard'
+import { FeatureUnitEconomicsPanel } from './components/FeatureUnitEconomicsPanel'
 import { RoleSelector } from './components/RoleSelector'
 import { PeriodSelector } from './components/PeriodSelector'
 import { ConfigPanel } from './components/ConfigPanel'
 import { loadConfigFromUrl } from './lib/configManager'
 import { toLegacySimState, type PlannerState } from './lib/plannerState'
+import type { UsageImportSummary } from './lib/usageImport'
 
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -47,7 +45,10 @@ export interface SimState {
 
 function App() {
   const { t, i18n } = useTranslation()
+  const [selectedUseCaseId, setSelectedUseCaseId] = useState<UseCasePresetId>('rag-chatbot')
+  const [importedUsage, setImportedUsage] = useState<UsageImportSummary | null>(null)
   const [state, setState] = useState<PlannerState>(() => {
+    const defaultPreset = USE_CASE_PRESETS[0]
     const urlConfig = loadConfigFromUrl()
     if (urlConfig) {
       const current = getModelById(urlConfig.state.currentModelId)
@@ -97,38 +98,22 @@ function App() {
         volumeBasis: 'requestsPerDay',
         activeDaysPerMonth: 30,
         retryRate: 0,
-        requestsPerDay: 3333,
+        requestsPerDay: Math.round(defaultPreset.monthlyRequests / 30),
         activeUsers: 1000,
-        requestsPerUserPerDay: 3.33,
-        avgInputTokensPerRequest: 500,
-        avgOutputTokensPerRequest: 50,
+        requestsPerUserPerDay: defaultPreset.monthlyRequests / 1000 / 30,
+        avgInputTokensPerRequest: defaultPreset.avgInputTokensPerRequest,
+        avgOutputTokensPerRequest: defaultPreset.avgOutputTokensPerRequest,
       },
       directTokens: {
-        monthlyInputTokens: 50_000_000,
-        monthlyOutputTokens: 5_000_000,
-        monthlyRequests: 100_000,
+        monthlyInputTokens: defaultPreset.monthlyRequests * defaultPreset.avgInputTokensPerRequest,
+        monthlyOutputTokens: defaultPreset.monthlyRequests * defaultPreset.avgOutputTokensPerRequest,
+        monthlyRequests: defaultPreset.monthlyRequests,
       },
-      cacheHitRate: 0.5,
-      batchEnabled: false,
+      cacheHitRate: defaultPreset.defaultCacheHitRate,
+      batchEnabled: defaultPreset.defaultBatchEnabled,
       monthlyBudgetUsd: null,
     }
   })
-
-  const handlePreset = (p: WorkloadPreset) => {
-    setState(s => ({
-      ...s,
-      inputMode: 'workload',
-      workload: p.workload,
-      directTokens: {
-        ...s.directTokens,
-        monthlyInputTokens: p.monthlyInputTokens,
-        monthlyOutputTokens: p.monthlyOutputTokens,
-        monthlyRequests: p.monthlyRequestsDefault || s.directTokens.monthlyRequests,
-      },
-      cacheHitRate: p.defaultCacheHitRate,
-      batchEnabled: p.defaultBatchEnabled,
-    }))
-  }
 
   const legacyState = toLegacySimState(state)
   const isSameModel = state.currentModel.id === state.candidateModel.id
@@ -138,9 +123,60 @@ function App() {
     cacheRate: `${Math.round(state.cacheHitRate * 100)}%`,
     batchSuffix: state.batchEnabled ? t('config.batchSuffix') : '',
   })
+  const selectedUseCase = USE_CASE_PRESETS.find(preset => preset.id === selectedUseCaseId) ?? USE_CASE_PRESETS[0]
+  const qualityProfile = getQualityProfile(selectedUseCase.id)
+
+  const handleCostQualityPreset = (id: UseCasePresetId) => {
+    const preset = USE_CASE_PRESETS.find(item => item.id === id) ?? USE_CASE_PRESETS[0]
+    setSelectedUseCaseId(preset.id)
+    setState(s => ({
+      ...s,
+      inputMode: 'workload',
+      workload: {
+        volumeBasis: 'requestsPerDay',
+        activeDaysPerMonth: 30,
+        retryRate: 0,
+        requestsPerDay: Math.round(preset.monthlyRequests / 30),
+        activeUsers: s.workload.activeUsers || 1000,
+        requestsPerUserPerDay: preset.monthlyRequests / (s.workload.activeUsers || 1000) / 30,
+        avgInputTokensPerRequest: preset.avgInputTokensPerRequest,
+        avgOutputTokensPerRequest: preset.avgOutputTokensPerRequest,
+      },
+      directTokens: {
+        monthlyInputTokens: preset.monthlyRequests * preset.avgInputTokensPerRequest,
+        monthlyOutputTokens: preset.monthlyRequests * preset.avgOutputTokensPerRequest,
+        monthlyRequests: preset.monthlyRequests,
+      },
+      cacheHitRate: preset.defaultCacheHitRate,
+      batchEnabled: preset.defaultBatchEnabled,
+    }))
+  }
+
+  const handleUsageImport = (summary: UsageImportSummary) => {
+    setImportedUsage(summary)
+    setState(s => ({
+      ...s,
+      inputMode: 'directTokens',
+      directTokens: {
+        monthlyInputTokens: summary.totalInputTokens,
+        monthlyOutputTokens: summary.totalOutputTokens,
+        monthlyRequests: summary.requestCount,
+      },
+      workload: {
+        ...s.workload,
+        requestsPerDay: Math.round(summary.requestCount / Math.max(1, s.workload.activeDaysPerMonth || 30)),
+        avgInputTokensPerRequest: summary.avgInputTokensPerRequest,
+        avgOutputTokensPerRequest: summary.avgOutputTokensPerRequest,
+      },
+    }))
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50" translate="no">
+    <div
+      data-testid="app-shell"
+      className="min-h-screen bg-surface-alternative font-sans text-label-normal"
+      translate="no"
+    >
       <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 md:gap-0 mb-4">
           <div>
@@ -197,92 +233,57 @@ function App() {
           </div>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-8 flex flex-col gap-4 md:gap-8">
-        <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 flex flex-col gap-4 md:gap-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('config.title')}</h2>
-              <span className="text-xs text-gray-500" title={t('config.help')}>(?)</span>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
-              <PeriodSelector value={state.period ?? 'month'} onChange={p => setState(s => ({ ...s, period: p }))} />
-            </div>
-          </div>
-          <div className="text-xs bg-gray-50 border border-gray-200 rounded p-3 text-gray-600">
-            {!isSameModel ? configSummary : t('errors.sameModel')}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            <ModelSelector
-              label={t('config.currentModel')}
-              value={state.currentModel.id}
-              onChange={m => setState(s => ({ ...s, currentModel: m }))}
-              disabledModelId={state.candidateModel.id}
-            />
-            <ModelSelector
-              label={t('config.candidateModel')}
-              value={state.candidateModel.id}
-              onChange={m => setState(s => ({ ...s, candidateModel: m }))}
-              disabledModelId={state.currentModel.id}
-            />
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-8 flex flex-col gap-4 md:gap-8">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
+          <div>
+            <p className="text-xs text-gray-500">{t('workspace.eyebrow')}</p>
+            <p className="text-sm text-gray-700">
+              {!isSameModel ? configSummary : t('errors.sameModel')}
+            </p>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">{t('inputMode.label')}</p>
-            <div className="inline-flex rounded-md border border-gray-300 overflow-hidden mb-4">
-              <button
-                type="button"
-                onClick={() => setState(s => ({ ...s, inputMode: 'workload' }))}
-                aria-pressed={state.inputMode === 'workload'}
-                className={`px-3 py-1.5 text-xs font-medium ${state.inputMode === 'workload' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-              >
-                {t('inputMode.workload')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setState(s => ({ ...s, inputMode: 'directTokens' }))}
-                aria-pressed={state.inputMode === 'directTokens'}
-                className={`border-l border-gray-300 px-3 py-1.5 text-xs font-medium ${state.inputMode === 'directTokens' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-              >
-                {t('inputMode.directTokens')}
-              </button>
-            </div>
-            {state.inputMode === 'workload' ? (
-              <WorkloadBuilder
-                value={state.workload}
-                onChange={workload => setState(s => ({ ...s, workload }))}
-              />
-            ) : (
-              <TokenInputs
-                periodInputTokens={state.directTokens.monthlyInputTokens}
-                periodOutputTokens={state.directTokens.monthlyOutputTokens}
-                cacheHitRate={state.cacheHitRate}
-                batchEnabled={state.batchEnabled}
-                onInputChange={v => setState(s => ({ ...s, inputMode: 'directTokens', directTokens: { ...s.directTokens, monthlyInputTokens: v } }))}
-                onOutputChange={v => setState(s => ({ ...s, inputMode: 'directTokens', directTokens: { ...s.directTokens, monthlyOutputTokens: v } }))}
-                onCacheChange={v => setState(s => ({ ...s, cacheHitRate: v }))}
-                onBatchChange={v => setState(s => ({ ...s, batchEnabled: v }))}
-                onPresetSelect={handlePreset}
-              />
-            )}
+            <p className="text-xs text-gray-500 mb-1">{t('config.period')}</p>
+            <PeriodSelector value={state.period ?? 'month'} onChange={p => setState(s => ({ ...s, period: p }))} />
           </div>
-        </section>
-
-        <DecisionSummaryStrip state={legacyState} />
-
-        <MigrationPanel state={legacyState} />
-
-        <SavingsTracker state={legacyState} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
-          <CacheAnalyzer state={legacyState} />
-          <BatchAnalyzer state={legacyState} />
         </div>
 
-        <ScenarioPlanner state={legacyState} />
+        <UsageSetup
+          selectedPresetId={selectedUseCase.id}
+          state={state}
+          featureMix={selectedUseCase.featureMix}
+          importedSummary={importedUsage}
+          onPresetChange={handleCostQualityPreset}
+          onUsageImport={handleUsageImport}
+          onWorkloadChange={workload => setState(s => ({ ...s, inputMode: 'workload', workload }))}
+          onCacheChange={cacheHitRate => setState(s => ({ ...s, cacheHitRate }))}
+          onBatchChange={batchEnabled => setState(s => ({ ...s, batchEnabled }))}
+        />
+
+        <FeatureUnitEconomicsPanel summary={importedUsage} />
+
+        <CurrentCostPanel
+          state={legacyState}
+          onCurrentModelChange={currentModel => setState(s => ({ ...s, currentModel }))}
+        />
+
+        <AlternativeComparison
+          state={legacyState}
+          currentAssumptions={qualityProfile.current}
+          candidateAssumptions={qualityProfile.candidate}
+          onCandidateModelChange={candidateModel => setState(s => ({ ...s, candidateModel }))}
+        />
+
+        <SavingsLeverTable
+          state={legacyState}
+          cacheableShare={selectedUseCase.cacheableShare}
+          batchableShare={selectedUseCase.batchableShare}
+          outputReductionRate={0.25}
+          routingEligibleShare={0.5}
+        />
 
         <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
           <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
-            Developer Diagnostics
+            {t('workspace.diagnostics')}
           </summary>
           <div className="mt-4 flex flex-col gap-4 md:gap-8">
             <RequestPatternAnalyzer state={legacyState} />

@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body{margin:0;padding:22px;background:#fff;font-family:var(--font-sans);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .chip{display:inline-flex;align-items:center;gap:4px;font-family:inherit;cursor:pointer;border:0;background:transparent;}
+  .chip-solid{background:var(--semantic-fill-alternative);color:var(--semantic-label-normal);}
+  .chip-outline{box-shadow:inset 0 0 0 1px var(--semantic-line-normal-neutral);color:var(--semantic-label-normal);}
+  .chip-active{background:var(--semantic-inverse-background);color:var(--semantic-inverse-label);}
+  .chip-out-active{box-shadow:inset 0 0 0 1px rgba(0,102,255,.43);background:rgba(0,102,255,.05);color:var(--semantic-primary-normal);}
+  .xs{padding:4px 7px;border-radius:6px;font-size:12px;font-weight:500;}
+  .sm{padding:6px 8px;border-radius:8px;font-size:14px;font-weight:500;}
+  .md{padding:7px 11px;border-radius:8px;font-size:15px;font-weight:500;}
+  .lg{padding:9px 12px;border-radius:10px;font-size:15px;font-weight:500;}
+</style></head><body>
+<button class="chip chip-solid xs">신입</button>
+<button class="chip chip-solid sm">React</button>
+<button class="chip chip-solid md">Remote</button>
+<button class="chip chip-solid lg">서울 전체</button>
+<button class="chip chip-active md">Active</button>
+<button class="chip chip-outline md">Outline</button>
+<button class="chip chip-out-active md">Selected</button>
+</body></html>

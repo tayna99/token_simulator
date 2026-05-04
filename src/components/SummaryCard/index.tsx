@@ -1,11 +1,13 @@
 // src/components/SummaryCard/index.tsx
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toPng } from 'html-to-image'
 import { calculateCost, calculateMigrationDelta } from '../../lib/calculator'
 import { fmtCurrency, fmtTokens, fmtPercent } from '../../lib/format'
 import { useToast } from '../../hooks/useToast'
 import { Toast } from '../ui/Toast'
+import { Button, Surface } from '../ui/primitives'
 import type { SimState } from '../../App'
 
 type SummaryTone = 'executive' | 'technical'
@@ -14,7 +16,7 @@ interface Props {
   state: SimState
 }
 
-function buildSummaryText(state: SimState, tone: SummaryTone = 'executive'): string {
+function buildSummaryText(state: SimState, t: TFunction, tone: SummaryTone = 'executive'): string {
   const current = calculateCost({
     model: state.currentModel,
     monthlyInputTokens: state.periodInputTokens,
@@ -34,38 +36,68 @@ function buildSummaryText(state: SimState, tone: SummaryTone = 'executive'): str
 
   const isSameModel = state.currentModel.id === state.candidateModel.id
   const isSaving = migration.monthlyDelta < 0
-  const direction = isSaving ? 'save' : 'cost an additional'
+  const direction = isSaving ? t('report.save') : t('report.costMore')
   const absDelta = fmtCurrency(Math.abs(migration.monthlyDelta))
   const absAnnual = fmtCurrency(Math.abs(migration.annualDelta))
   const percent = fmtPercent(Math.abs(migration.savingPercent) / 100, 1)
+  const sameModelText = t('report.sameModel', { zero: fmtCurrency(0) })
+  const switchText = t('report.switch', {
+    candidate: state.candidateModel.name,
+    direction,
+    monthlyDelta: absDelta,
+    percent,
+    annualDelta: absAnnual,
+  })
 
-  if (tone === 'technical') {
-    const cacheText = state.cacheHitRate > 0 ? `, cache ${fmtPercent(state.cacheHitRate)}` : ''
-    const batchText = state.batchEnabled ? ', batch enabled' : ''
+  if (tone === 'technical' || state.role === 'developer') {
+    const cacheText = state.cacheHitRate > 0 ? t('report.cacheText', { percent: fmtPercent(state.cacheHitRate) }) : ''
+    const batchText = state.batchEnabled ? t('report.batchText') : ''
+    const deltaText = isSameModel
+      ? t('report.developerDeltaSame', { zero: fmtCurrency(0) })
+      : t('report.developerDeltaSwitch', {
+        direction,
+        monthlyDelta: absDelta,
+        percent,
+        annualDelta: absAnnual,
+      })
 
-    return (
-      `Configuration: ${state.currentModel.name} vs ${state.candidateModel.name}\n` +
-      `Monthly volume: ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output${cacheText}${batchText}\n` +
-      `Current cost: ${fmtCurrency(current.monthlyCost)}/month (${fmtCurrency(current.annualCost)}/year)\n` +
-      `Candidate cost: ${fmtCurrency(migration.candidateCost.monthlyCost)}/month (${fmtCurrency(migration.candidateCost.annualCost)}/year)\n` +
-      (isSameModel
-        ? `Delta: same model selected, migration delta is ${fmtCurrency(0)}/month`
-        : `Delta: ${direction} ${absDelta}/month (${percent}), ${absAnnual} annualized`)
-    )
+    return t('report.developer', {
+      current: state.currentModel.name,
+      candidate: state.candidateModel.name,
+      inputTokens: fmtTokens(state.periodInputTokens),
+      outputTokens: fmtTokens(state.periodOutputTokens),
+      cacheText,
+      batchText,
+      inputCost: fmtCurrency(current.inputCost),
+      outputCost: fmtCurrency(current.outputCost),
+      currentMonthly: fmtCurrency(current.monthlyCost),
+      currentAnnual: fmtCurrency(current.annualCost),
+      candidateMonthly: fmtCurrency(migration.candidateCost.monthlyCost),
+      candidateAnnual: fmtCurrency(migration.candidateCost.annualCost),
+      deltaText,
+    })
   }
 
   const cacheText = state.cacheHitRate > 0
-    ? `, ${fmtPercent(state.cacheHitRate)} cache hit`
+    ? t('report.cacheText', { percent: fmtPercent(state.cacheHitRate) })
     : ''
-  const batchText = state.batchEnabled ? ', batch enabled' : ''
+  const batchText = state.batchEnabled ? t('report.batchText') : ''
 
-  return `On ${state.currentModel.name} with ${fmtTokens(state.periodInputTokens)} input / ${fmtTokens(state.periodOutputTokens)} output tokens/month` +
-    `${cacheText}${batchText}, estimated monthly cost is ${fmtCurrency(current.monthlyCost)} ` +
-    `(${fmtCurrency(current.annualCost)}/yr). ` +
-    (isSameModel
-      ? `Current and candidate are the same model; migration delta is ${fmtCurrency(0)}/month.`
-      : `Switching to ${state.candidateModel.name} would ${direction} ${absDelta}/month ` +
-        `(${percent}), annualized ${absAnnual}.`)
+  const baseline = t('report.baseline', {
+    current: state.currentModel.name,
+    inputTokens: fmtTokens(state.periodInputTokens),
+    outputTokens: fmtTokens(state.periodOutputTokens),
+    cacheText,
+    batchText,
+    monthlyCost: fmtCurrency(current.monthlyCost),
+    annualCost: fmtCurrency(current.annualCost),
+  })
+
+  if (state.role === 'ceo') {
+    return t('report.ceo', { baseline, decision: isSameModel ? sameModelText : switchText })
+  }
+
+  return t('report.pm', { baseline, decision: isSameModel ? sameModelText : switchText })
 }
 
 function provenanceText(model: SimState['currentModel']): string {
@@ -73,11 +105,12 @@ function provenanceText(model: SimState['currentModel']): string {
 }
 
 export function SummaryCard({ state }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const cardRef = useRef<HTMLDivElement>(null)
   const [tone, setTone] = useState<SummaryTone>('executive')
   const { toast, show: showToast, hide: hideToast } = useToast()
-  const summaryText = buildSummaryText(state, tone)
+  const language = i18n.language === 'ko' ? 'ko' : 'en'
+  const summaryText = buildSummaryText(state, t, tone)
 
   const handleCopy = async () => {
     try {
@@ -104,65 +137,61 @@ export function SummaryCard({ state }: Props) {
   }
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+    <Surface eyebrow={t('report.eyebrow')} title={t('summary.title')} description={t('report.description')}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm md:text-base font-semibold text-gray-800">{t('summary.title')}</h2>
           <span className="text-xs text-gray-500" title="AI-generated summary with verified pricing sources for stakeholder presentation">(?)</span>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 flex-wrap items-start sm:items-center">
           <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-            <button
+            <Button
+              size="sm"
+              variant={tone === 'executive' ? 'primary' : 'secondary'}
               onClick={() => setTone('executive')}
               aria-pressed={tone === 'executive'}
-              className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                tone === 'executive'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              className="rounded-none border-0"
               title="Executive summary: high-level business impact"
             >
               {t('summary.executive')}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
+              variant={tone === 'technical' ? 'primary' : 'secondary'}
               onClick={() => setTone('technical')}
               aria-pressed={tone === 'technical'}
-              className={`px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-gray-300 ${
-                tone === 'technical'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              className="rounded-none border-0 border-l border-line-solid"
               title="Technical summary: detailed configuration and metrics"
             >
               {t('summary.technical')}
-            </button>
+            </Button>
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
+              size="sm"
               onClick={handleCopy}
-              className="px-2.5 py-1.5 text-xs md:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
               {t('summary.copy')}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
               onClick={handleExportPng}
-              className="px-2.5 py-1.5 text-xs md:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
             >
               {t('summary.exportPng')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
       <div
         ref={cardRef}
-        lang="en"
+        lang={language}
         data-testid="summary-card-body"
-        className="bg-gray-50 border border-gray-200 rounded-lg p-3 md:p-5"
+        className="bg-fill-alternative border border-line-neutral rounded-wds-lg p-3 md:p-5"
       >
         <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-wrap">{summaryText}</p>
         <p className="text-xs text-gray-400 mt-3">
-          Static pricing catalog curated in-repo
+          {t('report.staticPricing')}
           {state.currentModel.priceSourceUrl && (
             <>
               {' '}· <a
@@ -188,8 +217,11 @@ export function SummaryCard({ state }: Props) {
             </>
           )}
         </p>
+        <p className="text-xs text-gray-400 mt-2">
+          {t('report.qualityAssumption')}
+        </p>
       </div>
       <Toast toast={toast} onClose={hideToast} />
-    </section>
+    </Surface>
   )
 }

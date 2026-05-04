@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CostPerBusinessMetric } from './index'
 import { MODELS } from '../../data/models'
+import i18n from '../../i18n'
 
 const BASE_STATE = {
   role: 'pm' as const,
@@ -19,6 +20,14 @@ const BASE_STATE = {
 }
 
 describe('CostPerBusinessMetric', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
   it('requires an explicit denominator before rendering metric rows', () => {
     render(<CostPerBusinessMetric state={BASE_STATE} />)
 
@@ -37,8 +46,21 @@ describe('CostPerBusinessMetric', () => {
 
     expect(screen.getByText('Support tickets')).toBeInTheDocument()
     expect(screen.getByText('$0.2250')).toBeInTheDocument()
+    expect(screen.getAllByText(/Raw unit cost/i)).toHaveLength(2)
+    expect(screen.getAllByText(/Effective unit cost/i)).toHaveLength(2)
+    expect(screen.getAllByText(/Quality burden/i).length).toBeGreaterThanOrEqual(2)
 
     rerender(<CostPerBusinessMetric state={{ ...BASE_STATE, periodInputTokens: 100_000_000 }} />)
     expect(screen.getByText('$0.3750')).toBeInTheDocument()
+  })
+
+  it('explains denominator and quality burden in Korean', async () => {
+    await i18n.changeLanguage('ko')
+
+    render(<CostPerBusinessMetric state={BASE_STATE} />)
+
+    expect(screen.getByRole('heading', { name: /비즈니스 지표별 비용/i })).toBeInTheDocument()
+    expect(screen.getByText(/앱은 ticket, user, report 수를 추정하지 않습니다/i)).toBeInTheDocument()
+    expect(screen.getByText(/품질 부담 비용/i)).toBeInTheDocument()
   })
 })

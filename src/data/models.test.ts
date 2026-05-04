@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getModelById } from './models'
+import { MODELS, getModelById } from './models'
 import { calculateCost } from '../lib/calculator'
 
 describe('MODELS catalog', () => {
@@ -34,5 +34,15 @@ describe('MODELS catalog', () => {
     })
 
     expect(result.monthlyCost).toBeCloseTo(0.5, 4)
+  })
+
+  it('keeps provenance and capability metadata on every catalog row', () => {
+    for (const model of MODELS) {
+      expect(model.sourceUrl).toMatch(/^https:\/\//)
+      expect(model.sourceLabel.length).toBeGreaterThan(0)
+      expect(model.lastVerifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(model.supportsCaching).toBe(model.cacheDiscount > 0)
+      expect(model.supportsBatch).toBe(model.batchDiscount > 0)
+    }
   })
 })

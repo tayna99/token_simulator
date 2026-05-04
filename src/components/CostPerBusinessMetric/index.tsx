@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
-import { calculateCost } from '../../lib/calculator'
+import { useTranslation } from 'react-i18next'
+import { calculateDecisionMetrics, type QualityAssumptions } from '../../lib/decisionMetrics'
+import { calculateBusinessMetricUnitCosts } from '../../lib/businessMetrics'
 import { fmtCurrency, fmtNumber, fmtPercent } from '../../lib/format'
+import { Button, Field, Surface } from '../ui/primitives'
 import type { SimState } from '../../App'
 
 interface BusinessMetric {
@@ -22,33 +25,59 @@ function fmtUnitCost(value: number): string {
   return fmtCurrency(value, value < 1 ? 4 : 2)
 }
 
+const CURRENT_ASSUMPTIONS: QualityAssumptions = {
+  qualityScore: 86,
+  latencyScore: 78,
+  riskScore: 28,
+  toolCallReliabilityScore: 84,
+  retryRate: 0.04,
+  humanReviewRate: 0.015,
+  csEscalationRate: 0.002,
+  reviewCostPerRequestUsd: 0.12,
+  csCostPerEscalationUsd: 3,
+}
+
+const CANDIDATE_ASSUMPTIONS: QualityAssumptions = {
+  qualityScore: 74,
+  latencyScore: 84,
+  riskScore: 46,
+  toolCallReliabilityScore: 76,
+  retryRate: 0.09,
+  humanReviewRate: 0.035,
+  csEscalationRate: 0.006,
+  reviewCostPerRequestUsd: 0.12,
+  csCostPerEscalationUsd: 3,
+}
+
 export function CostPerBusinessMetric({ state }: Props) {
+  const { t } = useTranslation()
   const [metricName, setMetricName] = useState('')
   const [denominator, setDenominator] = useState('')
   const [metrics, setMetrics] = useState<BusinessMetric[]>([])
   const [error, setError] = useState('')
 
   const costs = useMemo(() => {
-    const current = calculateCost({
+    const current = calculateDecisionMetrics({
       model: state.currentModel,
       monthlyInputTokens: state.periodInputTokens,
       monthlyOutputTokens: state.periodOutputTokens,
+      monthlyRequests: state.monthlyRequests,
       cacheHitRate: state.cacheHitRate,
       batchEnabled: state.batchEnabled,
+      assumptions: CURRENT_ASSUMPTIONS,
     })
 
-    const candidate = calculateCost({
+    const candidate = calculateDecisionMetrics({
       model: state.candidateModel,
       monthlyInputTokens: state.periodInputTokens,
       monthlyOutputTokens: state.periodOutputTokens,
+      monthlyRequests: state.monthlyRequests,
       cacheHitRate: state.cacheHitRate,
       batchEnabled: state.batchEnabled,
+      assumptions: CANDIDATE_ASSUMPTIONS,
     })
 
-    return {
-      currentMonthlyCost: current.monthlyCost,
-      candidateMonthlyCost: candidate.monthlyCost,
-    }
+    return { current, candidate }
   }, [state])
 
   const addMetric = () => {
@@ -56,7 +85,7 @@ export function CostPerBusinessMetric({ state }: Props) {
     const name = metricName.trim()
 
     if (!name || parsed === null) {
-      setError('Enter a metric name and a denominator greater than 0.')
+      setError(t('businessMetric.validation'))
       return
     }
 
@@ -71,56 +100,53 @@ export function CostPerBusinessMetric({ state }: Props) {
   }
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-      <h2 className="text-sm md:text-base font-semibold text-gray-800 mb-4">
-        Cost Per Business Metric
-      </h2>
-
+    <Surface
+      eyebrow={t('businessMetric.eyebrow')}
+      title={t('businessMetric.title')}
+      description={t('businessMetric.description')}
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="space-y-3">
           <p className="text-xs text-gray-600">
-            Add a denominator you actually track, such as tickets, PRs, users, jobs, or transactions per month.
+            {t('businessMetric.intro')}
           </p>
-          <label className="block text-xs font-medium text-gray-700" htmlFor="business-metric-name">
-            Metric name
-          </label>
-          <input
-            id="business-metric-name"
-            type="text"
-            placeholder="Support tickets"
-            value={metricName}
-            onChange={e => setMetricName(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs"
-          />
-          <label className="block text-xs font-medium text-gray-700" htmlFor="business-metric-denominator">
-            Monthly denominator
-          </label>
-          <div className="flex gap-2">
+          <p className="text-xs text-gray-600">
+            {t('businessMetric.qualityHelp')}
+          </p>
+          <Field label={t('businessMetric.metricName')} htmlFor="business-metric-name">
             <input
-              id="business-metric-denominator"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="1000"
-              value={denominator}
-              onChange={e => setDenominator(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs"
+              id="business-metric-name"
+              type="text"
+              placeholder="Support tickets"
+              value={metricName}
+              onChange={e => setMetricName(e.target.value)}
+              className="w-full rounded-wds border border-line-solid px-3 py-2 text-xs"
             />
-            <button
-              type="button"
-              onClick={addMetric}
-              className="px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Add metric
-            </button>
+          </Field>
+          <div className="flex gap-2">
+            <Field label={t('businessMetric.denominator')} htmlFor="business-metric-denominator">
+              <input
+                id="business-metric-denominator"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="1000"
+                value={denominator}
+                onChange={e => setDenominator(e.target.value)}
+                className="w-full rounded-wds border border-line-solid px-3 py-2 text-xs"
+              />
+            </Field>
+            <Button variant="primary" size="sm" onClick={addMetric} className="mt-6 shrink-0">
+              {t('businessMetric.addMetric')}
+            </Button>
           </div>
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="text-xs font-medium text-blue-700 mb-2">Configured denominators</div>
+        <div className="rounded-wds-lg border border-primary-normal/20 bg-primary-normal/10 p-3">
+          <div className="text-xs font-semibold text-primary-normal mb-2">{t('businessMetric.configured')}</div>
           {metrics.length === 0 ? (
-            <div className="text-xs text-blue-600">No denominators yet</div>
+            <div className="text-xs text-blue-600">{t('businessMetric.emptyConfigured')}</div>
           ) : (
             <div className="space-y-1">
               {metrics.map((metric, idx) => (
@@ -131,9 +157,9 @@ export function CostPerBusinessMetric({ state }: Props) {
                   <button
                     type="button"
                     onClick={() => removeMetric(idx)}
-                    className="text-xs text-red-600 hover:text-red-800"
+                    className="text-xs text-status-negative hover:underline"
                   >
-                    Remove
+                    {t('businessMetric.remove')}
                   </button>
                 </div>
               ))}
@@ -144,26 +170,42 @@ export function CostPerBusinessMetric({ state }: Props) {
 
       {metrics.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-          Add a denominator to compare cost per business metric. This panel does not invent proxy metrics.
+          {t('businessMetric.empty')}
         </div>
       ) : (
         <div className="overflow-x-auto mb-4">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b-2 border-gray-300 bg-gray-50">
-                <th className="text-left py-2 px-2 font-semibold text-gray-700">Metric</th>
-                <th className="text-right py-2 px-2 font-semibold text-gray-700">Monthly denominator</th>
-                <th className="text-right py-2 px-2 font-semibold text-gray-700">{state.currentModel.name}</th>
-                <th className="text-right py-2 px-2 font-semibold text-gray-700">{state.candidateModel.name}</th>
-                <th className="text-right py-2 px-2 font-semibold text-gray-700">Difference</th>
+              <tr className="border-b-2 border-line-solid bg-fill-alternative">
+                <th className="text-left py-2 px-2 font-semibold text-gray-700">{t('businessMetric.metric')}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.denominator')}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.currentRaw', { model: state.currentModel.name })}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.candidateRaw', { model: state.candidateModel.name })}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.effectiveUnitCost')}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.qualityBurden')}</th>
+                <th className="text-right py-2 px-2 font-semibold text-gray-700">{t('businessMetric.difference')}</th>
               </tr>
             </thead>
             <tbody>
               {metrics.map((metric, idx) => {
-                const currentUnitCost = costs.currentMonthlyCost / metric.denominator
-                const candidateUnitCost = costs.candidateMonthlyCost / metric.denominator
-                const diff = currentUnitCost - candidateUnitCost
-                const diffPct = currentUnitCost > 0 ? diff / currentUnitCost : 0
+                const currentUnits = calculateBusinessMetricUnitCosts({
+                  denominator: metric.denominator,
+                  rawMonthlyCost: costs.current.rawMonthlyCost,
+                  effectiveMonthlyCost: costs.current.effectiveMonthlyCost,
+                  retryCost: costs.current.retryCost,
+                  humanReviewCost: costs.current.humanReviewCost,
+                  csEscalationCost: costs.current.csEscalationCost,
+                })
+                const candidateUnits = calculateBusinessMetricUnitCosts({
+                  denominator: metric.denominator,
+                  rawMonthlyCost: costs.candidate.rawMonthlyCost,
+                  effectiveMonthlyCost: costs.candidate.effectiveMonthlyCost,
+                  retryCost: costs.candidate.retryCost,
+                  humanReviewCost: costs.candidate.humanReviewCost,
+                  csEscalationCost: costs.candidate.csEscalationCost,
+                })
+                const diff = currentUnits.rawCostPerMetric - candidateUnits.rawCostPerMetric
+                const diffPct = currentUnits.rawCostPerMetric > 0 ? diff / currentUnits.rawCostPerMetric : 0
                 const saves = diff > 0
 
                 return (
@@ -171,10 +213,20 @@ export function CostPerBusinessMetric({ state }: Props) {
                     <td className="py-2 px-2 font-medium text-gray-900">{metric.name}</td>
                     <td className="py-2 px-2 text-right text-gray-700">{fmtNumber(metric.denominator)}</td>
                     <td className="py-2 px-2 text-right text-gray-900 font-semibold">
-                      {fmtUnitCost(currentUnitCost)}
+                      <span className="sr-only">{t('businessMetric.rawUnitCostCurrent')} </span>
+                      {fmtUnitCost(currentUnits.rawCostPerMetric)}
                     </td>
                     <td className="py-2 px-2 text-right text-gray-900 font-semibold">
-                      {fmtUnitCost(candidateUnitCost)}
+                      <span className="sr-only">{t('businessMetric.rawUnitCostCandidate')} </span>
+                      {fmtUnitCost(candidateUnits.rawCostPerMetric)}
+                    </td>
+                    <td className="py-2 px-2 text-right text-gray-900 font-semibold">
+                      <span className="sr-only">{t('businessMetric.effectiveUnitCost')} </span>
+                      {fmtUnitCost(candidateUnits.effectiveCostPerMetric)}
+                    </td>
+                    <td className="py-2 px-2 text-right text-gray-700">
+                      <span className="sr-only">{t('businessMetric.qualityBurden')} </span>
+                      {fmtUnitCost(candidateUnits.qualityBurdenPerMetric)}
                     </td>
                     <td className={`py-2 px-2 text-right font-semibold ${saves ? 'text-green-700' : 'text-red-700'}`}>
                       {saves ? '-' : '+'}{fmtUnitCost(Math.abs(diff))}
@@ -189,6 +241,6 @@ export function CostPerBusinessMetric({ state }: Props) {
           </table>
         </div>
       )}
-    </section>
+    </Surface>
   )
 }

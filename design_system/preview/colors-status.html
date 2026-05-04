@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body{margin:0;padding:20px;background:#fff;font-family:var(--font-sans);}
+  .row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .item{padding:14px 16px;border-radius:12px;display:flex;align-items:center;gap:10px;}
+  .dot{width:14px;height:14px;border-radius:999px;}
+  .name{font-size:13px;font-weight:600;}
+  .hex{font-family:var(--font-mono);font-size:11px;margin-left:auto;opacity:.7;}
+  h4{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--semantic-label-normal);}
+</style></head><body>
+<h4>Status colors</h4>
+<div class="row">
+  <div class="item" style="background:#F2FFF6;color:#00240C"><span class="dot" style="background:#00BF40"></span><span class="name">Positive</span><span class="hex">#00BF40</span></div>
+  <div class="item" style="background:#FEF4E6;color:#361E00"><span class="dot" style="background:#FF9200"></span><span class="name">Cautionary</span><span class="hex">#FF9200</span></div>
+  <div class="item" style="background:#FEECEC;color:#3B0101"><span class="dot" style="background:#FF4242"></span><span class="name">Negative</span><span class="hex">#FF4242</span></div>
+</div>
+<div style="margin-top:12px;font-size:11px;color:var(--semantic-label-alternative);">Sit on saturated end of hue. Used for inline alerts, validation, badges.</div>
+</body></html>

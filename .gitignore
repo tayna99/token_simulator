@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local reference artifacts
+클로드 코드 구조(5).jpg
+클로드 코드 구조 (5).jpg
+하네스 프레임워크 튜토리얼 가이드 1103fbff97b0828286a781accadb81dc.md
+
 # gstack runtime artifacts
 .gstack/
 
