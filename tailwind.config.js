@@ -7,7 +7,12 @@ export default {
         sans: ['Pretendard', 'system-ui', 'sans-serif'],
       },
       colors: {
-        primary: 'var(--semantic-primary-normal)',
+        primary: {
+          DEFAULT: 'var(--semantic-primary-normal)',
+          normal: 'var(--semantic-primary-normal)',
+          strong: 'var(--semantic-primary-strong)',
+          heavy: 'var(--semantic-primary-heavy)',
+        },
         surface: {
           normal: 'var(--semantic-background-normal-normal)',
           alternative: 'var(--semantic-background-normal-alternative)',

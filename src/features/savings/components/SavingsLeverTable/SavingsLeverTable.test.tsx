@@ -32,6 +32,8 @@ describe('SavingsLeverTable', () => {
     expect(screen.getByRole('heading', { name: /4\. savings lever recommendation/i })).toBeInTheDocument()
     expect(screen.getByText('Strategy')).toBeInTheDocument()
     expect(screen.getByText('Cost effect')).toBeInTheDocument()
+    expect(screen.getByText('Risk level')).toBeInTheDocument()
+    expect(screen.getByText('Complexity')).toBeInTheDocument()
     expect(screen.getByText('Risk')).toBeInTheDocument()
     expect(screen.getByText('Conditions')).toBeInTheDocument()
     expect(screen.getByText('Model switch')).toBeInTheDocument()

@@ -44,7 +44,7 @@ describe('CostPerBusinessMetric', () => {
     await user.type(screen.getByLabelText(/monthly denominator/i), '1000')
     await user.click(screen.getByRole('button', { name: /add metric/i }))
 
-    expect(screen.getByText('Support tickets')).toBeInTheDocument()
+    expect(screen.getAllByText('Support tickets').length).toBeGreaterThan(0)
     expect(screen.getByText('$0.2250')).toBeInTheDocument()
     expect(screen.getAllByText(/Raw unit cost/i)).toHaveLength(2)
     expect(screen.getAllByText(/Effective unit cost/i)).toHaveLength(2)
@@ -54,13 +54,26 @@ describe('CostPerBusinessMetric', () => {
     expect(screen.getByText('$0.3750')).toBeInTheDocument()
   })
 
+  it('offers ticket, report, and customer templates without inventing denominators', async () => {
+    const user = userEvent.setup()
+    render(<CostPerBusinessMetric state={BASE_STATE} />)
+
+    await user.click(screen.getByRole('button', { name: 'Reports' }))
+
+    expect(screen.getByLabelText(/metric name/i)).toHaveValue('Reports')
+    expect(screen.getByLabelText(/monthly denominator/i)).toHaveValue(null)
+    expect(screen.getByRole('button', { name: 'Support tickets' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Customers' })).toBeInTheDocument()
+  })
+
   it('explains denominator and quality burden in Korean', async () => {
     await i18n.changeLanguage('ko')
 
     render(<CostPerBusinessMetric state={BASE_STATE} />)
 
     expect(screen.getByRole('heading', { name: /비즈니스 지표별 비용/i })).toBeInTheDocument()
-    expect(screen.getByText(/앱은 ticket, user, report 수를 추정하지 않습니다/i)).toBeInTheDocument()
+    expect(screen.getByText(/앱은 상담 건수, 사용자 수, 리포트 수를 추정하지 않습니다/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '상담/문의 건수' })).toBeInTheDocument()
     expect(screen.getByText(/품질 부담 비용/i)).toBeInTheDocument()
   })
 })

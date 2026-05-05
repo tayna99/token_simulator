@@ -27,6 +27,8 @@ export interface SavingsLever {
   strategy: string
   monthlySavings: number
   annualSavings: number
+  riskLevel: 'low' | 'medium' | 'high'
+  implementationComplexity: 'low' | 'medium' | 'high'
   riskText: string
   conditionText: string
   recommendedUse: string
@@ -44,6 +46,8 @@ function lever(
   id: SavingsLeverId,
   strategy: string,
   monthlySavings: number,
+  riskLevel: SavingsLever['riskLevel'],
+  implementationComplexity: SavingsLever['implementationComplexity'],
   riskText: string,
   conditionText: string,
   recommendedUse: string,
@@ -54,6 +58,8 @@ function lever(
     strategy,
     monthlySavings: savings,
     annualSavings: savings * 12,
+    riskLevel,
+    implementationComplexity,
     riskText,
     conditionText,
     recommendedUse,
@@ -99,6 +105,8 @@ export function rankSavingsLevers(input: SavingsLeverInput): SavingsLever[] {
       'model-switch',
       'Model switch',
       modelSwitchSavings,
+      'high',
+      'medium',
       'Quality degradation possible; validate task-level evals before routing all traffic.',
       'Candidate must satisfy quality, latency, context, and tool-call requirements.',
       'Classification, summary, simple extraction',
@@ -107,6 +115,8 @@ export function rankSavingsLevers(input: SavingsLeverInput): SavingsLever[] {
       'prompt-caching',
       'Prompt caching',
       cacheSavings,
+      'low',
+      'medium',
       'Requires repeatable prompt patterns; personalized context may not cache well.',
       cacheableShare > 0
         ? 'Works when system prompts, policies, or retrieved context repeat across requests.'
@@ -117,6 +127,8 @@ export function rankSavingsLevers(input: SavingsLeverInput): SavingsLever[] {
       'batch-processing',
       'Batch processing',
       batchSavings,
+      'medium',
+      'medium',
       'Lower real-time responsiveness; unsuitable for interactive user-facing paths.',
       batchableShare > 0
         ? 'Works for traffic that can wait for asynchronous processing.'
@@ -127,6 +139,8 @@ export function rankSavingsLevers(input: SavingsLeverInput): SavingsLever[] {
       'output-token-cap',
       'Output token cap',
       outputCapSavings,
+      'medium',
+      'low',
       'Answer quality can degrade when summaries or explanations are cut too aggressively.',
       'Works when concise outputs are acceptable and answer completeness is monitored.',
       'Internal summaries, log analysis',
@@ -135,6 +149,8 @@ export function rankSavingsLevers(input: SavingsLeverInput): SavingsLever[] {
       'feature-routing',
       'Feature-level routing',
       routingSavings,
+      'high',
+      'high',
       'Higher implementation complexity; requires feature-specific quality thresholds.',
       'Works when cheap models can safely handle only some request classes.',
       'Operational AI apps with mixed features',

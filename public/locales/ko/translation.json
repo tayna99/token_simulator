@@ -196,6 +196,18 @@
     "title": "보고용 요약",
     "executive": "임원용",
     "technical": "기술용",
+    "audience": {
+      "developer": "개발자",
+      "pm": "PM",
+      "ceo": "CEO"
+    },
+    "audienceHelp": {
+      "developer": "개발자 리포트: 토큰 사용량, 입력/출력 비용, 모델 차이",
+      "pm": "PM 리포트: 단위 원가, rollout 추천, 리스크 포함 의사결정",
+      "ceo": "CEO 리포트: 절감액, 예산 영향, 마진 리스크"
+    },
+    "audienceSelector": "보고서 대상 선택",
+    "reportHelp": "대상에 따라 같은 분석을 다른 말투로 정리합니다. 개발자는 토큰/비용 분해, PM은 rollout 판단, CEO는 절감액과 리스크를 중심으로 봅니다.",
     "copy": "복사",
     "exportPng": "PNG 내보내기",
     "copied": "클립보드에 복사했습니다.",
@@ -205,7 +217,9 @@
   },
   "workspace": {
     "eyebrow": "의사결정 워크스페이스",
-    "diagnostics": "개발자 진단"
+    "diagnostics": "개발자 진단",
+    "advancedReview": "고급 검토",
+    "advancedReviewDescription": "예산/쿼터 가드레일과 개발자 진단은 MVP 의사결정에는 보조 정보입니다. 실제 운영 단계에서 예산 초과, 비용 폭증, 모델 요구사항을 더 자세히 확인할 때 펼쳐보세요."
   },
   "usageSetup": {
     "eyebrow": "서비스 사용량 가정",
@@ -220,7 +234,19 @@
     "featureOutput": "기능 출력 토큰",
     "feature": "기능",
     "share": "비중",
-    "qualityFloor": "최소 품질 기준"
+    "qualityFloor": "최소 품질 기준",
+    "featureNames": {
+      "grounded-answer": "근거 기반 답변",
+      "policy-check": "정책/가이드 확인",
+      "long-summary": "긴 문서 요약",
+      "key-points": "핵심 포인트 추출",
+      "code-edit": "코드 수정",
+      "code-review": "코드 리뷰",
+      "intent-classification": "문의 의도 분류",
+      "priority-detection": "우선순위 감지",
+      "analysis-pass": "분석 단계",
+      "executive-writeup": "임원용 요약 작성"
+    }
   },
   "usageImport": {
     "eyebrow": "사용량 가져오기",
@@ -245,17 +271,40 @@
     "feature": "기능",
     "requests": "요청 수",
     "costPerUnit": "단위당 원가",
+    "sellingPrice": "판매가",
     "monthlyCost": "월 비용",
     "margin": "마진",
     "risk": "리스크",
     "pricePerUnit": "단위 판매가",
-    "priceHelp": "report, ticket, job, AI 요청 1건의 판매 가격을 입력하세요.",
+    "priceHelp": "기본 판매가입니다. 표에서 기능별로 다르게 입력할 수 있습니다.",
+    "priceForFeature": "{{feature}} 판매가",
+    "applyDefaultPrice": "기능별 판매가를 기본값으로 초기화",
     "totalRevenue": "매출",
     "totalMargin": "총마진",
     "marginRate": "마진율",
     "healthy": "양호",
     "thin": "낮음",
     "loss": "손실"
+  },
+  "featureCost": {
+    "eyebrow": "기능별 비용 분석",
+    "title": "기능별 비용 Top 분석",
+    "description": "무엇을 최적화할지 결정하기 전에 어떤 AI 기능이 월 LLM 비용을 가장 많이 쓰는지 봅니다.",
+    "topFeature": "최대 비용 기능",
+    "topShare": "비용 비중",
+    "topShareHelp": "{{feature}}가 이 시나리오에서 가장 큰 비용 원인입니다.",
+    "topCost": "월 비용",
+    "topCostHelp": "가장 비싼 기능의 예상 모델 API 비용입니다.",
+    "feature": "기능",
+    "monthlyCost": "월 비용",
+    "costShare": "비용 비중",
+    "requests": "요청 수",
+    "tokens": "토큰",
+    "sourceLabel": "출처",
+    "source": {
+      "logs": "로그 기준",
+      "preset": "프리셋 추정"
+    }
   },
   "currentCost": {
     "eyebrow": "현재 기준",
@@ -297,9 +346,16 @@
     "description": "각 절감 레버는 조건부입니다. 절감 가능 금액과 운영 트레이드오프를 함께 보여줍니다.",
     "strategy": "절감 전략",
     "costEffect": "비용 효과",
+    "riskLevel": "리스크 등급",
+    "complexity": "구현 난이도",
     "risk": "리스크",
     "recommendedUse": "추천 사용처",
     "conditions": "적용 조건",
+    "levels": {
+      "low": "낮음",
+      "medium": "중간",
+      "high": "높음"
+    },
     "items": {
       "model-switch": {
         "strategy": "모델 교체",
@@ -338,15 +394,21 @@
   "businessMetric": {
     "eyebrow": "비즈니스 지표",
     "title": "비즈니스 지표별 비용",
-    "description": "월 비용을 사용자가 입력한 비즈니스 기준값으로 나눕니다. 앱은 ticket, user, report 수를 추정하지 않습니다.",
-    "intro": "월간으로 실제 추적하는 값만 입력하세요. 예: support tickets, PR, users, jobs, transactions.",
+    "description": "월 비용을 사용자가 입력한 비즈니스 기준값으로 나눕니다. 앱은 상담 건수, 사용자 수, 리포트 수를 추정하지 않습니다.",
+    "intro": "월간으로 실제 추적하는 값만 입력하세요. 예: 상담/문의 건수, PR 수, 활성 사용자 수, 작업 수, 거래 수.",
     "qualityHelp": "품질 부담 비용은 재시도, 사람 검수, CS 이관 비용을 같은 기준값으로 나눈 값입니다.",
     "metricName": "지표 이름",
     "denominator": "월간 비즈니스 기준값",
     "addMetric": "지표 추가",
     "configured": "입력한 기준값",
+    "templates": {
+      "supportTickets": "상담/문의 건수",
+      "reports": "리포트 수",
+      "customers": "고객 수"
+    },
+    "placeholder": "상담/문의 건수",
     "emptyConfigured": "아직 기준값이 없습니다",
-    "empty": "비즈니스 기준값을 추가하면 지표별 비용을 비교합니다. 이 패널은 proxy metric을 임의로 만들지 않습니다.",
+    "empty": "비즈니스 기준값을 추가하면 지표별 비용을 비교합니다. 이 패널은 임의 기준값을 만들어내지 않습니다.",
     "validation": "지표 이름과 0보다 큰 기준값을 입력하세요.",
     "remove": "삭제",
     "metric": "지표",

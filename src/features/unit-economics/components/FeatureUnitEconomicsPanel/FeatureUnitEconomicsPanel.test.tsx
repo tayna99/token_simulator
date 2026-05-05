@@ -26,6 +26,17 @@ const SUMMARY: UsageImportSummary = {
       costPerRequest: 0.25,
       shareOfCost: 1,
     },
+    {
+      feature: 'report_generation',
+      requestCount: 10,
+      inputTokens: 200_000,
+      outputTokens: 80_000,
+      totalCostUsd: 15,
+      avgInputTokensPerRequest: 20000,
+      avgOutputTokensPerRequest: 8000,
+      costPerRequest: 1.5,
+      shareOfCost: 0.375,
+    },
   ],
 }
 
@@ -43,5 +54,17 @@ describe('FeatureUnitEconomicsPanel', () => {
 
     expect(screen.getAllByText('$75').length).toBeGreaterThan(0)
     expect(screen.getAllByText('75%').length).toBeGreaterThan(0)
+  })
+
+  it('lets each feature use a different selling price', async () => {
+    const user = userEvent.setup()
+    render(<FeatureUnitEconomicsPanel summary={SUMMARY} />)
+
+    await user.clear(screen.getByLabelText(/Selling price for report_generation/i))
+    await user.type(screen.getByLabelText(/Selling price for report_generation/i), '3')
+
+    expect(screen.getByLabelText(/Selling price for rag_chat/i)).toHaveValue(1)
+    expect(screen.getByLabelText(/Selling price for report_generation/i)).toHaveValue(3)
+    expect(screen.getAllByText('$15').length).toBeGreaterThan(0)
   })
 })

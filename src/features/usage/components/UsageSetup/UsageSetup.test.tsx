@@ -1,10 +1,11 @@
 ﻿import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UsageSetup } from './index'
 import { USE_CASE_PRESETS } from '../../../../data/workloadPresets'
 import { MODELS } from '../../../../data/models'
 import type { PlannerState } from '../../../../lib/plannerState'
+import i18n from '../../../../i18n'
 
 const BASE_STATE: PlannerState = {
   role: 'pm',
@@ -33,6 +34,14 @@ const BASE_STATE: PlannerState = {
 }
 
 describe('UsageSetup', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
   it('lets the user choose a cost-quality use case preset', async () => {
     const user = userEvent.setup()
     const onPresetChange = vi.fn()
@@ -71,5 +80,24 @@ describe('UsageSetup', () => {
     expect(screen.getByText('Grounded answer')).toBeInTheDocument()
     expect(screen.getAllByText(/Cacheable input/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/Batchable requests/i)).toBeInTheDocument()
+  })
+
+  it('uses Korean-friendly feature names in Korean', async () => {
+    await i18n.changeLanguage('ko')
+
+    render(
+      <UsageSetup
+        selectedPresetId="rag-chatbot"
+        state={BASE_STATE}
+        featureMix={USE_CASE_PRESETS[0].featureMix}
+        onPresetChange={vi.fn()}
+        onWorkloadChange={vi.fn()}
+        onCacheChange={vi.fn()}
+        onBatchChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('근거 기반 답변')).toBeInTheDocument()
+    expect(screen.getByText('정책/가이드 확인')).toBeInTheDocument()
   })
 })

@@ -9,7 +9,7 @@ describe('App developer-first structure', () => {
     await i18n.changeLanguage('en')
   })
 
-  it('groups secondary and deferred panels below the core decision flow', () => {
+  it('keeps the MVP decision flow focused without advanced review panels', () => {
     render(<App />)
 
     expect(screen.getByTestId('app-shell')).toHaveClass('font-sans')
@@ -18,8 +18,10 @@ describe('App developer-first structure', () => {
     expect(screen.getByRole('heading', { name: /2\. Current model cost/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /3\. Alternative comparison/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /4\. Savings lever recommendation/i })).toBeInTheDocument()
-    expect(screen.getByText('Developer Diagnostics')).toBeInTheDocument()
-    expect(screen.getAllByText('Budget & Quota Guardrails').length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: /Board-Ready Summary/i })).toBeInTheDocument()
+    expect(screen.queryByText('Advanced review')).not.toBeInTheDocument()
+    expect(screen.queryByText('Developer Diagnostics')).not.toBeInTheDocument()
+    expect(screen.queryByText('Budget & Quota Guardrails')).not.toBeInTheDocument()
     expect(screen.queryByText('Deferred / Business Planning')).not.toBeInTheDocument()
   })
 
@@ -51,7 +53,9 @@ describe('App developer-first structure', () => {
     expect(screen.getByRole('heading', { name: /4\. 절감 레버 추천/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /보고용 요약/i })).toBeInTheDocument()
     expect(screen.getByText(/월 비용을 사용자가 입력한 비즈니스 기준값으로 나눕니다/i)).toBeInTheDocument()
-    expect(screen.getAllByText('예산/쿼터 가드레일').length).toBeGreaterThan(0)
+    expect(screen.queryByText('고급 검토')).not.toBeInTheDocument()
+    expect(screen.queryByText('개발자 진단')).not.toBeInTheDocument()
+    expect(screen.queryByText('예산/쿼터 가드레일')).not.toBeInTheDocument()
     expect(screen.getAllByText(/Claude Sonnet 4.6/).length).toBeGreaterThan(0)
   })
 
@@ -63,7 +67,7 @@ describe('App developer-first structure', () => {
     await user.click(screen.getByRole('button', { name: /apply csv usage/i }))
 
     expect(screen.getByRole('heading', { name: /Feature cost and margin/i })).toBeInTheDocument()
-    expect(screen.getByText('rag_chat')).toBeInTheDocument()
+    expect(screen.getAllByText('rag_chat').length).toBeGreaterThan(0)
     expect(screen.getByText(/Token fields are read from logs/i)).toBeInTheDocument()
   })
 })

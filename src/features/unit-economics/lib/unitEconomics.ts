@@ -10,6 +10,8 @@ export interface FeatureUnitEconomicsRow extends FeatureUsageSummary {
   marginRisk: MarginRisk
 }
 
+export type FeaturePriceInput = number | Record<string, number>
+
 function finiteNonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
@@ -22,10 +24,13 @@ function riskFor(grossMarginPct: number, grossMarginUsd: number): MarginRisk {
 
 export function calculateFeatureUnitEconomics(
   features: FeatureUsageSummary[],
-  pricePerUnitUsd: number,
+  pricePerUnitUsd: FeaturePriceInput,
 ): FeatureUnitEconomicsRow[] {
-  const price = finiteNonNegative(pricePerUnitUsd)
   return features.map(feature => {
+    const rawPrice = typeof pricePerUnitUsd === 'number'
+      ? pricePerUnitUsd
+      : pricePerUnitUsd[feature.feature] ?? 0
+    const price = finiteNonNegative(rawPrice)
     const revenueUsd = feature.requestCount * price
     const grossMarginUsd = revenueUsd - finiteNonNegative(feature.totalCostUsd)
     const grossMarginPct = revenueUsd > 0 ? grossMarginUsd / revenueUsd : 0

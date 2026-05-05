@@ -29,6 +29,10 @@ function toRatio(raw: string): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 100)) : 0
 }
 
+function featureLabel(t: ReturnType<typeof useTranslation>['t'], feature: FeatureMixItem): string {
+  return t(`usageSetup.featureNames.${feature.id}`, { defaultValue: feature.name })
+}
+
 export function UsageSetup({
   selectedPresetId,
   state,
@@ -115,7 +119,7 @@ export function UsageSetup({
               <tbody className="divide-y divide-gray-200">
                 {featureMix.map(feature => (
                   <tr key={feature.id}>
-                    <td className="py-2 pr-2 font-medium text-gray-800">{feature.name}</td>
+                    <td className="py-2 pr-2 font-medium text-gray-800">{featureLabel(t, feature)}</td>
                     <td className="py-2 px-2 text-right text-gray-700">{fmtPercent(feature.requestShare, 0)}</td>
                     <td className="py-2 px-2 text-right text-gray-700">{feature.qualityFloor}</td>
                   </tr>

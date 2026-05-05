@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "research:hn": "node scripts/research/fetch-hn-candidates.mjs",
+    "research:github": "node scripts/research/fetch-github-candidates.mjs",
+    "research:validate": "node scripts/research/validate-evidence-board.mjs"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

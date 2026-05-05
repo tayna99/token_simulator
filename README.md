@@ -12,8 +12,8 @@ AI 기능은 겉으로는 버튼 하나처럼 보이지만, 실제로는 매 호
 
 - RAG 챗봇은 한 달에 얼마를 쓰는가?
 - 문서 요약 1건의 원가는 얼마인가?
-- 고객문의 ticket 1건을 AI로 처리하면 얼마가 드는가?
-- report 1개를 $1에 팔 때 마진이 남는가?
+- 고객 문의 1건을 AI로 처리하면 얼마가 드는가?
+- 보고서 1개를 $1에 팔 때 마진이 남는가?
 - 저가 모델로 바꾸면 진짜 싸지는가, 아니면 재시도/검수/CS 비용이 늘어나는가?
 - 어떤 기능부터 캐싱, 배치 처리, 출력 제한, 모델 라우팅을 적용해야 하는가?
 
@@ -45,7 +45,7 @@ AI 기능은 겉으로는 버튼 하나처럼 보이지만, 실제로는 매 호
 5. 원가와 마진 계산
 6. 절감 방법 추천
 7. 품질 부담 비용 확인
-8. 리포트와 알림으로 공유
+8. 리포트로 공유
 ```
 
 ### 1. 사용량 가져오기
@@ -90,12 +90,12 @@ LLM 호출 로그의 `feature` 컬럼을 기준으로 비용을 나눕니다.
 
 ### 4. 비즈니스 기준값 입력
 
-LLM 로그만으로는 support ticket 수, report 생성 수, 유료 고객 수 같은 비즈니스 기준값을 알기 어렵습니다. 그래서 이 값은 사용자가 직접 입력해야 합니다.
+LLM 로그만으로는 월 고객 문의 수, 월 보고서 생성 수, 유료 고객 수 같은 비즈니스 기준값을 알기 어렵습니다. 그래서 이 값은 사용자가 직접 입력해야 합니다.
 
 예시는 다음과 같습니다.
 
-- 월 support ticket 수
-- 월 report 생성 수
+- 월 고객 문의 수
+- 월 보고서 생성 수
 - 월 유료 고객 수
 - 월 job 실행 수
 - 월 transaction 수
@@ -103,15 +103,15 @@ LLM 로그만으로는 support ticket 수, report 생성 수, 유료 고객 수 
 이 기준값을 넣으면 앱은 비용을 비즈니스 단위로 나눠 보여줍니다.
 
 ```txt
-월 LLM 비용 / 월 support ticket 수 = ticket 1건당 AI 원가
-월 LLM 비용 / 월 report 수 = report 1개당 AI 원가
+월 LLM 비용 / 월 고객 문의 수 = 고객 문의 1건당 AI 원가
+월 LLM 비용 / 월 보고서 수 = 보고서 1개당 AI 원가
 ```
 
 ### 5. 원가와 마진 계산
 
 종량제 AI 제품에서는 원가만 보는 것으로 부족합니다. 판매 가격과 비교해 마진을 봐야 합니다.
 
-예를 들어 report 1개 생성 원가가 $0.31이고 고객에게 $1을 받는다면, gross margin은 약 69%입니다.
+예를 들어 보고서 1개 생성 원가가 $0.31이고 고객에게 $1을 받는다면, gross margin은 약 69%입니다.
 
 이 앱은 다음을 보여주는 방향으로 발전합니다.
 
@@ -150,16 +150,16 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 
 이 구분이 있어야 싼 모델이 진짜 싼지 판단할 수 있습니다.
 
-### 8. 리포트와 알림
+### 8. 리포트
 
-계산 결과는 개발자만 보는 것이 아니라 PM, CEO, Finance, 운영팀이 이해할 수 있어야 합니다.
+계산 결과는 개발자만 보는 것이 아니라 PM, CEO, Finance, 운영팀이 이해할 수 있어야 합니다. 예산/쿼터 알림은 현재 MVP 기본 화면에서 제거했고, 리서치 점수가 충분히 높을 때만 다시 검토합니다.
 
 역할별 출력 예시는 다음과 같습니다.
 
 - 개발자용: 입력/출력 토큰, 기능별 비용, 모델 교체 후보, 캐싱/배치 적용 포인트
 - PM용: 기능별 원가, 가격 정책, rollout 추천
 - CEO용: 월 절감액, 마진 영향, 예산 리스크
-- 운영용: 비용 폭증, output token 증가, 예산 초과 예상 알림
+- 운영용 후보: 비용 폭증, output token 증가, 예산 초과 예상 알림
 
 ## 현재 구현된 기능
 
@@ -176,6 +176,9 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 - PM/CEO/개발자용 요약 리포트
 - 한국어/영어 UI
 - Montage/Wanted 기반 Pretendard 및 디자인 토큰 적용
+- `docs/research` 기반 evidence board, pain taxonomy, ontology pilot
+
+현재 MVP에서는 `개발자 진단`과 `예산/쿼터 가드레일`을 기본 UI에서 제거했습니다. 해당 코드는 복구용으로 `archive/advanced-review/`에 보관하고, 리서치 점수가 충분히 높을 때만 다시 제품 후보로 올립니다.
 
 ## 로드맵
 
@@ -215,7 +218,15 @@ tracker.track("rag_chat", async () => {
 - 에러
 - 재시도
 
-### Phase 4. Alert / Margin Guard
+### Phase 4. Research-Gated Alert / Margin Guard
+
+다음 조건을 만족할 때만 예산/쿼터 가드레일을 다시 도입합니다.
+
+- `pain_team_budget` 또는 `pain_cost_unpredictable`이 50개 evidence 기준 Top 3
+- 평균 `wtp_score`가 4 이상
+- 알림을 받은 뒤 실제 action이 명확함
+
+후보 기능은 다음입니다.
 
 - 예산 초과 예상
 - output token 급증
@@ -256,6 +267,7 @@ npm run dev        # 로컬 개발 서버
 npm run test:run   # 테스트 전체 실행
 npm run build      # 프로덕션 빌드
 npm run preview    # 빌드 결과 미리보기
+npm run research:validate # research evidence CSV 검증
 ```
 
 preview URL은 기본적으로 다음과 같습니다.
@@ -287,9 +299,11 @@ src/features/alternatives
 src/features/savings
 src/features/unit-economics
 src/features/report
-src/features/guardrails
 src/domain
 src/shared
+docs/research
+scripts/research
+archive/advanced-review
 ```
 
 각 feature 폴더의 의미는 다음과 같습니다.
@@ -298,9 +312,11 @@ src/shared
 - `current-cost`: 현재 비용 계산
 - `alternatives`: 후보 모델 비교
 - `savings`: 캐싱/배치/출력제한/라우팅 추천
-- `unit-economics`: ticket/report/user당 원가와 마진
+- `unit-economics`: 고객 문의/보고서/사용자당 원가와 마진
 - `report`: PM/CEO/개발자용 요약
-- `guardrails`: 예산 초과, 비용 폭증 알림
+- `docs/research`: evidence board, pain taxonomy, ontology, pilot report
+- `scripts/research`: HN/GitHub 후보 수집, evidence CSV 검증
+- `archive/advanced-review`: 개발자 진단, 예산/쿼터 가드레일, 고급 검토 백업
 
 `src/domain`은 화면과 무관한 순수 계산 규칙을 위한 영역입니다. 예를 들어 비용 계산, 품질 부담, 가격/마진 계산처럼 UI가 없어도 테스트 가능한 로직이 여기에 들어갈 수 있습니다.
 

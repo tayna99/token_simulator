@@ -38,6 +38,11 @@ export function SavingsLeverTable({
     if (leverId === 'batch-processing' && batchableShare <= 0) return 'conditionEmpty'
     return 'condition'
   }
+  const toneFor = (level: string): 'positive' | 'caution' | 'negative' => {
+    if (level === 'low') return 'positive'
+    if (level === 'high') return 'negative'
+    return 'caution'
+  }
 
   return (
     <Surface
@@ -51,6 +56,8 @@ export function SavingsLeverTable({
             <tr>
               <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.strategy')}</th>
               <th className="px-3 py-2 text-right font-medium">{t('savingsLevers.costEffect')}</th>
+              <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.riskLevel')}</th>
+              <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.complexity')}</th>
               <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.risk')}</th>
               <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.recommendedUse')}</th>
               <th className="px-3 py-2 text-left font-medium">{t('savingsLevers.conditions')}</th>
@@ -66,7 +73,15 @@ export function SavingsLeverTable({
                   {fmtCurrency(lever.monthlySavings)}/mo
                 </td>
                 <td className="px-3 py-3 text-gray-700">
-                  <Badge tone="caution">{t(`savingsLevers.items.${lever.id}.risk`, { defaultValue: lever.riskText })}</Badge>
+                  <Badge tone={toneFor(lever.riskLevel)}>{t(`savingsLevers.levels.${lever.riskLevel}`)}</Badge>
+                </td>
+                <td className="px-3 py-3 text-gray-700">
+                  <Badge tone={toneFor(lever.implementationComplexity)}>
+                    {t(`savingsLevers.levels.${lever.implementationComplexity}`)}
+                  </Badge>
+                </td>
+                <td className="px-3 py-3 text-gray-700">
+                  {t(`savingsLevers.items.${lever.id}.risk`, { defaultValue: lever.riskText })}
                 </td>
                 <td className="px-3 py-3 text-gray-700">
                   {t(`savingsLevers.items.${lever.id}.use`, { defaultValue: lever.recommendedUse })}

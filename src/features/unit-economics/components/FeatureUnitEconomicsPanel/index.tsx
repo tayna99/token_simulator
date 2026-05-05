@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { calculateFeatureUnitEconomics } from '../../../../lib/unitEconomics'
 import type { UsageImportSummary } from '../../../../lib/usageImport'
@@ -21,11 +21,19 @@ function riskTone(risk: string): 'positive' | 'caution' | 'negative' {
 
 export function FeatureUnitEconomicsPanel({ summary }: Props) {
   const { t } = useTranslation()
-  const [pricePerUnit, setPricePerUnit] = useState(1)
+  const [defaultPricePerUnit, setDefaultPricePerUnit] = useState(1)
+  const [featurePrices, setFeaturePrices] = useState<Record<string, number>>({})
+  const featureSummaries = summary?.featureSummaries ?? []
 
+  const priceInput = useMemo(() => {
+    return featureSummaries.reduce<Record<string, number>>((acc, feature) => {
+      acc[feature.feature] = featurePrices[feature.feature] ?? defaultPricePerUnit
+      return acc
+    }, {})
+  }, [defaultPricePerUnit, featurePrices, featureSummaries])
   if (!summary) return null
 
-  const rows = calculateFeatureUnitEconomics(summary.featureSummaries, pricePerUnit)
+  const rows = calculateFeatureUnitEconomics(featureSummaries, priceInput)
   const totalRevenue = rows.reduce((sum, row) => sum + row.revenueUsd, 0)
   const totalMargin = rows.reduce((sum, row) => sum + row.grossMarginUsd, 0)
   const totalMarginPct = totalRevenue > 0 ? totalMargin / totalRevenue : 0
@@ -44,6 +52,7 @@ export function FeatureUnitEconomicsPanel({ summary }: Props) {
                 <th className="px-3 py-2 text-left font-medium">{t('unitEconomics.feature')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('unitEconomics.requests')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('unitEconomics.costPerUnit')}</th>
+                <th className="px-3 py-2 text-right font-medium">{t('unitEconomics.sellingPrice')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('unitEconomics.monthlyCost')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('unitEconomics.margin')}</th>
                 <th className="px-3 py-2 text-left font-medium">{t('unitEconomics.risk')}</th>
@@ -56,6 +65,23 @@ export function FeatureUnitEconomicsPanel({ summary }: Props) {
                   <td className="px-3 py-3 text-right text-label-neutral">{fmtTokens(row.requestCount)}</td>
                   <td className="px-3 py-3 text-right font-semibold text-label-normal" translate="no">
                     {unitCost(row.costPerRequest)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <input
+                      aria-label={t('unitEconomics.priceForFeature', { feature: row.feature })}
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={row.pricePerUnitUsd}
+                      onChange={event => {
+                        const value = Number(event.target.value)
+                        setFeaturePrices(prev => ({
+                          ...prev,
+                          [row.feature]: Number.isFinite(value) ? Math.max(0, value) : 0,
+                        }))
+                      }}
+                      className="w-24 rounded-wds border border-line-solid bg-surface-normal px-2 py-1 text-right text-xs"
+                    />
                   </td>
                   <td className="px-3 py-3 text-right text-label-neutral" translate="no">
                     {fmtCurrency(row.totalCostUsd, row.totalCostUsd < 1 ? 3 : 0)}
@@ -80,11 +106,21 @@ export function FeatureUnitEconomicsPanel({ summary }: Props) {
               type="number"
               min={0}
               step={0.01}
-              value={pricePerUnit}
-              onChange={event => setPricePerUnit(Number(event.target.value))}
+              value={defaultPricePerUnit}
+              onChange={event => {
+                const value = Number(event.target.value)
+                setDefaultPricePerUnit(Number.isFinite(value) ? Math.max(0, value) : 0)
+              }}
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm"
             />
           </Field>
+          <button
+            type="button"
+            onClick={() => setFeaturePrices({})}
+            className="rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs font-medium text-label-neutral hover:bg-fill-alternative"
+          >
+            {t('unitEconomics.applyDefaultPrice')}
+          </button>
           <MetricTile label={t('unitEconomics.totalRevenue')} value={fmtCurrency(totalRevenue)} />
           <MetricTile label={t('unitEconomics.totalMargin')} value={fmtCurrency(totalMargin)} />
           <MetricTile label={t('unitEconomics.marginRate')} value={fmtPercent(totalMarginPct)} />

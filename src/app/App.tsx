@@ -7,17 +7,9 @@ import { UsageSetup } from '../features/usage/components/UsageSetup'
 import { CurrentCostPanel } from '../features/current-cost/components/CurrentCostPanel'
 import { AlternativeComparison } from '../features/alternatives/components/AlternativeComparison'
 import { SavingsLeverTable } from '../features/savings/components/SavingsLeverTable'
-import { CostBreakdown } from '../features/current-cost/components/CostBreakdown'
-import { BudgetGuardrails } from '../features/guardrails/components/BudgetGuardrails'
-import { ExportAnalysis } from '../features/report/components/ExportAnalysis'
-import { TokenEfficiency } from '../components/TokenEfficiency'
-import { RequirementsFilter } from '../features/alternatives/components/RequirementsFilter'
 import { CostPerBusinessMetric } from '../features/unit-economics/components/CostPerBusinessMetric'
-import { CostOptimizationRoadmap } from '../features/savings/components/CostOptimizationRoadmap'
-import { CostAttributionByFeature } from '../features/unit-economics/components/CostAttributionByFeature'
-import { ModelComparisonMatrix } from '../features/alternatives/components/ModelComparisonMatrix'
-import { RequestPatternAnalyzer } from '../components/RequestPatternAnalyzer'
 import { SummaryCard } from '../features/report/components/SummaryCard'
+import { FeatureCostTopPanel } from '../features/unit-economics/components/FeatureCostTopPanel'
 import { FeatureUnitEconomicsPanel } from '../features/unit-economics/components/FeatureUnitEconomicsPanel'
 import { RoleSelector } from '../components/RoleSelector'
 import { PeriodSelector } from '../components/PeriodSelector'
@@ -259,6 +251,14 @@ function App() {
           onBatchChange={batchEnabled => setState(s => ({ ...s, batchEnabled }))}
         />
 
+        <FeatureCostTopPanel
+          state={legacyState}
+          featureMix={selectedUseCase.featureMix}
+          importedSummary={importedUsage}
+        />
+
+        <CostPerBusinessMetric state={legacyState} />
+
         <FeatureUnitEconomicsPanel summary={importedUsage} />
 
         <CurrentCostPanel
@@ -281,40 +281,6 @@ function App() {
           routingEligibleShare={0.5}
         />
 
-        <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-          <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
-            {t('workspace.diagnostics')}
-          </summary>
-          <div className="mt-4 flex flex-col gap-4 md:gap-8">
-            <RequestPatternAnalyzer state={legacyState} />
-            <CostAttributionByFeature state={legacyState} />
-            <CostPerBusinessMetric state={legacyState} />
-            <ModelComparisonMatrix state={legacyState} />
-            <RequirementsFilter
-              state={legacyState}
-              onSelectCandidate={modelId => {
-                const model = getModelById(modelId)
-                if (model) {
-                  setState(s => ({ ...s, candidateModel: model }))
-                }
-              }}
-            />
-            <TokenEfficiency state={legacyState} />
-            <CostBreakdown state={legacyState} />
-            <CostOptimizationRoadmap state={legacyState} />
-          </div>
-        </details>
-
-        <details className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-          <summary className="cursor-pointer text-sm md:text-base font-semibold text-gray-800">
-            {t('guardrails.title')}
-          </summary>
-          <div className="mt-4 flex flex-col gap-4 md:gap-8">
-            <BudgetGuardrails state={legacyState} onBudgetChange={v => setState(s => ({ ...s, monthlyBudgetUsd: v }))} />
-          </div>
-        </details>
-
-        <ExportAnalysis state={legacyState} />
         <SummaryCard state={legacyState} />
       </main>
     </div>

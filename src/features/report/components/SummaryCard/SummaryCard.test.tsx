@@ -1,5 +1,6 @@
 ﻿// src/components/SummaryCard/SummaryCard.test.tsx
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import { SummaryCard } from './index'
 import { MODELS } from '../../../../data/models'
@@ -79,7 +80,21 @@ describe('SummaryCard', () => {
   it('uses PM framing for rollout trade-offs', () => {
     render(<SummaryCard state={{ ...BASE_STATE, role: 'pm' }} />)
     expect(screen.getByText(/PM summary/i)).toBeInTheDocument()
-    expect(screen.getByText(/rollout/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/rollout/i).length).toBeGreaterThan(0)
+  })
+
+  it('switches between developer, PM, and CEO report audiences', async () => {
+    const user = userEvent.setup()
+    render(<SummaryCard state={{ ...BASE_STATE, role: 'pm' }} />)
+
+    expect(screen.getByRole('button', { name: 'Developer' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'PM' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Developer' }))
+    expect(screen.getByText(/Developer breakdown/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'CEO' }))
+    expect(screen.getByText(/CEO savings summary/i)).toBeInTheDocument()
   })
 
   it('uses developer framing for assumptions and breakdown', () => {

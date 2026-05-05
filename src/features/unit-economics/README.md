@@ -1,5 +1,5 @@
 # unit-economics
 
-ticket/report/user당 원가와 마진을 담당한다.
+상담/문의 건수, 리포트 수, 활성 사용자 수 같은 비즈니스 단위당 원가와 마진을 담당한다.
 
-LLM 비용을 token 단위가 아니라 support ticket, report, user, job 같은 비즈니스 단위로 나눠 보여주는 영역이다.
+LLM 비용을 token 단위가 아니라 상담/문의 건수, 리포트 수, 활성 사용자 수, 작업 수 같은 비즈니스 단위로 나눠 보여주는 영역이다.

@@ -196,6 +196,18 @@
     "title": "Board-Ready Summary",
     "executive": "Executive",
     "technical": "Technical",
+    "audience": {
+      "developer": "Developer",
+      "pm": "PM",
+      "ceo": "CEO"
+    },
+    "audienceHelp": {
+      "developer": "Developer report: token usage, input/output split, model delta",
+      "pm": "PM report: unit cost, rollout recommendation, risk-aware decision",
+      "ceo": "CEO report: savings, budget impact, margin risk"
+    },
+    "audienceSelector": "Report audience selector",
+    "reportHelp": "The same analysis is rewritten for each audience. Developers get token and cost breakdowns, PMs get rollout decisions, and CEOs get savings plus risk.",
     "copy": "Copy",
     "exportPng": "Export PNG",
     "copied": "Copied to clipboard!",
@@ -205,7 +217,9 @@
   },
   "workspace": {
     "eyebrow": "Decision workspace",
-    "diagnostics": "Developer Diagnostics"
+    "diagnostics": "Developer Diagnostics",
+    "advancedReview": "Advanced review",
+    "advancedReviewDescription": "Budget guardrails and developer diagnostics are supporting information for the MVP. Open this when you need operating checks such as budget overrun, cost spikes, or model requirement details."
   },
   "usageSetup": {
     "eyebrow": "Service assumptions",
@@ -220,7 +234,19 @@
     "featureOutput": "Feature output",
     "feature": "Feature",
     "share": "Share",
-    "qualityFloor": "Quality floor"
+    "qualityFloor": "Quality floor",
+    "featureNames": {
+      "grounded-answer": "Grounded answer",
+      "policy-check": "Policy check",
+      "long-summary": "Long summary",
+      "key-points": "Key points extraction",
+      "code-edit": "Code edit",
+      "code-review": "Code review",
+      "intent-classification": "Intent classification",
+      "priority-detection": "Priority detection",
+      "analysis-pass": "Analysis pass",
+      "executive-writeup": "Executive writeup"
+    }
   },
   "usageImport": {
     "eyebrow": "Usage import",
@@ -245,17 +271,40 @@
     "feature": "Feature",
     "requests": "Requests",
     "costPerUnit": "Cost/unit",
+    "sellingPrice": "Selling price",
     "monthlyCost": "Monthly cost",
     "margin": "Margin",
     "risk": "Risk",
     "pricePerUnit": "Price per unit",
-    "priceHelp": "Use the selling price for one report, ticket, job, or AI request.",
+    "priceHelp": "Default selling price. Override it per feature in the table.",
+    "priceForFeature": "Selling price for {{feature}}",
+    "applyDefaultPrice": "Reset feature prices to default",
     "totalRevenue": "Revenue",
     "totalMargin": "Gross margin",
     "marginRate": "Margin rate",
     "healthy": "Healthy",
     "thin": "Thin",
     "loss": "Loss"
+  },
+  "featureCost": {
+    "eyebrow": "Feature cost drivers",
+    "title": "Feature cost drivers",
+    "description": "See which AI feature consumes the most monthly LLM cost before deciding what to optimize.",
+    "topFeature": "Top cost feature",
+    "topShare": "Share of cost",
+    "topShareHelp": "{{feature}} is the largest cost driver in this scenario.",
+    "topCost": "Monthly cost",
+    "topCostHelp": "Estimated model API cost for the top feature.",
+    "feature": "Feature",
+    "monthlyCost": "Monthly cost",
+    "costShare": "Cost share",
+    "requests": "Requests",
+    "tokens": "Tokens",
+    "sourceLabel": "Source",
+    "source": {
+      "logs": "From logs",
+      "preset": "Preset estimate"
+    }
   },
   "currentCost": {
     "eyebrow": "Baseline",
@@ -297,9 +346,16 @@
     "description": "Each lever is conditional: the table shows savings potential and the operational trade-off beside it.",
     "strategy": "Strategy",
     "costEffect": "Cost effect",
+    "riskLevel": "Risk level",
+    "complexity": "Complexity",
     "risk": "Risk",
     "recommendedUse": "Recommended use",
     "conditions": "Conditions",
+    "levels": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
     "items": {
       "model-switch": {
         "strategy": "Model switch",
@@ -345,6 +401,12 @@
     "denominator": "Monthly denominator",
     "addMetric": "Add metric",
     "configured": "Configured denominators",
+    "templates": {
+      "supportTickets": "Support tickets",
+      "reports": "Reports",
+      "customers": "Customers"
+    },
+    "placeholder": "Support tickets",
     "emptyConfigured": "No denominators yet",
     "empty": "Add a denominator to compare cost per business metric. This panel does not invent proxy metrics.",
     "validation": "Enter a metric name and a denominator greater than 0.",

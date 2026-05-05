@@ -10,13 +10,13 @@ import { Toast } from '../../../../shared/ui/Toast'
 import { Button, Surface } from '../../../../shared/ui/primitives'
 import type { SimState } from '../../../../App'
 
-type SummaryTone = 'executive' | 'technical'
+type ReportAudience = 'developer' | 'pm' | 'ceo'
 
 interface Props {
   state: SimState
 }
 
-function buildSummaryText(state: SimState, t: TFunction, tone: SummaryTone = 'executive'): string {
+function buildSummaryText(state: SimState, t: TFunction, audience: ReportAudience = 'pm'): string {
   const current = calculateCost({
     model: state.currentModel,
     monthlyInputTokens: state.periodInputTokens,
@@ -49,7 +49,7 @@ function buildSummaryText(state: SimState, t: TFunction, tone: SummaryTone = 'ex
     annualDelta: absAnnual,
   })
 
-  if (tone === 'technical' || state.role === 'developer') {
+  if (audience === 'developer') {
     const cacheText = state.cacheHitRate > 0 ? t('report.cacheText', { percent: fmtPercent(state.cacheHitRate) }) : ''
     const batchText = state.batchEnabled ? t('report.batchText') : ''
     const deltaText = isSameModel
@@ -93,7 +93,7 @@ function buildSummaryText(state: SimState, t: TFunction, tone: SummaryTone = 'ex
     annualCost: fmtCurrency(current.annualCost),
   })
 
-  if (state.role === 'ceo') {
+  if (audience === 'ceo') {
     return t('report.ceo', { baseline, decision: isSameModel ? sameModelText : switchText })
   }
 
@@ -107,10 +107,11 @@ function provenanceText(model: SimState['currentModel']): string {
 export function SummaryCard({ state }: Props) {
   const { t, i18n } = useTranslation()
   const cardRef = useRef<HTMLDivElement>(null)
-  const [tone, setTone] = useState<SummaryTone>('executive')
+  const [audience, setAudience] = useState<ReportAudience>(state.role)
   const { toast, show: showToast, hide: hideToast } = useToast()
   const language = i18n.language === 'ko' ? 'ko' : 'en'
-  const summaryText = buildSummaryText(state, t, tone)
+  const summaryText = buildSummaryText(state, t, audience)
+  const audienceOptions = (['developer', 'pm', 'ceo'] as const)
 
   const handleCopy = async () => {
     try {
@@ -136,61 +137,62 @@ export function SummaryCard({ state }: Props) {
     }
   }
 
+  const reportControls = (
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+      <div
+        className="grid w-full grid-cols-3 overflow-hidden rounded-wds border border-line-solid bg-surface-normal sm:w-auto"
+        role="group"
+        aria-label={t('summary.audienceSelector')}
+      >
+        {audienceOptions.map((item, index) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setAudience(item)}
+            aria-pressed={audience === item}
+            title={t(`summary.audienceHelp.${item}`)}
+            className={`h-9 min-w-0 px-3 text-xs font-semibold transition-colors ${
+              index > 0 ? 'border-l border-line-solid' : ''
+            } ${
+              audience === item
+                ? 'bg-primary-normal text-white'
+                : 'bg-surface-normal text-label-neutral hover:bg-fill-alternative'
+            }`}
+          >
+            {t(`summary.audience.${item}`)}
+          </button>
+        ))}
+      </div>
+      <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+        <Button size="sm" onClick={handleCopy} className="w-full sm:w-auto">
+          {t('summary.copy')}
+        </Button>
+        <Button size="sm" variant="primary" onClick={handleExportPng} className="w-full sm:w-auto">
+          {t('summary.exportPng')}
+        </Button>
+      </div>
+    </div>
+  )
+
   return (
-    <Surface eyebrow={t('report.eyebrow')} title={t('summary.title')} description={t('report.description')}>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500" title="AI-generated summary with verified pricing sources for stakeholder presentation">(?)</span>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 flex-wrap items-start sm:items-center">
-          <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-            <Button
-              size="sm"
-              variant={tone === 'executive' ? 'primary' : 'secondary'}
-              onClick={() => setTone('executive')}
-              aria-pressed={tone === 'executive'}
-              className="rounded-none border-0"
-              title="Executive summary: high-level business impact"
-            >
-              {t('summary.executive')}
-            </Button>
-            <Button
-              size="sm"
-              variant={tone === 'technical' ? 'primary' : 'secondary'}
-              onClick={() => setTone('technical')}
-              aria-pressed={tone === 'technical'}
-              className="rounded-none border-0 border-l border-line-solid"
-              title="Technical summary: detailed configuration and metrics"
-            >
-              {t('summary.technical')}
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={handleCopy}
-            >
-              {t('summary.copy')}
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={handleExportPng}
-            >
-              {t('summary.exportPng')}
-            </Button>
-          </div>
-        </div>
+    <Surface
+      eyebrow={t('report.eyebrow')}
+      title={t('summary.title')}
+      description={t('report.description')}
+      action={reportControls}
+    >
+      <div className="mb-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 px-3 py-2">
+        <p className="text-xs leading-relaxed text-label-neutral">{t('summary.reportHelp')}</p>
       </div>
 
       <div
         ref={cardRef}
         lang={language}
         data-testid="summary-card-body"
-        className="bg-fill-alternative border border-line-neutral rounded-wds-lg p-3 md:p-5"
+        className="bg-fill-alternative border border-line-neutral rounded-wds-lg p-4 md:p-5"
       >
-        <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-wrap">{summaryText}</p>
-        <p className="text-xs text-gray-400 mt-3">
+        <p className="whitespace-pre-wrap text-sm leading-7 text-label-normal">{summaryText}</p>
+        <p className="mt-4 text-xs leading-relaxed text-label-alternative">
           {t('report.staticPricing')}
           {state.currentModel.priceSourceUrl && (
             <>
@@ -198,7 +200,7 @@ export function SummaryCard({ state }: Props) {
                 href={state.currentModel.priceSourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="font-medium text-primary-normal hover:underline"
               >
                 {provenanceText(state.currentModel)}
               </a>
@@ -210,14 +212,14 @@ export function SummaryCard({ state }: Props) {
                 href={state.candidateModel.priceSourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="font-medium text-primary-normal hover:underline"
               >
                 {provenanceText(state.candidateModel)}
               </a>
             </>
           )}
         </p>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="mt-2 text-xs leading-relaxed text-label-alternative">
           {t('report.qualityAssumption')}
         </p>
       </div>

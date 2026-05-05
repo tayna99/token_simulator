@@ -49,6 +49,12 @@ const CANDIDATE_ASSUMPTIONS: QualityAssumptions = {
   csCostPerEscalationUsd: 3,
 }
 
+const BUSINESS_METRIC_TEMPLATES = [
+  'supportTickets',
+  'reports',
+  'customers',
+] as const
+
 export function CostPerBusinessMetric({ state }: Props) {
   const { t } = useTranslation()
   const [metricName, setMetricName] = useState('')
@@ -113,11 +119,27 @@ export function CostPerBusinessMetric({ state }: Props) {
           <p className="text-xs text-gray-600">
             {t('businessMetric.qualityHelp')}
           </p>
+          <div className="flex flex-wrap gap-2">
+            {BUSINESS_METRIC_TEMPLATES.map(template => (
+              <Button
+                key={template}
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setMetricName(t(`businessMetric.templates.${template}`))
+                  setDenominator('')
+                  setError('')
+                }}
+              >
+                {t(`businessMetric.templates.${template}`)}
+              </Button>
+            ))}
+          </div>
           <Field label={t('businessMetric.metricName')} htmlFor="business-metric-name">
             <input
               id="business-metric-name"
               type="text"
-              placeholder="Support tickets"
+              placeholder={t('businessMetric.placeholder')}
               value={metricName}
               onChange={e => setMetricName(e.target.value)}
               className="w-full rounded-wds border border-line-solid px-3 py-2 text-xs"
