@@ -5,6 +5,7 @@ import { FeatureUnitEconomicsPanel } from './index'
 import type { UsageImportSummary } from '../../../../lib/usageImport'
 
 const SUMMARY: UsageImportSummary = {
+  errors: [],
   requestCount: 100,
   totalInputTokens: 100_000,
   totalOutputTokens: 50_000,

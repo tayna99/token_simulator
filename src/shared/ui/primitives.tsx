@@ -36,14 +36,14 @@ export function Surface({
 }: SurfaceProps) {
   return (
     <section
-      className={`rounded-wds-lg border border-line-neutral bg-surface-normal p-4 shadow-sm md:p-6 ${className}`}
+      className={`apple-utility-surface rounded-wds-lg border border-line-neutral bg-surface-normal p-4 md:p-6 ${className}`}
       {...props}
     >
       {(eyebrow || title || description || action) && (
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1">
             {eyebrow && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary-normal">
+              <p className="text-xs font-semibold uppercase text-primary-normal">
                 {eyebrow}
               </p>
             )}
@@ -80,7 +80,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-wds border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${variantClass} ${sizeClass} ${className}`}
+      className={`inline-flex items-center justify-center rounded-wds border font-semibold transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${variantClass} ${sizeClass} ${className}`}
       {...props}
     />
   )

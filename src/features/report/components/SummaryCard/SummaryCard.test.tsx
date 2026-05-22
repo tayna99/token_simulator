@@ -83,18 +83,23 @@ describe('SummaryCard', () => {
     expect(screen.getAllByText(/rollout/i).length).toBeGreaterThan(0)
   })
 
-  it('switches between developer, PM, and CEO report audiences', async () => {
+  it('switches between developer, PM, CEO/CFO, and Board report audiences', async () => {
     const user = userEvent.setup()
     render(<SummaryCard state={{ ...BASE_STATE, role: 'pm' }} />)
 
     expect(screen.getByRole('button', { name: 'Developer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'PM' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'CEO/CFO' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Board' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Developer' }))
     expect(screen.getByText(/Developer breakdown/i)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'CEO' }))
+    await user.click(screen.getByRole('button', { name: 'CEO/CFO' }))
     expect(screen.getByText(/CEO savings summary/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    expect(screen.getAllByText(/AI unit economics/i).length).toBeGreaterThan(0)
   })
 
   it('uses developer framing for assumptions and breakdown', () => {

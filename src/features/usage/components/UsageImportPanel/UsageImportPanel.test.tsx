@@ -1,4 +1,4 @@
-﻿import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { UsageImportPanel } from './index'
@@ -9,11 +9,11 @@ describe('UsageImportPanel', () => {
     const onImport = vi.fn()
     render(<UsageImportPanel onImport={onImport} />)
 
-    await user.clear(screen.getByLabelText(/LLM usage CSV/i))
-    await user.type(
-      screen.getByLabelText(/LLM usage CSV/i),
-      'feature,model,input_tokens,output_tokens,total_cost\nrag_chat,claude-sonnet-4.6,1000,500,0.01',
-    )
+    fireEvent.change(screen.getByLabelText(/LLM usage CSV/i), {
+      target: {
+        value: 'feature,model,input_tokens,output_tokens,total_cost\nrag_chat,claude-sonnet-4.6,1000,500,0.01',
+      },
+    })
     await user.click(screen.getByRole('button', { name: /apply csv usage/i }))
 
     expect(onImport).toHaveBeenCalledTimes(1)

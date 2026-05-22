@@ -4,6 +4,7 @@ import { MODELS } from '../../../../data/models'
 import { parseUsageCsv, type UsageImportSummary } from '../../../../lib/usageImport'
 import { Button, Field, MetricTile } from '../../../../shared/ui/primitives'
 import { fmtCurrency, fmtTokens } from '../../../../lib/format'
+import { SPARK_CLAW_SAMPLE_CSV } from '../../data/sparkClawSample'
 
 const SAMPLE_USAGE_CSV = [
   'timestamp,feature,model,input_tokens,output_tokens,total_cost,latency_ms,customer_id',
@@ -25,11 +26,18 @@ export function UsageImportPanel({ importedSummary, onImport }: Props) {
 
   const applyCsv = () => {
     const summary = parseUsageCsv(rawCsv, MODELS)
-    if (summary.requestCount === 0) {
-      setError(t('usageImport.error'))
+    if (summary.errors.length > 0 || summary.requestCount === 0) {
+      setError(summary.errors[0] ?? t('usageImport.error'))
       return
     }
 
+    setError('')
+    onImport(summary)
+  }
+
+  const applySparkClawSample = () => {
+    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    setRawCsv(SPARK_CLAW_SAMPLE_CSV)
     setError('')
     onImport(summary)
   }
@@ -65,6 +73,9 @@ export function UsageImportPanel({ importedSummary, onImport }: Props) {
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setRawCsv(SAMPLE_USAGE_CSV)}>
               {t('usageImport.sample')}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={applySparkClawSample}>
+              Load SparkClaw sample
             </Button>
             <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-wds border border-line-solid bg-surface-normal px-3 text-xs font-semibold text-label-normal hover:bg-fill-alternative">
               {t('usageImport.upload')}

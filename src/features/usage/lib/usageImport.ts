@@ -2,13 +2,20 @@ import { calculateCost } from '../../../lib/calculator'
 import type { Model } from '../../../data/models'
 
 export interface UsageImportRow {
+  timestamp: string | null
+  requestId: string | null
   feature: string
   modelId: string
+  planId: string | null
+  sessionId: string | null
+  agentRunId: string | null
   inputTokens: number
   outputTokens: number
   totalCostUsd: number
   latencyMs: number | null
   customerId: string | null
+  status: string | null
+  costSource: 'explicit' | 'model_price' | 'missing_model'
 }
 
 export interface FeatureUsageSummary {
@@ -26,6 +33,7 @@ export interface FeatureUsageSummary {
 export interface UsageImportSummary {
   rows: UsageImportRow[]
   featureSummaries: FeatureUsageSummary[]
+  errors: string[]
   requestCount: number
   totalInputTokens: number
   totalOutputTokens: number
@@ -77,19 +85,27 @@ function valueFor(record: Record<string, string>, keys: string[]): string | unde
   return keys.map(key => record[key]).find(value => value !== undefined && value !== '')
 }
 
-function rowCost(record: Record<string, string>, model: Model | undefined, inputTokens: number, outputTokens: number): number {
+function rowCost(
+  record: Record<string, string>,
+  model: Model | undefined,
+  inputTokens: number,
+  outputTokens: number,
+): { totalCostUsd: number; costSource: UsageImportRow['costSource'] } {
   const explicit = numberFrom(valueFor(record, ['total_cost', 'cost_usd', 'cost', 'totalCost']))
-  if (explicit > 0) return explicit
-  if (!model) return 0
+  if (explicit > 0) return { totalCostUsd: explicit, costSource: 'explicit' }
+  if (!model) return { totalCostUsd: 0, costSource: 'missing_model' }
 
-  return calculateCost({
+  return {
+    totalCostUsd: calculateCost({
     model,
     monthlyInputTokens: inputTokens,
     monthlyOutputTokens: outputTokens,
     monthlyRequests: 1,
     cacheHitRate: 0,
     batchEnabled: false,
-  }).monthlyCost
+    }).monthlyCost,
+    costSource: 'model_price',
+  }
 }
 
 function percentile(values: number[], ratio: number): number {
@@ -100,27 +116,43 @@ function percentile(values: number[], ratio: number): number {
 }
 
 export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSummary {
+  const empty = (errors: string[] = []): UsageImportSummary => ({
+    rows: [],
+    featureSummaries: [],
+    errors,
+    requestCount: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalCostUsd: 0,
+    avgInputTokensPerRequest: 0,
+    avgOutputTokensPerRequest: 0,
+    p95OutputTokens: 0,
+    topFeatureByCost: null,
+  })
   const lines = rawCsv
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean)
 
   if (lines.length < 2) {
-    return {
-      rows: [],
-      featureSummaries: [],
-      requestCount: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalCostUsd: 0,
-      avgInputTokensPerRequest: 0,
-      avgOutputTokensPerRequest: 0,
-      p95OutputTokens: 0,
-      topFeatureByCost: null,
-    }
+    return empty()
   }
 
   const headers = parseCsvLine(lines[0]).map(header => header.trim())
+  const requiredColumns = [
+    { label: 'feature', keys: ['feature', 'route', 'use_case', 'useCase'] },
+    { label: 'model', keys: ['model', 'model_id', 'modelId'] },
+    { label: 'input_tokens', keys: ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'] },
+    { label: 'output_tokens', keys: ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'] },
+  ]
+  const missingRequired = requiredColumns
+    .filter(group => !group.keys.some(key => headers.includes(key)))
+    .map(group => `Missing required column: ${group.label}`)
+
+  if (missingRequired.length > 0) {
+    return empty(missingRequired)
+  }
+
   const rows = lines.slice(1).map(line => {
     const values = parseCsvLine(line)
     const record = headers.reduce<Record<string, string>>((acc, header, index) => {
@@ -132,15 +164,23 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     const model = models.find(item => item.id === modelId || item.name === modelId)
     const inputTokens = Math.round(numberFrom(valueFor(record, ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'])))
     const outputTokens = Math.round(numberFrom(valueFor(record, ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'])))
+    const cost = rowCost(record, model, inputTokens, outputTokens)
 
     return {
+      timestamp: valueFor(record, ['timestamp', 'created_at', 'createdAt']) ?? null,
+      requestId: valueFor(record, ['request_id', 'requestId', 'id']) ?? null,
       feature,
       modelId,
+      planId: valueFor(record, ['plan_id', 'planId', 'plan']) ?? null,
+      sessionId: valueFor(record, ['session_id', 'sessionId', 'conversation_id', 'conversationId']) ?? null,
+      agentRunId: valueFor(record, ['agent_run_id', 'agentRunId', 'run_id', 'runId']) ?? null,
       inputTokens,
       outputTokens,
-      totalCostUsd: rowCost(record, model, inputTokens, outputTokens),
+      totalCostUsd: cost.totalCostUsd,
       latencyMs: numberFrom(valueFor(record, ['latency_ms', 'latencyMs', 'latency'])) || null,
       customerId: valueFor(record, ['customer_id', 'customerId', 'user_id', 'userId']) ?? null,
+      status: valueFor(record, ['status', 'result']) ?? null,
+      costSource: cost.costSource,
     }
   })
 
@@ -190,6 +230,7 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
   return {
     rows,
     featureSummaries,
+    errors: [],
     requestCount,
     totalInputTokens: totals.totalInputTokens,
     totalOutputTokens: totals.totalOutputTokens,

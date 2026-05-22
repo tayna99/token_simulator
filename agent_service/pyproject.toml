@@ -1,0 +1,22 @@
+[project]
+name = "agent-service"
+version = "0.1.0"
+description = "LangChain 1.0 interpretation-only agent service for the AI SaaS Cost & Margin Workspace. Numbers are computed deterministically in the TypeScript frontend; this service only interprets the tool snapshot."
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.0",
+    "langchain-openai>=1.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -10,7 +10,7 @@ import { Toast } from '../../../../shared/ui/Toast'
 import { Button, Surface } from '../../../../shared/ui/primitives'
 import type { SimState } from '../../../../App'
 
-type ReportAudience = 'developer' | 'pm' | 'ceo'
+type ReportAudience = 'developer' | 'pm' | 'ceo_cfo' | 'board'
 
 interface Props {
   state: SimState
@@ -93,8 +93,12 @@ function buildSummaryText(state: SimState, t: TFunction, audience: ReportAudienc
     annualCost: fmtCurrency(current.annualCost),
   })
 
-  if (audience === 'ceo') {
+  if (audience === 'ceo_cfo') {
     return t('report.ceo', { baseline, decision: isSameModel ? sameModelText : switchText })
+  }
+
+  if (audience === 'board') {
+    return `Board-ready summary: ${baseline} ${isSameModel ? sameModelText : switchText} The recommendation is framed as AI unit economics, margin protection, customer concentration, and pricing model risk.`
   }
 
   return t('report.pm', { baseline, decision: isSameModel ? sameModelText : switchText })
@@ -107,11 +111,23 @@ function provenanceText(model: SimState['currentModel']): string {
 export function SummaryCard({ state }: Props) {
   const { t, i18n } = useTranslation()
   const cardRef = useRef<HTMLDivElement>(null)
-  const [audience, setAudience] = useState<ReportAudience>(state.role)
+  const [audience, setAudience] = useState<ReportAudience>(state.role === 'ceo' ? 'ceo_cfo' : state.role)
   const { toast, show: showToast, hide: hideToast } = useToast()
   const language = i18n.language === 'ko' ? 'ko' : 'en'
   const summaryText = buildSummaryText(state, t, audience)
-  const audienceOptions = (['developer', 'pm', 'ceo'] as const)
+  const audienceOptions = (['developer', 'pm', 'ceo_cfo', 'board'] as const)
+  const audienceLabels: Record<ReportAudience, string> = {
+    developer: t('summary.audience.developer'),
+    pm: t('summary.audience.pm'),
+    ceo_cfo: i18n.language === 'ko' ? 'CEO/CFO' : 'CEO/CFO',
+    board: i18n.language === 'ko' ? 'Board' : 'Board',
+  }
+  const audienceHelp: Record<ReportAudience, string> = {
+    developer: t('summary.audienceHelp.developer'),
+    pm: t('summary.audienceHelp.pm'),
+    ceo_cfo: 'CEO/CFO report: AI COGS, gross margin, pricing risk, and next action',
+    board: 'Board report: AI unit economics, customer concentration, and pricing model risk',
+  }
 
   const handleCopy = async () => {
     try {
@@ -140,7 +156,7 @@ export function SummaryCard({ state }: Props) {
   const reportControls = (
     <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
       <div
-        className="grid w-full grid-cols-3 overflow-hidden rounded-wds border border-line-solid bg-surface-normal sm:w-auto"
+        className="grid w-full grid-cols-4 overflow-hidden rounded-wds border border-line-solid bg-surface-normal sm:w-auto"
         role="group"
         aria-label={t('summary.audienceSelector')}
       >
@@ -150,7 +166,7 @@ export function SummaryCard({ state }: Props) {
             type="button"
             onClick={() => setAudience(item)}
             aria-pressed={audience === item}
-            title={t(`summary.audienceHelp.${item}`)}
+            title={audienceHelp[item]}
             className={`h-9 min-w-0 px-3 text-xs font-semibold transition-colors ${
               index > 0 ? 'border-l border-line-solid' : ''
             } ${
@@ -159,7 +175,7 @@ export function SummaryCard({ state }: Props) {
                 : 'bg-surface-normal text-label-neutral hover:bg-fill-alternative'
             }`}
           >
-            {t(`summary.audience.${item}`)}
+            {audienceLabels[item]}
           </button>
         ))}
       </div>
