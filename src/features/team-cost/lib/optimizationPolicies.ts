@@ -4,6 +4,8 @@ import { MODELS, getModelById, type Model } from '../../alternatives/data/models
 import { sanitizeAgentSpec, sumArtifactTokens, type AgentSpec } from './agentSpec'
 import { estimateAgentWorkload, summarizeTeamCost } from './estimateAgentWorkload'
 
+type OptimizationSourceFinding = Pick<BottleneckFinding, 'id' | 'kind' | 'agentId' | 'severity' | 'message'>
+
 export type OptimizationPolicy =
   | 'cache_reused_input'
   | 'route_low_risk_to_cheaper_model'
@@ -29,10 +31,14 @@ export interface OptimizationRecommendation extends OptimizationCandidate {
   monthlySavingsUsd: number
   costAfterUsd: number
   toolResultRefs: ToolResultRef[]
+  decisionMode: 'deterministic' | 'what_if'
+  qualityCaveat: string | null
+  isDefinitiveWaste: boolean
+  requiredValidation: string[]
 }
 
 export interface OptimizationInput {
-  findings: BottleneckFinding[]
+  findings: OptimizationSourceFinding[]
 }
 
 export interface OptimizationPolicyState {
@@ -120,6 +126,14 @@ export function recommendationFromCandidate(
       `tool:optimization.${candidate.id}.costAfterUsd`,
       `tool:optimization.${candidate.id}.affectedAgentIds`,
     ] as ToolResultRef[],
+    decisionMode: candidate.policy === 'route_low_risk_to_cheaper_model' ? 'what_if' : 'deterministic',
+    qualityCaveat: candidate.policy === 'route_low_risk_to_cheaper_model'
+      ? 'Potential savings are deterministic, but accuracy impact requires validation before adoption.'
+      : null,
+    isDefinitiveWaste: candidate.policy !== 'route_low_risk_to_cheaper_model',
+    requiredValidation: candidate.policy === 'route_low_risk_to_cheaper_model'
+      ? ['Run quality evaluation on representative low-risk tasks before routing production traffic.']
+      : [],
   }
 }
 

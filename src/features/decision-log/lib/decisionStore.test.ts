@@ -19,6 +19,9 @@ describe('createRemoteDecisionStore', () => {
         createdAt: '2026-05-22T00:00:00.000Z',
         performanceSnapshot: {},
         costSnapshot: {},
+        thresholdSnapshot: {},
+        factSourceSnapshot: [],
+        aiMode: 'unknown',
       },
     ])
 

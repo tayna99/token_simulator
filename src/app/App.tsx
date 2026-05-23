@@ -39,6 +39,14 @@ import { OptimizationReviewPanel } from '../features/team-cost/components/Optimi
 import { createDefaultAgentAccountability, updateAgentAccountability, type AgentAccountability } from '../features/team-cost/lib/accountability'
 import { attributeDeliverableCosts, DEFAULT_AI_TEAM_DELIVERABLES, type Deliverable } from '../features/team-cost/lib/deliverables'
 import { summarizeDeliverablePerformance } from '../features/team-cost/lib/deliverableMetrics'
+import {
+  DEFAULT_THRESHOLD_POLICY,
+  factSourceSnapshotFromModels,
+  getThreshold,
+  mergeThresholdPolicy,
+  type ThresholdId,
+  type ThresholdPolicy,
+} from '../features/metrics/lib/thresholdPolicy'
 
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -430,11 +438,22 @@ function DecisionLogWorkspace({
                 <Badge tone={decision.kind === 'approve' ? 'positive' : 'primary'}>{decision.kind}</Badge>
                 <p className="mt-1 text-xs text-label-neutral">{decision.why}</p>
                 <p className="mt-2 text-xs text-label-alternative" translate="no">{decision.createdAt}</p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Badge tone={decision.aiMode === 'llm_assisted' ? 'positive' : 'neutral'}>{decision.aiMode}</Badge>
+                  <Badge tone="neutral">
+                    policy {String((decision.thresholdSnapshot as ThresholdPolicy | undefined)?.gross_margin_thin_pct?.policyVersion ?? 'legacy')}
+                  </Badge>
+                  <Badge tone={decision.factSourceSnapshot.length > 0 ? 'primary' : 'neutral'}>
+                    fact sources {decision.factSourceSnapshot.length}
+                  </Badge>
+                </div>
                 <pre className="mt-2 overflow-x-auto rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral" translate="no">
                   {JSON.stringify({
                     assumptions: decision.assumptions,
                     performanceSnapshot: decision.performanceSnapshot,
                     costSnapshot: decision.costSnapshot,
+                    thresholdSnapshot: decision.thresholdSnapshot,
+                    factSourceSnapshot: decision.factSourceSnapshot,
                   }, null, 2)}
                 </pre>
               </div>
@@ -603,6 +622,8 @@ function DecisionAssistantPanel({
   events,
   llmMode,
   savedDecisionCount,
+  thresholdPolicy,
+  onThresholdOverride,
   onAdopt,
   onReject,
 }: {
@@ -612,6 +633,8 @@ function DecisionAssistantPanel({
   events: TeamCostGraphEvent[]
   llmMode: TeamCostLlmMode
   savedDecisionCount: number
+  thresholdPolicy: ThresholdPolicy
+  onThresholdOverride: (id: ThresholdId, value: number) => void
   onAdopt: () => void
   onReject: () => void
 }) {
@@ -646,6 +669,41 @@ function DecisionAssistantPanel({
           {assistantRefs.slice(0, 6).map(refId => (
             <ToolRefChip key={refId} refId={refId} />
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+        <p className="text-xs font-semibold uppercase text-primary-normal">Judgment policy</p>
+        <p className="mt-2 text-xs text-label-neutral" lang="en">
+          Thresholds are policy defaults, not hidden code constants. Changes recompute deterministic flags.
+        </p>
+        <div className="mt-3 grid gap-3">
+          {[
+            ['gross_margin_thin_pct', 'Thin margin below'] as const,
+            ['retry_rate_pct', 'Retry rate above'] as const,
+            ['top_agent_concentration_pct', 'Top agent share above'] as const,
+          ].map(([id, label]) => {
+            const threshold = getThreshold(thresholdPolicy, id)
+            return (
+              <label key={id} className="grid gap-1 text-xs text-label-neutral">
+                <span className="flex items-center justify-between gap-2">
+                  <span>{label}</span>
+                  <span translate="no">{fmtPercent(threshold.currentValue)}</span>
+                </span>
+                <input
+                  aria-label={label}
+                  className="w-full accent-primary-normal"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round(threshold.currentValue * 100)}
+                  onChange={event => onThresholdOverride(id, Number(event.currentTarget.value) / 100)}
+                />
+                <span className="text-label-alternative" translate="no">basis:{threshold.sourceType}</span>
+              </label>
+            )
+          })}
         </div>
       </div>
 
@@ -737,6 +795,7 @@ function WedgeADecisionLogPanel({
                     <p className="text-sm font-semibold">{decision.what}</p>
                     <Badge tone={decision.status === 'adopted' ? 'positive' : 'caution'}>{decision.status}</Badge>
                     <Badge tone={decision.kind === 'approve' ? 'positive' : 'primary'}>{decision.kind}</Badge>
+                    <Badge tone={decision.aiMode === 'llm_assisted' ? 'positive' : 'neutral'}>{decision.aiMode}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-label-neutral">{decision.why}</p>
                   <p className="mt-2 text-xs text-label-alternative" translate="no">{decision.createdAt}</p>
@@ -759,6 +818,8 @@ function WedgeADecisionLogPanel({
                     assumptions: decision.assumptions,
                     performanceSnapshot: decision.performanceSnapshot,
                     costSnapshot: decision.costSnapshot,
+                    thresholdSnapshot: decision.thresholdSnapshot,
+                    factSourceSnapshot: decision.factSourceSnapshot,
                   }, null, 2)}
                 </pre>
               </div>
@@ -894,6 +955,7 @@ function App() {
   const [teamCostAgents, setTeamCostAgents] = useState<AgentSpec[]>(cloneAgentCatalog)
   const [teamCostEvents, setTeamCostEvents] = useState<TeamCostGraphEvent[]>([])
   const [teamCostLlmMode, setTeamCostLlmMode] = useState<TeamCostLlmMode>('deterministic-fallback')
+  const [thresholdPolicy, setThresholdPolicy] = useState<ThresholdPolicy>(DEFAULT_THRESHOLD_POLICY)
   const [teamCostWorkItems, setTeamCostWorkItems] = useState<WorkCatalogItem[]>(() => (
     DEFAULT_TEAM_COST_WORK_ITEMS.map(item => ({ ...item }))
   ))
@@ -1019,16 +1081,16 @@ function App() {
     [importedUsage],
   )
   const planMargins = useMemo(
-    () => marginByPlan(importedUsage?.rows ?? [], PLAN_MONTHLY_REVENUE, effectiveAssumptions),
-    [effectiveAssumptions, importedUsage],
+    () => marginByPlan(importedUsage?.rows ?? [], PLAN_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
+    [effectiveAssumptions, importedUsage, thresholdPolicy],
   )
   const customerMargins = useMemo(
-    () => customerProfitability(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE, effectiveAssumptions),
-    [effectiveAssumptions, importedUsage],
+    () => customerProfitability(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
+    [effectiveAssumptions, importedUsage, thresholdPolicy],
   )
   const heavyUsers = useMemo(
-    () => heavyUserDetection(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE),
-    [importedUsage],
+    () => heavyUserDetection(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE, { thresholdPolicy }),
+    [importedUsage, thresholdPolicy],
   )
   const scenarios = useMemo(() => {
     const rows = importedUsage?.rows ?? []
@@ -1089,7 +1151,7 @@ function App() {
     monthlyBudgetUsd: teamCostCompanyProfile.monthlyBudgetUsd,
     teamEstimate: teamCostEstimate,
     agents: teamCostAgents,
-  }), [teamCostAgents, teamCostCompanyProfile.monthlyBudgetUsd, teamCostEstimate])
+  }, { thresholdPolicy }), [teamCostAgents, teamCostCompanyProfile.monthlyBudgetUsd, teamCostEstimate, thresholdPolicy])
   const teamCostRecommendations = useMemo(() => proposeOptimizationCandidates({ findings: teamCostBottlenecks })
     .map(candidate => recommendationFromCandidate(candidate, {
       agents: teamCostAgents,
@@ -1122,6 +1184,25 @@ function App() {
     importedUsage,
     teamCostAccountability,
   ])
+
+  const decisionFactSourceModels = useMemo(() => {
+    const modelIds = new Set([
+      state.currentModel.id,
+      state.candidateModel.id,
+      ...teamCostAgents.map(agent => agent.modelId),
+    ])
+    return MODELS.filter(model => modelIds.has(model.id))
+  }, [state.candidateModel.id, state.currentModel.id, teamCostAgents])
+
+  const decisionAuditSnapshot = () => ({
+    thresholdSnapshot: thresholdPolicy,
+    factSourceSnapshot: factSourceSnapshotFromModels(decisionFactSourceModels, new Date().toISOString().slice(0, 10)),
+    aiMode: teamCostLlmMode === 'provider-llm' ? 'llm_assisted' as const : 'deterministic_fallback' as const,
+  })
+
+  const handleThresholdOverride = (id: ThresholdId, value: number) => {
+    setThresholdPolicy(policy => mergeThresholdPolicy(policy, { [id]: Math.min(1, Math.max(0, value)) }))
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -1269,6 +1350,7 @@ function App() {
       toolResultRefs: ['pricing:credit', 'risk:credit'],
       riskCards: riskCards.map(card => card.id),
       status: 'adopted',
+      ...decisionAuditSnapshot(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1300,6 +1382,7 @@ function App() {
       status: 'adopted',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
+      ...decisionAuditSnapshot(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1325,6 +1408,7 @@ function App() {
       status: 'rejected',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
+      ...decisionAuditSnapshot(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1350,6 +1434,7 @@ function App() {
       status: 'adopted',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
+      ...decisionAuditSnapshot(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1778,6 +1863,8 @@ function App() {
           events={teamCostEvents}
           llmMode={teamCostLlmMode}
           savedDecisionCount={savedTeamCostDecisionCount}
+          thresholdPolicy={thresholdPolicy}
+          onThresholdOverride={handleThresholdOverride}
           onAdopt={handleAdoptTeamCostOptimization}
           onReject={handleRejectTeamCostOptimization}
         />

@@ -1,5 +1,8 @@
+import type { FactSourceSnapshot, ThresholdPolicy } from '../../metrics/lib/thresholdPolicy'
+
 export type DecisionStatus = 'adopted' | 'rejected' | 'superseded'
 export type OperatingDecisionKind = 'approve' | 'automate' | 'authority' | 'policy' | 'attribution' | 'ownership'
+export type DecisionAiMode = 'llm_assisted' | 'deterministic_fallback' | 'unknown'
 
 export interface DecisionInput {
   kind?: OperatingDecisionKind
@@ -12,6 +15,9 @@ export interface DecisionInput {
   createdAt?: string
   performanceSnapshot?: Record<string, unknown>
   costSnapshot?: Record<string, unknown>
+  thresholdSnapshot?: Partial<ThresholdPolicy>
+  factSourceSnapshot?: FactSourceSnapshot[]
+  aiMode?: DecisionAiMode
 }
 
 export interface Decision extends DecisionInput {
@@ -20,6 +26,9 @@ export interface Decision extends DecisionInput {
   createdAt: string
   performanceSnapshot: Record<string, unknown>
   costSnapshot: Record<string, unknown>
+  thresholdSnapshot: Partial<ThresholdPolicy>
+  factSourceSnapshot: FactSourceSnapshot[]
+  aiMode: DecisionAiMode
 }
 
 const STORAGE_KEY = 'token-simulator:decision-log'
@@ -31,6 +40,7 @@ const DECISION_KINDS = new Set<OperatingDecisionKind>([
   'attribution',
   'ownership',
 ])
+const DECISION_AI_MODES = new Set<DecisionAiMode>(['llm_assisted', 'deterministic_fallback', 'unknown'])
 
 function idFromTimestamp(createdAt: string): string {
   return `decision-${createdAt.replace(/[^0-9A-Za-z]/g, '-')}`
@@ -51,6 +61,9 @@ export function createDecision(input: DecisionInput): Decision {
     id: idFromTimestamp(createdAt),
     performanceSnapshot: input.performanceSnapshot ?? {},
     costSnapshot: input.costSnapshot ?? {},
+    thresholdSnapshot: input.thresholdSnapshot ?? {},
+    factSourceSnapshot: input.factSourceSnapshot ?? [],
+    aiMode: input.aiMode ?? 'unknown',
   }
 }
 
@@ -66,6 +79,10 @@ function isOperatingDecisionKind(value: unknown): value is OperatingDecisionKind
   return typeof value === 'string' && DECISION_KINDS.has(value as OperatingDecisionKind)
 }
 
+function isDecisionAiMode(value: unknown): value is DecisionAiMode {
+  return typeof value === 'string' && DECISION_AI_MODES.has(value as DecisionAiMode)
+}
+
 function isDecision(value: unknown): value is DecisionInput & { id: string; createdAt: string } {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<Decision>
@@ -79,6 +96,9 @@ function isDecision(value: unknown): value is DecisionInput & { id: string; crea
     && (!('kind' in candidate) || isOperatingDecisionKind(candidate.kind))
     && (!('performanceSnapshot' in candidate) || isRecord(candidate.performanceSnapshot))
     && (!('costSnapshot' in candidate) || isRecord(candidate.costSnapshot))
+    && (!('thresholdSnapshot' in candidate) || isRecord(candidate.thresholdSnapshot))
+    && (!('factSourceSnapshot' in candidate) || Array.isArray(candidate.factSourceSnapshot))
+    && (!('aiMode' in candidate) || isDecisionAiMode(candidate.aiMode))
 }
 
 function normalizeDecision(decision: DecisionInput & { id: string; createdAt: string }): Decision {
@@ -87,6 +107,9 @@ function normalizeDecision(decision: DecisionInput & { id: string; createdAt: st
     kind: decision.kind ?? 'approve',
     performanceSnapshot: isRecord(decision.performanceSnapshot) ? decision.performanceSnapshot : {},
     costSnapshot: isRecord(decision.costSnapshot) ? decision.costSnapshot : {},
+    thresholdSnapshot: isRecord(decision.thresholdSnapshot) ? decision.thresholdSnapshot as Partial<ThresholdPolicy> : {},
+    factSourceSnapshot: Array.isArray(decision.factSourceSnapshot) ? decision.factSourceSnapshot : [],
+    aiMode: isDecisionAiMode(decision.aiMode) ? decision.aiMode : 'unknown',
   }
 }
 

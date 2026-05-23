@@ -1,4 +1,5 @@
 import type { UsageImportRow } from '../../usage/lib/usageImport'
+import { DEFAULT_THRESHOLD_POLICY, getThreshold, type ThresholdPolicy } from '../../metrics/lib/thresholdPolicy'
 import { calculateEffectiveCost, type EffectiveCostInput } from './effectiveCost'
 
 export type MarginRisk = 'healthy' | 'thin' | 'loss'
@@ -38,13 +39,17 @@ export interface HeavyUserDetectionResult {
   customers: CustomerMarginRow[]
 }
 
+export interface MarginOptions {
+  thresholdPolicy?: ThresholdPolicy
+}
+
 function finiteNonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-function riskFor(grossMarginPct: number, grossMarginUsd: number): MarginRisk {
-  if (grossMarginUsd < 0) return 'loss'
-  if (grossMarginPct < 0.4) return 'thin'
+function riskFor(grossMarginPct: number, grossMarginUsd: number, policy: ThresholdPolicy): MarginRisk {
+  if (grossMarginUsd < getThreshold(policy, 'gross_margin_loss_usd').currentValue) return 'loss'
+  if (grossMarginPct < getThreshold(policy, 'gross_margin_thin_pct').currentValue) return 'thin'
   return 'healthy'
 }
 
@@ -65,7 +70,9 @@ export function marginByPlan(
   rows: UsageImportRow[],
   revenueByPlan: Record<string, number>,
   effectiveAssumptions?: Omit<EffectiveCostInput, 'rawCostUsd'>,
+  options: MarginOptions = {},
 ): MarginRow[] {
+  const thresholdPolicy = options.thresholdPolicy ?? DEFAULT_THRESHOLD_POLICY
   const grouped = rows.reduce<Map<string, MarginRow>>((map, row) => {
     if (!row.planId) return map
     const existing = map.get(row.planId) ?? {
@@ -100,7 +107,7 @@ export function marginByPlan(
         grossMarginPct,
         effectiveGrossMarginUsd,
         effectiveGrossMarginPct,
-        marginRisk: riskFor(grossMarginPct, grossMarginUsd),
+        marginRisk: riskFor(grossMarginPct, grossMarginUsd, thresholdPolicy),
       }
     })
     .sort((a, b) => a.grossMarginPct - b.grossMarginPct)
@@ -110,7 +117,9 @@ export function customerProfitability(
   rows: UsageImportRow[],
   revenueByCustomer: Record<string, number>,
   effectiveAssumptions?: Omit<EffectiveCostInput, 'rawCostUsd'>,
+  options: MarginOptions = {},
 ): CustomerMarginRow[] {
+  const thresholdPolicy = options.thresholdPolicy ?? DEFAULT_THRESHOLD_POLICY
   const grouped = rows.reduce<Map<string, CustomerMarginRow>>((map, row) => {
     if (!row.customerId) return map
     const existing = map.get(row.customerId) ?? {
@@ -146,7 +155,7 @@ export function customerProfitability(
         grossMarginPct,
         effectiveGrossMarginUsd,
         effectiveGrossMarginPct,
-        marginRisk: riskFor(grossMarginPct, grossMarginUsd),
+        marginRisk: riskFor(grossMarginPct, grossMarginUsd, thresholdPolicy),
       }
     })
     .sort((a, b) => b.totalCostUsd - a.totalCostUsd)
@@ -162,8 +171,9 @@ function median(values: number[]): number {
 export function heavyUserDetection(
   rows: UsageImportRow[],
   revenueByCustomer: Record<string, number> = {},
+  options: MarginOptions = {},
 ): HeavyUserDetectionResult {
-  const customers = customerProfitability(rows, revenueByCustomer)
+  const customers = customerProfitability(rows, revenueByCustomer, undefined, options)
   const totalCost = customers.reduce((sum, row) => sum + row.totalCostUsd, 0)
   const topCount = customers.length > 0 ? Math.max(1, Math.ceil(customers.length * 0.1)) : 0
   const topDecileCostUsd = customers.slice(0, topCount).reduce((sum, row) => sum + row.totalCostUsd, 0)

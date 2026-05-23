@@ -153,6 +153,21 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/tool:team\.monthlyCostUsd/i)
   }, 10000)
 
+  it('lets the user adjust visible judgment policy thresholds', () => {
+    render(<App />)
+
+    const panel = screen.getByTestId('decision-assistant-panel')
+    const concentrationSlider = screen.getByLabelText(/Top agent share above/i) as HTMLInputElement
+
+    expect(panel).toHaveTextContent(/Judgment policy/i)
+    expect(panel).toHaveTextContent(/basis:rule/i)
+
+    fireEvent.change(concentrationSlider, { target: { value: '50' } })
+
+    expect(concentrationSlider).toHaveValue('50')
+    expect(panel).toHaveTextContent(/50%/)
+  })
+
   it('shows Python-backed team-cost events when the server runtime is enabled', async () => {
     vi.stubEnv('VITE_TEAM_COST_RUNTIME', 'server')
     vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {

@@ -58,4 +58,20 @@ describe('proposeOptimizationCandidates', () => {
     expect(recommendations.find(item => item.policy === 'reduce_calls_per_run')?.monthlySavingsUsd).toBeGreaterThan(0)
     expect(recommendations.find(item => item.policy === 'adjust_human_review_gate')?.monthlySavingsUsd).toBe(0)
   })
+
+  it('marks model routing as a risk-gated what-if instead of definitive waste', () => {
+    const [candidate] = proposeOptimizationCandidates({
+      findings: [
+        { id: 'finding-route', kind: 'top_agent_concentration', agentId: 'agent-engineering', severity: 'high', message: 'route lower risk work' },
+      ],
+    })
+    const recommendation = recommendationFromCandidate(candidate, {
+      agents: AI_TEAM_AGENT_CATALOG,
+    })
+
+    expect(recommendation.policy).toBe('route_low_risk_to_cheaper_model')
+    expect(recommendation.decisionMode).toBe('what_if')
+    expect(recommendation.qualityCaveat).toContain('accuracy impact requires validation')
+    expect(recommendation.isDefinitiveWaste).toBe(false)
+  })
 })
