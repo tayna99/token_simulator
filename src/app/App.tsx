@@ -20,6 +20,7 @@ import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
 import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
 import { buildAgentSnapshot } from '../features/agent/lib/buildAgentSnapshot'
 import { OperatingTeamPanel } from '../features/agent/components/OperatingTeamPanel'
+import { FrontOperatingPanel } from '../features/front-operating/components/FrontOperatingPanel'
 import { createDecision, createOperatingLedgerEntry, deleteDecision, exportDecisionLogFileName, loadDecisionLog, saveDecisionLog, serializeDecisionLog, type Decision, type OperatingDecisionKind, type ReportReviewMetadata, type TrustReviewMetadata } from '../features/decision-log/lib/decisionLog'
 import { createRemoteDecisionStore } from '../features/decision-log/lib/decisionStore'
 import { DEFAULT_AI_TEAM_AGENTS, type AITeamConfiguration } from '../features/team/lib/aiTeamConfiguration'
@@ -754,6 +755,9 @@ function LifecycleNavigation({
   onStageChange,
   onAgentSelect,
   onRunAllHands,
+  onOpenFrontFitCheck,
+  onOpenFrontDataGate,
+  onOpenFrontSampleReport,
 }: {
   activeStage: DecisionStageId
   operatingAgents: OperatingAgent[]
@@ -763,6 +767,9 @@ function LifecycleNavigation({
   onStageChange: (stage: DecisionStageId) => void
   onAgentSelect: (agentId: OperatingAgentId) => void
   onRunAllHands: () => void
+  onOpenFrontFitCheck: () => void
+  onOpenFrontDataGate: () => void
+  onOpenFrontSampleReport: () => void
 }) {
   return (
     <aside data-testid="lifecycle-nav" className="montage-console-left">
@@ -814,6 +821,15 @@ function LifecycleNavigation({
           selectedAgentId={selectedAgentId}
           onAgentSelect={onAgentSelect}
           onRunAllHands={onRunAllHands}
+        />
+      )}
+
+      {showInternal && (
+        <FrontOperatingPanel
+          context={AGENTCOST_FRONT_OPERATING_SYSTEM}
+          onOpenFitCheck={onOpenFrontFitCheck}
+          onOpenDataGate={onOpenFrontDataGate}
+          onOpenSampleReport={onOpenFrontSampleReport}
         />
       )}
     </aside>
@@ -1752,6 +1768,24 @@ function App() {
     setAgentExecutionMode('all_hands')
   }
 
+  const handleOpenFrontFitCheck = () => {
+    setActiveDecisionStage('design')
+    setRequestedOperatingAgentId(null)
+    setAgentExecutionMode('stage_committee')
+  }
+
+  const handleOpenFrontDataGate = () => {
+    setActiveDecisionStage('design')
+    setRequestedOperatingAgentId('usage_data_ingestion')
+    setAgentExecutionMode('single_agent')
+  }
+
+  const handleOpenFrontSampleReport = () => {
+    setActiveDecisionStage('decision-log')
+    setRequestedOperatingAgentId('knowledge_release_ops')
+    setAgentExecutionMode('single_agent')
+  }
+
   const decisionAuditSnapshot = () => ({
     thresholdSnapshot: thresholdPolicy,
     factSourceSnapshot: currentFactSources,
@@ -2686,6 +2720,9 @@ function App() {
           onStageChange={handleDecisionStageChange}
           onAgentSelect={handleOperatingAgentSelect}
           onRunAllHands={handleRunFullOperatingReview}
+          onOpenFrontFitCheck={handleOpenFrontFitCheck}
+          onOpenFrontDataGate={handleOpenFrontDataGate}
+          onOpenFrontSampleReport={handleOpenFrontSampleReport}
         />
 
         <section data-testid="decision-workspace-panel" className="montage-console-main">

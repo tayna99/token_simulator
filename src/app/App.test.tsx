@@ -112,6 +112,39 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByRole('button', { name: /Run full operating review/i })).toBeInTheDocument()
   })
 
+  it('shows the front operating panel only in admin mode', () => {
+    render(<App />)
+
+    expect(screen.queryByTestId('front-operating-panel')).not.toBeInTheDocument()
+
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/AgentCost front operating system/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/ICP Scorecard/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Data Readiness Checklist/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Offer Ladder/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Human Approval Matrix/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Learning Loop Review/i)
+  })
+
+  it('routes front operating panel actions into existing decision stages', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /open data gate/i }))
+    expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Design/i)
+    expect(screen.getByRole('heading', { name: /1\. Import/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /open sample report/i }))
+    expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Decision Log/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/Decision & Approval Log/i)
+
+    await user.click(screen.getByRole('button', { name: /open fit check/i }))
+    expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Design/i)
+  })
+
   it('lets the user call one operating agent or the full operating team', async () => {
     const user = userEvent.setup()
     window.history.pushState({}, '', '/token_simulator/?debug=1')
