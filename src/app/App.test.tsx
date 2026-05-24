@@ -271,8 +271,8 @@ describe('App AI team operations workspace', () => {
     await user.click(screen.getByRole('button', { name: /Hold team-cost optimization/i }))
     await user.click(lifecycleButton(/Decision Log/i))
 
-    await waitFor(() => expect(screen.getByText(/Hold AI team cost optimization/i)).toBeInTheDocument())
-    expect(screen.getByText(/decision: hold/i)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText(/Hold AI team cost optimization/i).length).toBeGreaterThan(0))
+    expect(screen.getAllByText(/decision: hold/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeEnabled()
   }, 15000)
 

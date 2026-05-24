@@ -1000,6 +1000,7 @@ function DecisionAssistantPanel({
   onThresholdOverride,
   onAdopt,
   onReject,
+  onHold,
 }: {
   activeStage: DecisionStageId
   teamEstimate: TeamCostEstimate
@@ -1015,6 +1016,7 @@ function DecisionAssistantPanel({
   onThresholdOverride: (id: ThresholdId, value: number) => void
   onAdopt: () => void
   onReject: () => void
+  onHold: () => void
 }) {
   const recommendation = recommendations[0]
   const assistantRefs = recommendation
@@ -1216,6 +1218,9 @@ function DecisionAssistantPanel({
           <Button size="sm" variant="secondary" onClick={onReject} disabled={!recommendation}>
             Reject top recommendation
           </Button>
+          <Button size="sm" variant="secondary" onClick={onHold} disabled={!recommendation}>
+            Hold top recommendation
+          </Button>
         </div>
         <p className="mt-3 text-xs text-label-alternative">
           Decision Log entries saved: {savedDecisionCount}
@@ -1292,6 +1297,11 @@ function WedgeADecisionLogPanel({
                     <p className="text-sm font-semibold">{decision.what}</p>
                     <Badge tone={decision.status === 'adopted' ? 'positive' : 'caution'}>{decision.status}</Badge>
                     <Badge tone={decision.kind === 'approve' ? 'positive' : 'primary'}>{decision.kind}</Badge>
+                    {decision.decisionChoice && (
+                      <Badge tone={decision.decisionChoice === 'adopt' ? 'positive' : 'caution'}>
+                        decision: {decision.decisionChoice}
+                      </Badge>
+                    )}
                     <Badge tone={decision.aiMode === 'llm_assisted' ? 'positive' : 'neutral'}>{decision.aiMode}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-label-neutral">{decision.why}</p>
@@ -1865,6 +1875,8 @@ function App() {
   const decisionAuditSnapshot = () => ({
     thresholdSnapshot: thresholdPolicy,
     factSourceSnapshot: currentFactSources,
+    rateCardDraft: primaryRateCardDraft,
+    pricingFreshnessSnapshot,
     aiMode: teamCostLlmMode === 'provider-llm' ? 'llm_assisted' as const : 'deterministic_fallback' as const,
   })
 
@@ -2161,6 +2173,7 @@ function App() {
       ],
       riskCards: cards.map(card => card.id),
       status: 'adopted',
+      decisionChoice: 'adopt',
       createdAt: new Date(nowMs).toISOString(),
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
@@ -2204,6 +2217,7 @@ function App() {
       toolResultRefs: ['pricing:credit', 'risk:credit'],
       riskCards: riskCards.map(card => card.id),
       status: 'adopted',
+      decisionChoice: 'adopt',
       ...decisionAuditSnapshot(),
       agentReview: agentReviewSnapshot(),
       ...decisionReviewMetadata(),
@@ -2236,6 +2250,7 @@ function App() {
       toolResultRefs: recommendation.toolResultRefs,
       riskCards: cards.map(card => card.id),
       status: 'adopted',
+      decisionChoice: 'adopt',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
@@ -2264,6 +2279,36 @@ function App() {
       toolResultRefs: recommendation.toolResultRefs,
       riskCards: cards.map(card => card.id),
       status: 'rejected',
+      decisionChoice: 'reject',
+      performanceSnapshot: teamCostPerformanceSnapshot(),
+      costSnapshot: teamCostCostSnapshot(),
+      ...decisionAuditSnapshot(),
+      agentReview: agentReviewSnapshot(),
+      ...decisionReviewMetadata(),
+    })
+    const next = [decision, ...decisions]
+    await persistDecisions(next)
+  }
+
+  const handleHoldTeamCostOptimization = async () => {
+    const recommendation = teamCostRecommendations[0]
+    if (!recommendation) return
+    const cards = retrieveRiskCards(recommendation.riskTags)
+    const decision = createDecision({
+      kind: 'approve',
+      what: 'Hold AI team cost optimization',
+      why: `Held for human review: ${recommendation.rationale}`,
+      assumptions: {
+        recommendationId: recommendation.id,
+        agentId: recommendation.agentId,
+        heldMonthlySavingsUsd: recommendation.monthlySavingsUsd,
+        currentMonthlyCostUsd: teamCostEstimate.monthlyCostUsd,
+        requiredValidation: recommendation.requiredValidation,
+      },
+      toolResultRefs: recommendation.toolResultRefs,
+      riskCards: cards.map(card => card.id),
+      status: 'held',
+      decisionChoice: 'hold',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
@@ -2292,6 +2337,7 @@ function App() {
       toolResultRefs: recommendation.toolResultRefs,
       riskCards: cards.map(card => card.id),
       status: 'adopted',
+      decisionChoice: 'adopt',
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
@@ -2330,6 +2376,8 @@ function App() {
 
   const handleExportOnePageReport = () => {
     if (typeof document === 'undefined') return
+    const exportGate = canExportOnePageReport(decisions)
+    if (!exportGate.allowed) return
     const report = buildOnePageReportArtifact({
       title: 'SparkClaw AI Team Cost Decision Report',
       executiveSummary: agentRun.supervisorSummary || agentRun.report,
@@ -2352,6 +2400,9 @@ function App() {
       providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
       snapshotVersion: agentSnapshot.snapshotVersion,
       decisionRefs: decisions.map(decision => decision.id),
+      decisionChoice: exportGate.decisionChoice,
+      rateCardDraft: primaryRateCardDraft,
+      pricingFreshness: pricingFreshnessSnapshot,
     })
     const content = report.markdown
     const blob = new Blob([content], { type: 'text/markdown' })
@@ -2586,6 +2637,7 @@ function App() {
         operatingDecisionReason={operatingDecisionReason}
         onAdopt={handleAdoptTeamCostOptimization}
         onReject={handleRejectTeamCostOptimization}
+        onHold={handleHoldTeamCostOptimization}
         onOperatingDecisionKindChange={setOperatingDecisionKind}
         onOperatingDecisionReasonChange={setOperatingDecisionReason}
         onRecordOperatingDecision={handleRecordOperatingDecision}
@@ -2673,6 +2725,7 @@ function App() {
             operatingDecisionReason={operatingDecisionReason}
             onAdopt={handleAdoptTeamCostOptimization}
             onReject={handleRejectTeamCostOptimization}
+            onHold={handleHoldTeamCostOptimization}
             onOperatingDecisionKindChange={setOperatingDecisionKind}
             onOperatingDecisionReasonChange={setOperatingDecisionReason}
             onRecordOperatingDecision={handleRecordOperatingDecision}
@@ -2712,6 +2765,9 @@ function App() {
             formulaVersion={COST_FORMULA_VERSION}
             providerRegistryVersion={PROVIDER_REGISTRY_VERSION}
             snapshotVersion={agentSnapshot.snapshotVersion}
+            rateCardDraft={primaryRateCardDraft}
+            pricingFreshness={pricingFreshnessSnapshot}
+            decisionHeader={decisionHeader}
             showInternal={showInternal}
           />
         </>
@@ -2880,6 +2936,7 @@ function App() {
           onThresholdOverride={handleThresholdOverride}
           onAdopt={handleAdoptTeamCostOptimization}
           onReject={handleRejectTeamCostOptimization}
+          onHold={handleHoldTeamCostOptimization}
         />
       </main>
     </div>
