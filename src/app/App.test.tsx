@@ -263,6 +263,22 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeDisabled()
   })
 
+  it('renders the customer-facing rate card draft in the report panel', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(lifecycleButton(/Decision Log/i))
+
+    expect(screen.getByRole('heading', { name: /Rate card draft/i })).toBeInTheDocument()
+    expect(screen.getByText(/Draft only/i)).toBeInTheDocument()
+    expect(screen.getByText(/Policy type/i)).toBeInTheDocument()
+    expect(screen.getByText(/Included credits/i)).toBeInTheDocument()
+    expect(screen.getByText(/Overage/i)).toBeInTheDocument()
+    expect(screen.getByText(/Customer cap/i)).toBeInTheDocument()
+    expect(screen.getByText(/Affected customers/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Margin basis ref/i)).not.toBeInTheDocument()
+  })
+
   it('lets a user hold an optimization and then export the one-page report', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -275,6 +291,24 @@ describe('App AI team operations workspace', () => {
     expect(screen.getAllByText(/decision: hold/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeEnabled()
   }, 15000)
+
+  it('projects the central workspace and assistant copy by selected role', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/PM projection/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Feature, customer, and plan/i)
+
+    await user.click(screen.getByRole('tab', { name: /Developer view/i }))
+
+    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/Developer projection/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Model, token, retry, and cache/i)
+
+    await user.click(screen.getByRole('tab', { name: /CEO view/i }))
+
+    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/CEO projection/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Margin, loss customers, and operating decision/i)
+  })
 
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {
     render(<App />)

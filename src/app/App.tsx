@@ -19,6 +19,7 @@ import { buildRateCardDraft, type RateCardDraft } from '../features/pricing/lib/
 import { buildPricingFreshnessBadge, type PricingFreshnessBadge } from '../features/facts/lib/pricingFreshness'
 import { buildDecisionHeader, type DecisionHeader } from '../features/decision-loop/lib/decisionHeader'
 import { canExportOnePageReport } from '../features/decision-loop/lib/exportGate'
+import { projectSnapshotForRole, type RoleViewModel } from '../features/role-projection/lib/projectSnapshotForRole'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
 import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
@@ -483,6 +484,30 @@ function AgentReportWorkspace({ events, showInternal }: { events: AgentEvent[]; 
   )
 }
 
+function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
+  return (
+    <Surface
+      data-testid="role-projection-panel"
+      eyebrow="Role projection"
+      title={view.title}
+      description="같은 deterministic snapshot을 역할별 판단 순서로 재배치합니다. 이 패널은 새 숫자를 계산하지 않습니다."
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        {view.primaryKpis.map(kpi => (
+          <MetricTile key={kpi.id} label={kpi.label} value={kpi.value} />
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {view.panelOrder.map(panel => (
+          <Badge key={panel} tone={panel === 'debug_refs' ? 'caution' : 'neutral'}>
+            {panel}
+          </Badge>
+        ))}
+      </div>
+    </Surface>
+  )
+}
+
 function OnePageReportPanel({
   agentRun,
   teamEstimate,
@@ -590,6 +615,44 @@ function OnePageReportPanel({
             {exportGate.reason}
           </p>
         )}
+        <section aria-label="Rate card draft" className="mb-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-label-normal">Rate card draft</h3>
+            <Badge tone="caution">Draft only</Badge>
+          </div>
+          <p className="mt-1 text-xs text-label-alternative">
+            Stripe/Metronome 같은 billing 시스템은 실행하지 않고, 사람이 검토할 가격표 초안만 만듭니다.
+          </p>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+              <dt className="text-xs font-semibold text-label-alternative">Policy type</dt>
+              <dd className="mt-1 font-semibold text-label-normal">{rateCardDraft.policyType}</dd>
+            </div>
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+              <dt className="text-xs font-semibold text-label-alternative">Included credits</dt>
+              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.includedCredits)}</dd>
+            </div>
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+              <dt className="text-xs font-semibold text-label-alternative">Overage</dt>
+              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.overagePricePerRequest)} / request</dd>
+            </div>
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+              <dt className="text-xs font-semibold text-label-alternative">Customer cap</dt>
+              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.capUsdPerCustomer)}</dd>
+            </div>
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+              <dt className="text-xs font-semibold text-label-alternative">Affected customers</dt>
+              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.affectedCustomerCount)}</dd>
+            </div>
+          </dl>
+          {showInternal && (
+            <div className="mt-3 flex flex-wrap gap-1">
+              {rateCardDraft.marginBasisRefs.map(refId => (
+                <ToolRefChip key={refId} refId={refId} />
+              ))}
+            </div>
+          )}
+        </section>
         <h3 className="text-base font-semibold">{artifact.title}</h3>
         <div className="mt-3 grid gap-3">
           {artifact.sections.map(section => (
@@ -992,6 +1055,7 @@ function DecisionAssistantPanel({
   riskCards,
   events,
   agentRun,
+  roleProjection,
   operatingAgents,
   llmMode,
   savedDecisionCount,
@@ -1008,6 +1072,7 @@ function DecisionAssistantPanel({
   riskCards: RiskCard[]
   events: TeamCostGraphEvent[]
   agentRun: AgentRunResponse
+  roleProjection: RoleViewModel
   operatingAgents: OperatingAgent[]
   llmMode: TeamCostLlmMode
   savedDecisionCount: number
@@ -1020,8 +1085,8 @@ function DecisionAssistantPanel({
 }) {
   const recommendation = recommendations[0]
   const assistantRefs = recommendation
-    ? [...new Set([...ASSISTANT_TOOL_REFS, ...recommendation.toolResultRefs, ...agentRun.toolResultRefs])]
-    : ASSISTANT_TOOL_REFS
+    ? [...new Set([...ASSISTANT_TOOL_REFS, ...roleProjection.assistant.refs, ...recommendation.toolResultRefs, ...agentRun.toolResultRefs])]
+    : [...new Set([...ASSISTANT_TOOL_REFS, ...roleProjection.assistant.refs])]
   const displayMode = agentRun.llmMode === 'provider-llm' || llmMode === 'provider-llm'
     ? 'LLM assisted'
     : 'Deterministic fallback'
@@ -1049,7 +1114,7 @@ function DecisionAssistantPanel({
     <aside data-testid="decision-assistant-panel" className="montage-console-right">
       <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase text-primary-normal">AI interpretation</p>
+          <p className="text-xs font-semibold uppercase text-primary-normal">{roleProjection.assistant.title}</p>
           <Badge tone={displayMode === 'LLM assisted' ? 'positive' : 'neutral'}>
             {displayMode}
           </Badge>
@@ -1062,8 +1127,7 @@ function DecisionAssistantPanel({
           )}
         </div>
         <p className="mt-2 text-sm text-label-neutral" lang="en">
-          Cost Analyst is attached beside the deterministic forecast. It can explain refs, risk, and next decisions,
-          but it does not create cost numbers.
+          {roleProjection.assistant.focus} It can explain refs, risk, and next decisions, but it does not create cost numbers.
         </p>
         <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
           <p className="text-xs font-semibold uppercase text-primary-normal">Supervisor synthesis</p>
@@ -1837,6 +1901,33 @@ function App() {
     thresholdPolicy,
   ])
   const officialWatchtowerSummary = useMemo(() => officialWatchtowerCoverageSummary(), [])
+  const roleProjection = useMemo(() => {
+    const marginRow = planMargins[0]
+    const customerRow = customerMargins[0]
+    const topFeature = attribution.feature?.rows[0]?.label ?? 'No feature data'
+    return projectSnapshotForRole({
+      monthlyCostLabel: fmtCurrency(teamCostEstimate.monthlyCostUsd),
+      marginLabel: marginRow ? fmtPercent(marginRow.grossMarginPct) : 'No margin data',
+      topAgentShareLabel: fmtPercent(teamCostEstimate.topAgentShare),
+      featureLabel: topFeature,
+      customerLabel: customerRow?.customerId ?? 'No customer data',
+      refs: [
+        agentSnapshot.snapshotVersion,
+        'tool:team.monthlyCostUsd',
+        'tool:team.topAgentShare',
+        ...ASSISTANT_TOOL_REFS,
+      ],
+    }, state.role, showInternal ? 'internal' : 'customer')
+  }, [
+    agentSnapshot.snapshotVersion,
+    attribution.feature,
+    customerMargins,
+    planMargins,
+    showInternal,
+    state.role,
+    teamCostEstimate.monthlyCostUsd,
+    teamCostEstimate.topAgentShare,
+  ])
 
   const handleDecisionStageChange = (stage: DecisionStageId) => {
     setActiveDecisionStage(stage)
@@ -2877,6 +2968,8 @@ function App() {
             onOpenTeamCost={() => setShowTeamCostSimulator(true)}
           />
 
+          <RoleProjectionPanel view={roleProjection} />
+
           <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
             <p className="text-xs font-semibold uppercase text-primary-normal">Deterministic setup</p>
             <p className="mt-2 text-sm text-label-neutral" lang="en">
@@ -2928,6 +3021,7 @@ function App() {
           riskCards={teamCostRiskCards}
           events={teamCostEvents}
           agentRun={agentRun}
+          roleProjection={roleProjection}
           operatingAgents={OPERATING_AGENTS}
           llmMode={teamCostLlmMode}
           savedDecisionCount={savedTeamCostDecisionCount}
