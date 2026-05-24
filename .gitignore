@@ -20,6 +20,9 @@ dist-ssr
 # gstack runtime artifacts
 .gstack/
 
+# Local git worktrees
+.worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
