@@ -32,6 +32,7 @@ describe('App AI team operations workspace', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('renders the P0 decision console without advanced backend surfaces', () => {
@@ -157,6 +158,63 @@ describe('App AI team operations workspace', () => {
     await user.click(screen.getByRole('button', { name: /Run full operating review/i }))
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/11 agents/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Knowledge & Release Ops Agent/i)
+  }, 15000)
+
+  it('sends the visible front operating context when running the operating team', async () => {
+    const user = userEvent.setup()
+    vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      if (String(input).includes('/api/agent/run')) {
+        return new Response(JSON.stringify({
+          answer: 'Front operating assets were included.',
+          supervisorSummary: 'All-hands reviewed front operating context.',
+          events: [],
+          toolResults: [],
+          assetRefs: ['asset:icp_scorecard'],
+          warnings: [],
+          llmMode: 'deterministic-fallback',
+          snapshotVersion: 'snapshot:design:test',
+          calledAgentIds: ['usage_data_ingestion', 'trust_security_compliance', 'knowledge_release_ops'],
+          primaryAgentId: 'usage_data_ingestion',
+          reviewerAgentIds: ['trust_security_compliance', 'knowledge_release_ops'],
+          agentRoute: { executionMode: 'all_hands', reason: 'test all-hands' },
+        }), { status: 200 })
+      }
+      if (String(input).includes('/api/agent')) {
+        return new Response(JSON.stringify({ events: [] }), { status: 200 })
+      }
+
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+
+    render(<App />)
+
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/asset:icp_scorecard/i)
+    await user.click(screen.getByRole('button', { name: /Run full operating review/i }))
+
+    const allHandsBody = await waitFor(() => {
+      const agentRunCall = fetchMock.mock.calls.find(([input, init]) => {
+        if (!String(input).includes('/api/agent/run') || !init?.body) return false
+        try {
+          const body = JSON.parse(String(init.body))
+          return body.executionMode === 'all_hands'
+        } catch {
+          return false
+        }
+      })
+      expect(agentRunCall).toBeDefined()
+      return JSON.parse(String(agentRunCall?.[1]?.body))
+    })
+    const assetRefs = allHandsBody.frontOperatingSystem.assets.map((asset: { ref: string }) => asset.ref)
+    const offerIds = allHandsBody.frontOperatingSystem.offerLadder.map((offer: { id: string }) => offer.id)
+    expect(allHandsBody.executionMode).toBe('all_hands')
+    expect(assetRefs).toContain('asset:icp_scorecard')
+    expect(assetRefs).toContain('asset:approval_matrix')
+    expect(allHandsBody.frontOperatingSystem.dataReadinessGate.rejectedColumns).toContain('raw_prompt')
+    expect(offerIds).toContain('ai_cost_snapshot')
+    expect(allHandsBody.frontOperatingSystem.learningLoopRecords).toEqual([])
   }, 15000)
 
   it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {
