@@ -137,10 +137,14 @@ describe('App AI team operations workspace', () => {
     await user.click(screen.getByRole('button', { name: /open data gate/i }))
     expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Design/i)
     expect(screen.getByRole('heading', { name: /1\. Import/i })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/single_agent/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Usage Data Ingestion Agent/i)
 
     await user.click(screen.getByRole('button', { name: /open sample report/i }))
     expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Decision Log/i)
     expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/Decision & Approval Log/i)
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Knowledge & Release Ops Agent/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/single_agent/i)
 
     await user.click(screen.getByRole('button', { name: /open fit check/i }))
     expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Design/i)

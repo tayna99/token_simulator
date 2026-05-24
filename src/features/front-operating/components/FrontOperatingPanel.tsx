@@ -1,4 +1,5 @@
 import { Badge, Button } from '../../../shared/ui/primitives'
+import { fmtNumber } from '../../../lib/format'
 import type { FrontOperatingSystemContext } from '../lib/frontOperatingContext'
 
 function assetById(context: FrontOperatingSystemContext, id: string) {
@@ -60,7 +61,7 @@ export function FrontOperatingPanel({
   ]
 
   return (
-    <div data-testid="front-operating-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+    <div data-testid="front-operating-panel" lang="en" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase text-primary-normal">AgentCost front operating system</p>
         <Badge tone="primary">read-only</Badge>
@@ -73,11 +74,11 @@ export function FrontOperatingPanel({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-label-neutral">
-        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">accepted columns: {context.dataReadinessGate.acceptedColumns.length}</p>
-        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">rejected columns: {context.dataReadinessGate.rejectedColumns.length}</p>
-        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">offers: {context.offerLadder.length}</p>
-        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">approval gates: {context.approvalGates.length}</p>
-        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">learning records: {context.learningLoopRecords.length}</p>
+        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">accepted columns: {fmtNumber(context.dataReadinessGate.acceptedColumns.length)}</p>
+        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">rejected columns: {fmtNumber(context.dataReadinessGate.rejectedColumns.length)}</p>
+        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">offers: {fmtNumber(context.offerLadder.length)}</p>
+        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">approval gates: {fmtNumber(context.approvalGates.length)}</p>
+        <p className="rounded-wds bg-fill-alternative px-2 py-1.5">learning records: {fmtNumber(context.learningLoopRecords.length)}</p>
       </div>
 
       <div className="mt-3 rounded-wds bg-fill-alternative px-2 py-1.5 text-xs text-label-neutral">

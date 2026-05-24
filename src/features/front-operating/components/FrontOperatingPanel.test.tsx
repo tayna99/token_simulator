@@ -17,6 +17,7 @@ describe('FrontOperatingPanel', () => {
     )
 
     const panel = screen.getByTestId('front-operating-panel')
+    expect(panel).toHaveAttribute('lang', 'en')
     expect(panel).toHaveTextContent(/AgentCost front operating system/i)
     expect(panel).toHaveTextContent(/ICP Scorecard/i)
     expect(panel).toHaveTextContent(/asset:icp_scorecard/i)
