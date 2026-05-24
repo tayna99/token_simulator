@@ -20,6 +20,10 @@ dist-ssr
 # gstack runtime artifacts
 .gstack/
 
+# Local env and runtime artifacts
+.env
+artifacts/
+
 # Local git worktrees
 .worktrees/
 
