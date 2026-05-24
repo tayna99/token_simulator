@@ -22,6 +22,10 @@ describe('createRemoteDecisionStore', () => {
         thresholdSnapshot: {},
         factSourceSnapshot: [],
         aiMode: 'unknown',
+        operatingLedger: null,
+        agentReview: null,
+        trustReview: null,
+        reportReview: null,
       },
     ])
 

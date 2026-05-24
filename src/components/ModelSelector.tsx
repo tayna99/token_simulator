@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { MODELS, type Model, type Provider } from '../data/models'
+import { MODELS, isCostCalculableModel, type Model, type Provider } from '../data/models'
 import { fmtPricePerMillion, fmtTokens } from '../lib/format'
 
 interface Props {
@@ -20,6 +20,15 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   alibaba: 'Alibaba',
   moonshot: 'Moonshot',
+  zai: 'Z.ai / GLM',
+  minimax: 'MiniMax',
+  bytedance: 'ByteDance',
+  baidu: 'Baidu',
+  tencent: 'Tencent',
+  stepfun: 'StepFun',
+  '01ai': '01.AI',
+  baichuan: 'Baichuan',
+  sensetime: 'SenseTime',
 }
 
 export function ModelSelector({ label, value, onChange, disabledModelId }: Props) {
@@ -34,6 +43,10 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
     }
     providers.get(model.provider)!.push(model)
   }
+
+  const priceLabel = (model: Model) => isCostCalculableModel(model)
+    ? fmtPricePerMillion(model.inputPrice, model.outputPrice)
+    : 'API pricing not published'
 
   return (
     <div className="flex flex-col gap-1">
@@ -54,8 +67,12 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
         {Array.from(providers.entries()).map(([provider, models]) => (
           <optgroup key={provider} label={PROVIDER_NAMES[provider]}>
             {models.map(m => (
-              <option key={m.id} value={m.id} disabled={m.id === disabledModelId}>
-                {m.name} - {fmtPricePerMillion(m.inputPrice, m.outputPrice)}
+              <option
+                key={m.id}
+                value={m.id}
+                disabled={m.id === disabledModelId || !isCostCalculableModel(m)}
+              >
+                {m.name} - {priceLabel(m)}
               </option>
             ))}
           </optgroup>
@@ -66,7 +83,7 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-medium text-gray-800">{PROVIDER_NAMES[selectedModel.provider]}</span>
             <span>{t('model.context')} {fmtTokens(selectedModel.contextWindow)}</span>
-            <span>{fmtPricePerMillion(selectedModel.inputPrice, selectedModel.outputPrice)}</span>
+            <span>{priceLabel(selectedModel)}</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span>{t('model.verified')} {selectedModel.lastVerifiedAt}</span>
@@ -84,6 +101,11 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
             <span className="rounded border border-gray-300 bg-white px-2 py-0.5">
               {selectedModel.supportsBatch ? t('model.batchSupported') : t('model.batchUnsupported')}
             </span>
+            {!isCostCalculableModel(selectedModel) && (
+              <span className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-800">
+                공식 발표됨 · 사용자 단가 필요
+              </span>
+            )}
           </div>
           {selectedModel.pricingNotes && (
             <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">

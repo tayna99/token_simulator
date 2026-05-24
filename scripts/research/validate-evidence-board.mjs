@@ -5,23 +5,18 @@ const REQUIRED_COLUMNS = [
   'evidence_id',
   'source',
   'url',
-  'date',
-  'community',
+  'published_date',
+  'crawled_date',
   'persona',
-  'raw_quote',
+  'exact_quote',
   'summary_ko',
-  'tool_model',
-  'context',
+  'group',
   'pain_tag',
-  'severity',
   'frequency_signal',
-  'wtp_signal',
   'wtp_score',
+  'evidence_strength',
+  'quote_verified',
   'possible_feature',
-  'competitor_mentioned',
-  'cost_object',
-  'business_metric',
-  'opportunity_score',
   'notes',
 ]
 
@@ -29,20 +24,36 @@ const NONEMPTY_COLUMNS = [
   'evidence_id',
   'source',
   'url',
-  'date',
-  'community',
+  'published_date',
+  'crawled_date',
   'persona',
-  'raw_quote',
+  'exact_quote',
   'summary_ko',
+  'group',
   'pain_tag',
-  'severity',
   'frequency_signal',
   'wtp_score',
+  'evidence_strength',
+  'quote_verified',
   'possible_feature',
-  'cost_object',
-  'business_metric',
-  'opportunity_score',
 ]
+
+const ALLOWED_PAIN_TAGS = new Set([
+  'pain_cost_unpredictable',
+  'pain_tracking_wrong',
+  'pain_token_waste',
+  'pain_provider_compare',
+  'pain_margin_unknown',
+  'pain_quality_tradeoff',
+  'pain_limit_confusion',
+  'pain_team_budget',
+  'pain_customer_profitability_unknown',
+  'pain_heavy_user_loss',
+  'pain_usage_pricing_mismatch',
+  'pain_feature_cost_unknown',
+  'pain_ai_cogs_untracked',
+  'pain_board_reporting_gap',
+])
 
 function parseCsv(text) {
   const rows = []
@@ -158,13 +169,16 @@ function validateBoard(filePath) {
       errors.push(`${rowLabel}: pain_tag must contain 1 to 3 semicolon-separated tags`)
     }
 
-    const severity = parseNumber(row, 'severity', rowLabel, errors)
+    tags.forEach(tag => {
+      if (!ALLOWED_PAIN_TAGS.has(tag)) {
+        errors.push(`${rowLabel}: unknown pain_tag ${tag}`)
+      }
+    })
+
     const frequency = parseNumber(row, 'frequency_signal', rowLabel, errors)
     const wtpScore = parseNumber(row, 'wtp_score', rowLabel, errors)
-    const opportunityScore = parseNumber(row, 'opportunity_score', rowLabel, errors)
 
     for (const [field, value] of [
-      ['severity', severity],
       ['frequency_signal', frequency],
       ['wtp_score', wtpScore],
     ]) {
@@ -173,19 +187,22 @@ function validateBoard(filePath) {
       }
     }
 
-    if (
-      severity !== null &&
-      frequency !== null &&
-      wtpScore !== null &&
-      opportunityScore !== null
-    ) {
-      const expectedScore = severity * frequency * wtpScore
-      if (opportunityScore !== expectedScore) {
-        errors.push(`${rowLabel}: opportunity_score should be ${expectedScore}, got ${opportunityScore}`)
-      }
+    if (!['A', 'B', 'A+B'].includes(row.group)) {
+      errors.push(`${rowLabel}: group must be A, B, or A+B`)
+    }
 
+    if (!['low', 'medium', 'high'].includes(row.evidence_strength)) {
+      errors.push(`${rowLabel}: evidence_strength must be low, medium, or high`)
+    }
+
+    if (!['true', 'false', 'pending'].includes(row.quote_verified)) {
+      errors.push(`${rowLabel}: quote_verified must be true, false, or pending`)
+    }
+
+    if (frequency !== null && wtpScore !== null) {
+      const weightedScore = frequency * wtpScore
       tags.forEach(tag => {
-        painScores.set(tag, (painScores.get(tag) ?? 0) + expectedScore)
+        painScores.set(tag, (painScores.get(tag) ?? 0) + weightedScore)
       })
     }
   })

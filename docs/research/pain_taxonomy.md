@@ -1,66 +1,108 @@
-# Token Cost Pain Taxonomy
+# AI SaaS Cost Pain Taxonomy
 
-이 문서는 `docs/research/evidence_board.csv`의 `pain_tag` 기준표다. Pilot 단계에서는 아래 8개 태그만 사용하고, 새 태그는 50개 evidence 확장 전까지 추가하지 않는다.
+이 문서는 [evidence_board.csv](evidence_board.csv)의 `pain_tag` 기준표다. 공식 원본은 Evidence Board이며, taxonomy는 evidence를 제품 판단 언어로 바꾸는 분류표다.
 
-## 제품 정의와 분류 원칙
+## 분류 원칙
 
-제품 정의는 "AI 기능의 LLM 사용량을 기능별 원가, 비즈니스 단위 마진, 비용 리스크로 바꿔주는 도구"다. 그래서 taxonomy도 단순 개인 불만이 아니라 제품 의사결정에 연결되는 pain을 우선한다.
+이 taxonomy는 "불만이 많이 보이는가"와 "돈을 낼 가능성이 큰가"를 분리하되, 둘을 끊어내지 않는다. Group A는 entry point, Core Engine은 비용 귀속 레이어, Group B는 paid value다.
+
+```txt
+Group A: Entry Point
+실시간 비용/운영 문제
+        ↓
+Core Engine
+비용 귀속 / 원인 분해 / 비즈니스 단위 변환
+        ↓
+Group B: Paid Value
+마진/가격/수익성 의사결정
+```
 
 분류할 때는 다음 순서로 판단한다.
 
-1. 이 evidence가 개인 구독/한도 불만인가, 제품/팀/고객/마진 문제인가?
-2. 실제 비용 단위가 무엇인가: token, request, feature, customer, report, job.
-3. 구매 신호가 있는가: team, budget, production, customer, pricing, finance, margin.
-4. 현재 MVP가 바로 해결할 수 있는가, 아니면 research-gated 후보인가?
+1. 개인 구독/한도 불만인가, 제품/팀/고객/마진 문제인가?
+2. 비용이 들어온 지점은 무엇인가: token spike, cache miss, quota, agent loop, provider delay.
+3. 비용을 귀속할 수 있는 축은 무엇인가: customer, feature, model, plan, session, agent run.
+4. 구매 신호가 있는가: customer profitability, gross margin, pricing, finance, board, revenue, COGS.
+5. 현재 MVP가 바로 해결할 수 있는가, 아니면 research-gated 후보인가?
 
-## 태그
+## 3-Layer Pain Map
 
-| pain_tag | 정의 | 포함되는 말 | 제외되는 말 | MVP 연결 |
-| --- | --- | --- | --- | --- |
-| `pain_cost_unpredictable` | 월말/주간/세션/팀 단위 AI 비용이 언제, 왜 튀는지 예측하기 어렵다. | cost spike, burn rate, 예상보다 큰 월 비용, 갑작스러운 사용량 증가 | 단순히 "비싸다"는 감정적 불평 | 월 비용, 기능별 비용 Top, 비용 변화 시뮬레이션 |
-| `pain_tracking_wrong` | 사용량/비용 추적 도구의 숫자가 실제 과금, cache, quota와 맞지 않는다. | wrong token count, incorrect cost, billing console과 불일치, usage 누락 | 가격이 비싸다는 의견만 있는 경우 | CSV import, provider별 가격 출처, 계산 검증 |
-| `pain_token_waste` | 불필요한 context, tool output, 반복 실행, 긴 출력 때문에 토큰이 낭비된다. | repeated context, file reread, long output, cache miss, tool output 누적 | 정상적으로 큰 작업이라 비용이 큰 경우 | 입력/출력 비용 분해, 출력 제한, 기능별 라우팅 |
-| `pain_provider_compare` | provider/model마다 가격 구조, cache/batch 할인, 품질이 달라 비교가 어렵다. | provider cost, model pricing, cache hit/miss 차이, 모델 교체 고민 | 특정 모델 취향 또는 성능 선호만 있는 경우 | 현재 모델 vs 후보 모델 비교, 캐시/배치 조건 표시 |
-| `pain_margin_unknown` | 기능/고객/요청/보고서/job 단위 원가와 판매 가격 대비 마진을 모른다. | cost per customer, cost per report, gross margin, AI SaaS margin, pricing | 개인 구독료 불만, 단순 월 사용액 공유 | 비즈니스 단위 원가, 기능별 판매가, gross margin |
-| `pain_quality_tradeoff` | 싼 모델로 바꾸면 재시도, 사람 검수, CS 이관 비용 때문에 실제 원가가 다시 올라갈 수 있다. | retry, human review, CS escalation, quality drop, effective margin | 단순 모델 취향, 벤치마크 점수만 있는 경우 | raw cost vs effective cost, risk와 함께 보는 절감 추천 |
-| `pain_limit_confusion` | quota, rate limit, usage limit 숫자가 실제 체감과 맞지 않거나 설명이 부족하다. | session limit, usage cap, quota reset, local tracker와 provider quota 불일치 | API 단가 비교, 팀 예산 문제 | 현재는 문서 evidence만 축적, UI 재도입 보류 |
-| `pain_team_budget` | 팀/고객/프로젝트/API key별 예산과 비용 폭증을 늦게 알아차린다. | team budget, customer spend, project budget, virtual key, budget exceeded | 개인 플랜 한도 불만 | 현재는 archive 보관, Top pain 검증 후 guardrails 재도입 |
+| 레이어 | 역할 | pain_tag | MVP 연결 |
+| --- | --- | --- | --- |
+| Entry Point | 개발자가 로그를 가져오게 만드는 운영 pain | `pain_cost_unpredictable` | usage/spike 요약, 비용 변화 시뮬레이션 |
+| Entry Point | 개발자가 로그를 가져오게 만드는 운영 pain | `pain_token_waste` | 입력/출력 분해, 출력 제한, 라우팅 후보 |
+| Entry Point | 개발자가 로그를 가져오게 만드는 운영 pain | `pain_tracking_wrong` | CSV import, provider별 가격 출처, 계산 검증 |
+| Entry Point | 개발자가 로그를 가져오게 만드는 운영 pain | `pain_limit_confusion` | quota/limit evidence 축적, research-gated guardrail |
+| Core Engine | 비용을 비즈니스 단위로 재분류하는 pain | `pain_feature_cost_unknown` | 기능별 비용 Top, workflow-level attribution |
+| Core Engine | 비용을 비즈니스 단위로 재분류하는 pain | `pain_customer_profitability_unknown` | 고객별 원가, heavy-user 손익, customer-level report |
+| Core Engine | 비용을 비즈니스 단위로 재분류하는 pain | `pain_ai_cogs_untracked` | AI COGS 분리, margin report |
+| Core Engine | 비용을 비즈니스 단위로 재분류하는 pain | `pain_provider_compare` | 모델별 비용, provider/model 비교 |
+| Core Engine | 비용을 비즈니스 단위로 재분류하는 pain | `pain_quality_tradeoff` | raw/effective cost, risk 포함 절감 추천 |
+| Paid Value | 회사가 결제할 마진/가격/보고 pain | `pain_margin_unknown` | gross margin, raw/effective margin, 가격정책 판단 |
+| Paid Value | 회사가 결제할 마진/가격/보고 pain | `pain_heavy_user_loss` | heavy-user profitability, tier/overage 시뮬레이션 |
+| Paid Value | 회사가 결제할 마진/가격/보고 pain | `pain_usage_pricing_mismatch` | usage/credit/hybrid/cap/overage pricing simulator |
+| Paid Value | 회사가 결제할 마진/가격/보고 pain | `pain_board_reporting_gap` | CEO/CFO/PM/Finance 보고서 |
 
-## 제품 정의 기준 우선순위
+## Pain Tag Definitions
 
-| 우선순위 | pain | 이유 |
+| pain_tag | 정의 | 포함되는 말 | 제외되는 말 |
+| --- | --- | --- | --- |
+| `pain_cost_unpredictable` | 월말/주간/세션 단위 AI 비용이 언제, 왜 튀는지 예측하기 어렵다. | token spike, bill surprise, agent loop, session cost | 가격정책/마진과만 연결된 추상 논의 |
+| `pain_token_waste` | 불필요한 context, 반복 실행, 긴 출력 때문에 토큰이 낭비된다. | unnecessary context, repeated calls, long output, cache waste | 사용량이 많지만 매출이 충분히 따라오는 경우 |
+| `pain_tracking_wrong` | 사용량/비용 추적 숫자가 실제 과금, cache, quota와 맞지 않는다. | dashboard lag, wrong token count, invoice mismatch | 단순히 비용이 높다는 불평 |
+| `pain_limit_confusion` | quota, rate limit, usage limit 숫자가 체감과 맞지 않는다. | quota, usage limit, credit exhaustion | 고객별 마진/가격정책 문제 |
+| `pain_feature_cost_unknown` | 어떤 AI 기능/워크플로우가 비용과 마진을 먹는지 모른다. | per-feature cost, cost per workflow, workflow margin | 모델 전체 비용만 비교하는 경우 |
+| `pain_customer_profitability_unknown` | 고객별 AI 원가와 수익성을 모른다. | cost per customer, per-customer margin, tenant cost | 전체 월 비용만 보는 경우 |
+| `pain_ai_cogs_untracked` | AI 관련 COGS가 P&L, 제품 원가, finance report에서 분리되지 않는다. | AI COGS, inference cost, cost-to-serve | 개발자 개인 구독 불만 |
+| `pain_provider_compare` | provider/model마다 가격, cache/batch 할인, 품질이 달라 비교가 어렵다. | model switch, provider compare, cache/batch price | 가격정책과 무관한 성능 취향 |
+| `pain_quality_tradeoff` | 싼 모델로 바꾸면 재시도, 검수, CS 비용 때문에 effective cost가 다시 올라간다. | retry cost, human review, CS escalation, quality risk | raw API cost만 보는 비교 |
+| `pain_margin_unknown` | AI 기능의 원가가 판매 가격 대비 gross margin을 얼마나 깎는지 모른다. | gross margin, contribution margin, margin compression | 단순히 "API가 비싸다"는 불평 |
+| `pain_heavy_user_loss` | 일부 heavy/power user가 사용량을 많이 만들어 손해 고객이 된다. | power users, whales, top-decile user cost | 사용량이 많지만 plan/overage로 충분히 회수되는 경우 |
+| `pain_usage_pricing_mismatch` | 비용은 사용량에 따라 늘어나는데 가격은 seat/flat subscription이라 마진이 깨진다. | flat per-seat, usage-based, hybrid, AI credits, overage | 가격 UX 불만만 있고 원가/마진 연결이 없는 경우 |
+| `pain_board_reporting_gap` | CEO/CFO/Board/투자자에게 설명할 AI unit economics 지표가 없다. | board report, investor metric, CFO dashboard | 내부 개발자 디버깅만 필요한 경우 |
+| `pain_team_budget` | 팀/고객/프로젝트별 예산과 비용 폭증을 늦게 알아차린다. | budget alert, team budget, cost overrun | 가격정책 의사결정과 연결되지 않는 개인 불만 |
+
+## MVP 핵심 Pain
+
+현재 MVP의 핵심은 Entry Point에서 들어온 로그를 Core Engine에서 재분류하고, Paid Value의 의사결정으로 내보내는 것이다.
+
+| 우선순위 | pain_tag | 이유 |
 | --- | --- | --- |
-| P0 | `pain_margin_unknown` | 제품 정의의 중심이다. "얼마에 팔아야 손해를 안 보는가"에 직접 연결된다. |
-| P0 | `pain_quality_tradeoff` | 싼 모델 추천의 위험을 막아준다. raw cost와 effective cost를 나누는 이유다. |
-| P0 | `pain_provider_compare` | 현재 모델 vs 후보 모델 비교와 절감 시뮬레이션의 기본 pain이다. |
-| P0 | `pain_cost_unpredictable` | 기능별 비용 Top과 월 비용 시뮬레이션의 직접 근거다. |
-| P1 | `pain_tracking_wrong` | 제품 신뢰도의 전제다. 다만 "개발자 진단" 화면보다 CSV/계산 검증으로 먼저 해결한다. |
-| P1 | `pain_team_budget` | 알림/가드레일 후보지만 MVP 기본 UI에서는 보류한다. |
-| P2 | `pain_token_waste` | 개발자 진단 후보지만 50개 evidence 후 별도 기능으로 판단한다. |
-| P2 | `pain_limit_confusion` | 불만은 크지만 provider quota 자체를 해결할 수 있는지는 더 검증해야 한다. |
+| P0 | `pain_feature_cost_unknown` | 비용을 기능별로 쪼개야 최적화와 rollout 판단이 가능하다. |
+| P0 | `pain_customer_profitability_unknown` | 고객별 원가를 알아야 손해 고객을 찾을 수 있다. |
+| P0 | `pain_margin_unknown` | 판매 가격과 원가를 비교해야 제품이 돈이 되는지 판단할 수 있다. |
+| P0 | `pain_heavy_user_loss` | 최신 Evidence Board에서 Top 3로 올라온 고강도 paid pain이다. |
+| P0 | `pain_usage_pricing_mismatch` | flat/seat pricing과 variable AI cost의 충돌을 해결해야 한다. |
+| P1 | `pain_cost_unpredictable` | 진입점으로 중요하지만, 실시간 alert는 아직 research-gated다. |
+| P1 | `pain_ai_cogs_untracked` | Finance/CEO 보고 가치가 크지만, 초기에는 report와 ontology에서 먼저 반영한다. |
+| P1 | `pain_quality_tradeoff` | 비용 절감 추천의 안전장치로 raw/effective cost에 연결한다. |
 
 ## 점수 규칙
 
-- `severity`: 사용자의 업무/비용 의사결정에 주는 영향. 1은 사소함, 5는 서비스 운영 또는 마진에 직접 영향.
-- `frequency_signal`: 같은 유형의 문제가 반복적으로 보이는 정도. 1은 단일 사례, 5는 여러 커뮤니티/도구에서 반복.
-- `wtp_score`: 돈을 낼 가능성. 1은 불만 표출, 5는 이미 도구/내부 작업/예산을 쓰는 강한 신호.
-- `opportunity_score = severity * frequency_signal * wtp_score`
+현재 Evidence Board는 `frequency_signal`과 `wtp_score`를 분리해서 관리한다.
 
-## 빈도 표시 분리
+| 필드 | 의미 |
+| --- | --- |
+| `frequency_signal` | 같은 유형의 문제가 얼마나 자주 보이는가. 1은 단일 후보, 5는 커뮤니티에서 반복되는 고빈도 불만. |
+| `wtp_score` | 돈을 낼 가능성. 1은 가벼운 불만, 5는 pricing, margin, finance, board, 내부 대체 비용과 연결된 강한 신호. |
+| `evidence_strength` | source의 신뢰도와 제품 의사결정 관련성. `low`, `medium`, `high` 중 하나. |
+| `quote_verified` | 원문 quote 확인 상태. `true`, `false`, `pending` 중 하나. |
 
-다음 리서치에서는 `cost per customer`, `gross margin`, `usage-based pricing`, `AI SaaS margin`, `PM/CEO/Finance` 키워드를 의도적으로 더 찾는다. 하지만 이 키워드들은 일반적인 usage limit 불만보다 빈도가 낮을 수 있다.
+validator의 Top Pain 계산은 `frequency_signal * wtp_score`를 pain tag별로 합산한다. 과거의 `severity`와 `opportunity_score` 필드는 더 이상 공식 CSV 계약에 쓰지 않는다.
 
-그래서 빈도는 두 층으로 나눈다.
+## 빈도와 WTP 분리
 
-| 빈도 필드 | 의미 | 어디에 기록하는가 |
+`token spike` evidence는 많이 보이지만 구매 예산과 직접 연결되지 않을 수 있다. 반대로 `gross margin` evidence는 덜 자주 보여도 CFO/CEO/Founder가 가격정책과 투자자 보고를 위해 찾는 지표라면 WTP가 더 높다.
+
+그래서 다음 리서치에서는 두 가지를 따로 기록한다.
+
+| 구분 | 기록 위치 | 용도 |
 | --- | --- | --- |
-| `frequency_signal` | 개별 evidence가 얼마나 반복/공감/업보트/이슈화되었는지 | `evidence_board.csv` |
-| `business_keyword_frequency` | business keyword 후보가 검색/후보군에서 얼마나 자주 보였는지 | `business_keyword_frequency.csv` |
-
-이 둘을 섞지 않는다. `gross margin` evidence는 적게 보여도 WTP가 높을 수 있고, `usage limit` evidence는 많이 보여도 개인 불만이면 WTP가 낮을 수 있다.
+| 개별 evidence의 빈도 | `evidence_board.csv`의 `frequency_signal` | 반복적으로 보이는 pain인지 판단 |
+| business keyword 후보 빈도 | `business_keyword_frequency.csv` | `cost per customer`, `gross margin`, `usage-based pricing`, `AI SaaS margin`, `PM/CEO/Finance` 후보군의 검색 빈도 추적 |
 
 ## MVP 재도입 기준
 
 - `pain_team_budget` 또는 `pain_cost_unpredictable`이 50개 evidence 기준 Top 3이고 평균 `wtp_score >= 4`일 때만 예산/쿼터 가드레일을 다시 UI 후보로 올린다.
 - `pain_tracking_wrong` 또는 `pain_token_waste`가 Top 3일 때만 개발자 진단을 별도 화면으로 재검토한다.
-- 10개 pilot은 방향 확인용이다. 큰 UI 기능 추가는 50개 evidence 이후로 미룬다.
+- 큰 UI 기능 추가는 50개 evidence 이후에 판단한다. 그 전에는 CSV import, usage/spike 요약, 고객/기능/모델/플랜/세션별 비용 귀속, gross margin, pricing simulation, report를 우선한다.

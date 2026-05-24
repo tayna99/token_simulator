@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MODELS, getModelById, type Model } from '../features/alternatives/data/models'
 import { USE_CASE_PRESETS } from '../features/usage/data/workloadPresets'
 import { SummaryCard } from '../features/report/components/SummaryCard'
+import { buildOnePageReportArtifact, buildReportArtifact } from '../features/report/lib/reportArtifacts'
 import { RoleSelector } from '../components/RoleSelector'
 import { PeriodSelector } from '../components/PeriodSelector'
 import { ConfigPanel } from '../components/ConfigPanel'
@@ -16,7 +17,10 @@ import { customerProfitability, heavyUserDetection, marginByPlan, type CustomerM
 import { calculatePricingScenario, type ScenarioResult } from '../features/pricing/lib/pricingScenario'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
-import { createDecision, deleteDecision, exportDecisionLogFileName, loadDecisionLog, saveDecisionLog, serializeDecisionLog, type Decision, type OperatingDecisionKind } from '../features/decision-log/lib/decisionLog'
+import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
+import { buildAgentSnapshot } from '../features/agent/lib/buildAgentSnapshot'
+import { OperatingTeamPanel } from '../features/agent/components/OperatingTeamPanel'
+import { createDecision, createOperatingLedgerEntry, deleteDecision, exportDecisionLogFileName, loadDecisionLog, saveDecisionLog, serializeDecisionLog, type Decision, type OperatingDecisionKind, type ReportReviewMetadata, type TrustReviewMetadata } from '../features/decision-log/lib/decisionLog'
 import { createRemoteDecisionStore } from '../features/decision-log/lib/decisionStore'
 import { DEFAULT_AI_TEAM_AGENTS, type AITeamConfiguration } from '../features/team/lib/aiTeamConfiguration'
 import { TeamDesignerPanel } from '../features/team/components/TeamDesignerPanel'
@@ -25,6 +29,7 @@ import { OperationalSignalSummary } from '../features/usage/components/Operation
 import { Badge, Button, MetricTile, Surface } from '../shared/ui/primitives'
 import { fmtCurrency, fmtPercent, fmtTokens } from '../lib/format'
 import { AI_TEAM_AGENT_CATALOG } from '../features/team-cost/lib/agentCatalog'
+import { TEAM_COST_BENCHMARKS } from '../features/team-cost/lib/benchmarkCorpus'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { detectBottlenecks } from '../features/team-cost/lib/bottleneckAnalysis'
 import { estimateAgentWorkload, summarizeTeamCost, type TeamCostEstimate } from '../features/team-cost/lib/estimateAgentWorkload'
@@ -47,6 +52,17 @@ import {
   type ThresholdId,
   type ThresholdPolicy,
 } from '../features/metrics/lib/thresholdPolicy'
+import { OPERATING_AGENTS, OPERATING_ASSETS, P1_AUTOMATION_MODULES, p0OperatingAssetSummary, type OperatingAgent, type OperatingAgentId } from '../features/operating-assets/lib/operatingAssets'
+import { buildCustomerWorkspaceDashboard, type CustomerWorkspaceDashboard } from '../features/p1/lib/p1OperatingSystem'
+import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../features/front-operating/lib/frontOperatingContext'
+import {
+  INITIAL_FX_RATE_SNAPSHOTS,
+  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+  INITIAL_MODEL_RELEASE_CANDIDATES,
+  INITIAL_PRICING_FACT_CANDIDATES,
+  OFFICIAL_SOURCE_REGISTRY,
+  officialWatchtowerCoverageSummary,
+} from '../features/research/lib/officialWatchtower'
 
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -211,6 +227,46 @@ const ASSISTANT_TOOL_REFS = [
   'tool:team.monthlyCostUsd',
   'tool:team.topAgentShare',
   'tool:optimization.primary.monthlySavingsUsd',
+]
+const COST_FORMULA_VERSION = 'cost_formula_v0.3'
+const PROVIDER_REGISTRY_VERSION = 'provider_registry_v0.4'
+
+const EMPTY_AGENT_RUN_RESPONSE: AgentRunResponse = {
+  events: [],
+  answer: 'Agentic RAG is waiting for a deterministic snapshot.',
+  report: 'One-page report will be generated after the SparkClaw demo or a real import.',
+  llmMode: 'deterministic-fallback',
+  supervisorSummary: 'Operating team synthesis is waiting for a deterministic snapshot.',
+  disagreements: [],
+  decisionReadiness: 'needs_review',
+  nextQuestions: [],
+  calledAgentIds: [],
+  primaryAgentId: null,
+  reviewerAgentIds: [],
+  agentRoute: {},
+  snapshotVersion: '',
+  usedTools: [],
+  toolResultRefs: [],
+  riskCardIds: [],
+  decisionIds: [],
+  evidenceRefs: [],
+  assetRefs: [],
+  warnings: [],
+}
+
+const MODEL_PERF_MATRIX = [
+  {
+    taskType: 'classification',
+    modelId: 'gemini-3.1-flash',
+    qualityBasis: 'assumption',
+    risk: 'Low-risk classification can be routed only after sample quality checks.',
+  },
+  {
+    taskType: 'report_generation',
+    modelId: 'claude-sonnet-4.6',
+    qualityBasis: 'assumption',
+    risk: 'Executive-facing reports need review before cheaper-model routing.',
+  },
 ]
 
 function AttributionTable({ result }: { result: AttributionResult }) {
@@ -392,16 +448,29 @@ function PricingSimulatorWorkspace({
   )
 }
 
-function AgentReportWorkspace({ events }: { events: AgentEvent[] }) {
+function AgentReportWorkspace({ events, showInternal }: { events: AgentEvent[]; showInternal: boolean }) {
   return (
     <div className="rounded-wds-lg border border-line-neutral bg-fill-alternative p-4">
       <h3 className="text-sm font-semibold">Agent interpretation layer</h3>
-      <p className="mt-1 text-xs text-label-alternative">P0 browser runtime. Without a BYO key it renders deterministic fallback events grounded in tool payloads.</p>
+      <p className="mt-1 text-xs text-label-alternative">
+        AI 해석은 결정론적 비용 결과를 설명합니다. 내부 tool ref와 실행 경로는 관리자 모드에서만 표시됩니다.
+      </p>
       <div className="mt-3 grid gap-2">
         {events.map(event => (
           <div key={event.type} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary-normal">{event.type.replace('_', ' ')}</p>
             <p className="mt-1 text-sm text-label-neutral">{event.message}</p>
+            {showInternal ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {event.toolResultRefs.map(refId => (
+                  <ToolRefChip key={refId} refId={refId} />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-label-alternative">
+                근거 ref는 결정 기록에 저장되며 관리자 모드에서 확인할 수 있습니다.
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -409,20 +478,141 @@ function AgentReportWorkspace({ events }: { events: AgentEvent[] }) {
   )
 }
 
+function OnePageReportPanel({
+  agentRun,
+  teamEstimate,
+  recommendation,
+  decisions,
+  riskCards,
+  onExport,
+  operatingAssetHealth,
+  trustInspection,
+  formulaVersion,
+  providerRegistryVersion,
+  snapshotVersion,
+  showInternal,
+}: {
+  agentRun: AgentRunResponse
+  teamEstimate: TeamCostEstimate
+  recommendation?: OptimizationRecommendation
+  decisions: Decision[]
+  riskCards: RiskCard[]
+  onExport: () => void
+  operatingAssetHealth: string[]
+  trustInspection?: UsageImportSummary['trustInspection']
+  formulaVersion: string
+  providerRegistryVersion: string
+  snapshotVersion: string
+  showInternal: boolean
+}) {
+  const dataLimitations = trustInspection?.analysisScope.blocked ?? ['raw prompt was not collected']
+  const onePageReport = buildOnePageReportArtifact({
+    title: 'SparkClaw AI Cost Snapshot',
+    executiveSummary: 'AI COGS is concentrated in the highest-volume AI team work and requires a human operating decision.',
+    metrics: [
+      { label: 'Monthly AI team cost', value: fmtCurrency(teamEstimate.monthlyCostUsd) },
+      { label: 'Top agent share', value: fmtPercent(teamEstimate.topAgentShare) },
+    ],
+    recommendations: recommendation ? [recommendation.title] : [],
+    risks: riskCards.map(card => card.title),
+    refs: [
+      ...(agentRun.toolResultRefs.length > 0 ? agentRun.toolResultRefs : ASSISTANT_TOOL_REFS),
+      snapshotVersion,
+    ],
+    trust: {
+      status: trustInspection?.status ?? 'unknown',
+      dataLimitations,
+      retentionNote: trustInspection?.retentionNote ?? 'Raw prompt was not collected for this demo snapshot.',
+    },
+    formulaVersion,
+    providerRegistryVersion,
+    snapshotVersion,
+    decisionRefs: decisions.map(decision => decision.id),
+  })
+  const artifact = buildReportArtifact({
+    audience: 'ceo_cfo',
+    headline: 'This customer is unprofitable until AI COGS, routing, and pricing policy are corrected',
+    toolResultRefs: agentRun.toolResultRefs.length > 0 ? agentRun.toolResultRefs : ASSISTANT_TOOL_REFS,
+    riskCardIds: riskCards.map(card => card.id),
+    evidenceRefs: agentRun.evidenceRefs,
+    costSummary: `AI team monthly cost: ${fmtCurrency(teamEstimate.monthlyCostUsd)}.`,
+    marginSummary: 'Margin review covers loss customers, heavy users, and plan-level gross margin.',
+    bottleneckSummary: `Bottleneck review cites top agent share ${fmtPercent(teamEstimate.topAgentShare)}.`,
+    optimizationSummary: recommendation
+      ? `Optimization candidate: ${recommendation.title} with ${fmtCurrency(recommendation.monthlySavingsUsd)} monthly savings what-if.`
+      : 'No optimization candidate selected yet.',
+    decisionSummary: decisions[0]
+      ? `Decision logged: ${decisions[0].what}.`
+      : 'Decision log is waiting for an approval row.',
+    operatingAssetHealth,
+  })
+
+  return (
+    <Surface
+      eyebrow="One-page export"
+      title="CEO/CFO/PM/Developer Report"
+      description="A paid-value one-pager that keeps cost, margin, risk, decision refs, and AI citations together."
+      action={<Button size="sm" variant="primary" onClick={onExport}>Export one-page report</Button>}
+    >
+      <div className="rounded-wds-lg border border-line-neutral bg-fill-alternative p-4">
+        <h3 className="text-base font-semibold">{artifact.title}</h3>
+        <div className="mt-3 grid gap-3">
+          {artifact.sections.map(section => (
+            <section key={section.title} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+              <p className="text-xs font-semibold uppercase text-primary-normal">{section.title}</p>
+              <p className="mt-1 text-sm text-label-neutral">{section.body}</p>
+            </section>
+          ))}
+        </div>
+        {showInternal ? (
+          <div className="mt-3 flex flex-wrap gap-1">
+            {artifact.toolResultRefs.map(refId => <ToolRefChip key={refId} refId={refId} />)}
+            {artifact.riskCardIds.map(refId => <ToolRefChip key={refId} refId={`risk:${refId}`} />)}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-label-alternative">
+            내부 ref와 원시 근거는 관리자 모드에서만 표시됩니다. 고객용 보고서는 비용, 마진, 리스크, 결정 요약만 보여줍니다.
+          </p>
+        )}
+        {showInternal && (
+        <section className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+          <p className="text-xs font-semibold uppercase text-primary-normal">Report review gate</p>
+          <ul className="mt-2 grid gap-1 text-xs text-label-neutral">
+            <li>No raw prompt in report</li>
+            <li>No uncited numeric claim</li>
+            <li>Provider price source visible</li>
+            <li>Formula version visible</li>
+          </ul>
+          <div className="mt-2 grid gap-1 text-xs text-label-neutral">
+            <p>Snapshot allowed: {trustInspection?.allowedForSnapshot ? 'yes' : 'no'}</p>
+            <p>Analysis available: {trustInspection?.analysisScope.available.join(', ') || 'none'}</p>
+          </div>
+          <p translate="no">
+            {formulaVersion} / {providerRegistryVersion} / {onePageReport.refs.join(', ')}
+          </p>
+        </section>
+        )}
+      </div>
+    </Surface>
+  )
+}
+
 function DecisionLogWorkspace({
   decisions,
   onDelete,
   onExport,
+  showInternal,
 }: {
   decisions: Decision[]
   onDelete: (id: string) => void
   onExport: () => void
+  showInternal: boolean
 }) {
   return (
     <Surface
       eyebrow="Local persistence"
       title="6. Decision & Approval Log"
-      description="P0 stores adopted decisions in localStorage and exports the same JSON shape planned for P1 persistence."
+      description="P0 stores adopted decisions plus Operating Ledger rows in localStorage and exports the same JSON shape planned for P1 persistence."
       action={decisions.length > 0 && (
         <Button size="sm" onClick={onExport}>Export JSON</Button>
       )}
@@ -438,24 +628,71 @@ function DecisionLogWorkspace({
                 <Badge tone={decision.kind === 'approve' ? 'positive' : 'primary'}>{decision.kind}</Badge>
                 <p className="mt-1 text-xs text-label-neutral">{decision.why}</p>
                 <p className="mt-2 text-xs text-label-alternative" translate="no">{decision.createdAt}</p>
+                {showInternal && decision.operatingLedger && (
+                  <div className="mt-2 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-primary-normal">Operating Ledger</p>
+                    <p translate="no">workstream: {decision.operatingLedger.workstream}</p>
+                    <p>agent: {decision.operatingLedger.agentUsed}</p>
+                    <p>human decision: {decision.operatingLedger.humanDecision}</p>
+                    <p translate="no">artifact: {decision.operatingLedger.artifactUpdated}</p>
+                  </div>
+                )}
+                {showInternal && decision.agentReview ? (
+                  <div className="mt-2 rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-primary-normal">Agent review</p>
+                    <p translate="no">called agents: {decision.agentReview.calledAgentIds.join(', ')}</p>
+                    <p translate="no">primary: {decision.agentReview.primaryAgentId ?? 'none'}</p>
+                    <p translate="no">reviewers: {decision.agentReview.reviewerAgentIds.join(', ') || 'none'}</p>
+                    <p translate="no">used tools: {decision.agentReview.usedCapabilityTools.join(', ') || 'none'}</p>
+                    <p translate="no">{decision.agentReview.snapshotVersion}</p>
+                    <p>{decision.agentReview.supervisorSummary}</p>
+                  </div>
+                ) : showInternal ? (
+                  <p className="mt-2 text-xs text-label-alternative">legacy decision</p>
+                ) : null}
+                {showInternal && decision.trustReview && (
+                  <div className="mt-2 rounded-wds border border-status-warning/20 bg-status-warning/10 p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-status-warning">Trust review</p>
+                    <p translate="no">status: {decision.trustReview.status}</p>
+                    <p translate="no">warnings: {decision.trustReview.warnings.join(', ') || 'none'}</p>
+                    <p>{decision.trustReview.retentionNote}</p>
+                  </div>
+                )}
+                {showInternal && decision.reportReview && (
+                  <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-primary-normal">Report review</p>
+                    <p>No raw prompt: {decision.reportReview.noRawPrompt ? 'yes' : 'no'}</p>
+                    <p>No uncited numbers: {decision.reportReview.noUncitedNumbers ? 'yes' : 'no'}</p>
+                    <p>Provider source visible: {decision.reportReview.providerSourceVisible ? 'yes' : 'no'}</p>
+                    <p>Formula provenance: {decision.reportReview.formulaVersionVisible ? 'yes' : 'no'}</p>
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap gap-1">
                   <Badge tone={decision.aiMode === 'llm_assisted' ? 'positive' : 'neutral'}>{decision.aiMode}</Badge>
-                  <Badge tone="neutral">
-                    policy {String((decision.thresholdSnapshot as ThresholdPolicy | undefined)?.gross_margin_thin_pct?.policyVersion ?? 'legacy')}
-                  </Badge>
-                  <Badge tone={decision.factSourceSnapshot.length > 0 ? 'primary' : 'neutral'}>
-                    fact sources {decision.factSourceSnapshot.length}
-                  </Badge>
+                  {showInternal && (
+                    <>
+                      <Badge tone="neutral">
+                        policy {String((decision.thresholdSnapshot as ThresholdPolicy | undefined)?.gross_margin_thin_pct?.policyVersion ?? 'legacy')}
+                      </Badge>
+                      <Badge tone={decision.factSourceSnapshot.length > 0 ? 'primary' : 'neutral'}>
+                        fact sources {decision.factSourceSnapshot.length}
+                      </Badge>
+                    </>
+                  )}
                 </div>
-                <pre className="mt-2 overflow-x-auto rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral" translate="no">
-                  {JSON.stringify({
-                    assumptions: decision.assumptions,
-                    performanceSnapshot: decision.performanceSnapshot,
-                    costSnapshot: decision.costSnapshot,
-                    thresholdSnapshot: decision.thresholdSnapshot,
-                    factSourceSnapshot: decision.factSourceSnapshot,
-                  }, null, 2)}
-                </pre>
+                {showInternal && (
+                <details className="mt-2 rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral">
+                  <summary className="cursor-pointer font-semibold">Snapshot details</summary>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    <p translate="no">assumptions: {Object.keys(decision.assumptions).join(', ') || 'none'}</p>
+                    <p translate="no">performanceSnapshot: {Object.keys(decision.performanceSnapshot).join(', ') || 'none'}</p>
+                    <p translate="no">costSnapshot: {Object.keys(decision.costSnapshot).join(', ') || 'none'}</p>
+                    <p translate="no">thresholdSnapshot: {Object.keys(decision.thresholdSnapshot).join(', ') || 'none'}</p>
+                    <p translate="no">factSourceSnapshot: {decision.factSourceSnapshot.length}</p>
+                    <p translate="no">tool refs: {decision.toolResultRefs.join(', ') || 'none'}</p>
+                  </div>
+                </details>
+                )}
               </div>
               <Button size="sm" variant="ghost" onClick={() => onDelete(decision.id)}>
                 Delete decision
@@ -502,16 +739,30 @@ function ToolRefChip({ refId }: { refId: string }) {
   )
 }
 
+function customerSafeAgentText(text: string): string {
+  return text
+    .replace(/\b(?:tool|asset|snapshot|risk|evidence|decision):[^\s,.)]+/g, '저장된 근거')
+    .replace(/agentic runtime unavailable/gi, 'AI 해석은 저장된 비용 근거를 기준으로 표시됩니다')
+}
+
 function LifecycleNavigation({
   activeStage,
-  agents,
+  operatingAgents,
+  selectedAgentId,
   savedDecisionCount,
+  showInternal,
   onStageChange,
+  onAgentSelect,
+  onRunAllHands,
 }: {
   activeStage: DecisionStageId
-  agents: AgentSpec[]
+  operatingAgents: OperatingAgent[]
+  selectedAgentId: OperatingAgentId | null
   savedDecisionCount: number
+  showInternal: boolean
   onStageChange: (stage: DecisionStageId) => void
+  onAgentSelect: (agentId: OperatingAgentId) => void
+  onRunAllHands: () => void
 }) {
   return (
     <aside data-testid="lifecycle-nav" className="montage-console-left">
@@ -520,7 +771,7 @@ function LifecycleNavigation({
         <p className="mt-2 text-sm font-semibold text-label-normal">
           Design -&gt; Cost -&gt; Bottleneck -&gt; Optimize + Risk -&gt; Decision Log
         </p>
-        <div className="mt-4 grid gap-2">
+        <div data-testid="decision-stage-nav" className="mt-4 grid gap-2">
           {DECISION_STAGES.map(stage => (
             <button
               key={stage.id}
@@ -539,33 +790,32 @@ function LifecycleNavigation({
         </div>
       </div>
 
-      <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase text-primary-normal">PRD 9-step path</p>
-          <Badge tone={savedDecisionCount > 0 ? 'positive' : 'caution'}>
-            {savedDecisionCount > 0 ? 'logged' : 'open'}
-          </Badge>
+      {showInternal && (
+        <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase text-primary-normal">PRD 9-step path</p>
+            <Badge tone={savedDecisionCount > 0 ? 'positive' : 'caution'}>
+              {savedDecisionCount > 0 ? 'logged' : 'open'}
+            </Badge>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {TEAM_COST_DEMO_STEPS.map((step, index) => (
+              <p key={step} className="rounded-wds bg-fill-alternative px-2 py-1.5 text-xs text-label-neutral">
+                Step {index + 1}: {step.replace(/^\d+\.\s*/, '')}
+              </p>
+            ))}
+          </div>
         </div>
-        <div className="mt-3 grid gap-2">
-          {TEAM_COST_DEMO_STEPS.map((step, index) => (
-            <p key={step} className="rounded-wds bg-fill-alternative px-2 py-1.5 text-xs text-label-neutral">
-              Step {index + 1}: {step.replace(/^\d+\.\s*/, '')}
-            </p>
-          ))}
-        </div>
-      </div>
+      )}
 
-      <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
-        <p className="text-xs font-semibold uppercase text-primary-normal">Agents</p>
-        <div className="mt-3 grid gap-2">
-          {agents.slice(0, 7).map(agent => (
-            <div key={agent.id} className="flex items-center justify-between gap-2 rounded-wds bg-fill-alternative px-2 py-1.5">
-              <span className="text-xs font-medium text-label-neutral">{agent.role}</span>
-              <Badge>{agent.humanReviewGate}</Badge>
-            </div>
-          ))}
-        </div>
-      </div>
+      {showInternal && (
+        <OperatingTeamPanel
+          operatingAgents={operatingAgents}
+          selectedAgentId={selectedAgentId}
+          onAgentSelect={onAgentSelect}
+          onRunAllHands={onRunAllHands}
+        />
+      )}
     </aside>
   )
 }
@@ -575,12 +825,14 @@ function DecisionWorkspaceIntro({
   remoteBackendStatus,
   remoteBackendMessage,
   workspaceId,
+  showInternal,
   onOpenTeamCost,
 }: {
   activeStage: DecisionStageId
   remoteBackendStatus: RemoteBackendStatus
   remoteBackendMessage: string
   workspaceId: string
+  showInternal: boolean
   onOpenTeamCost: () => void
 }) {
   const stage = DECISION_STAGES.find(item => item.id === activeStage) ?? DECISION_STAGES[0]
@@ -589,7 +841,7 @@ function DecisionWorkspaceIntro({
     <section className="rounded-wds-lg border border-line-neutral bg-surface-normal p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-primary-normal">PRODUCT_UX workspace</p>
+          <p className="text-xs font-semibold uppercase text-primary-normal">Workspace</p>
           <h2 data-testid="active-decision-stage" className="mt-2 text-2xl font-semibold text-label-normal">
             {stage.label}
           </h2>
@@ -601,11 +853,15 @@ function DecisionWorkspaceIntro({
           </p>
         </div>
         <div className="grid gap-2 text-sm lg:min-w-64">
-          <Badge tone={remoteBackendStatus === 'connected' ? 'positive' : remoteBackendStatus === 'fallback' ? 'caution' : 'neutral'}>
-            {remoteBackendStatus}
-          </Badge>
-          <p className="text-label-neutral">{remoteBackendMessage}</p>
-          <p className="text-xs text-label-alternative" translate="no">workspaceId: {workspaceId}</p>
+          {showInternal && (
+            <>
+              <Badge tone={remoteBackendStatus === 'connected' ? 'positive' : remoteBackendStatus === 'fallback' ? 'caution' : 'neutral'}>
+                {remoteBackendStatus}
+              </Badge>
+              <p className="text-label-neutral">{remoteBackendMessage}</p>
+              <p className="text-xs text-label-alternative" translate="no">workspaceId: {workspaceId}</p>
+            </>
+          )}
           <Button variant="primary" onClick={onOpenTeamCost}>
             AI Team Cost Simulator
           </Button>
@@ -615,47 +871,202 @@ function DecisionWorkspaceIntro({
   )
 }
 
+function CustomerDashboardEntryPanel({
+  dashboard,
+  onRunSample,
+  onUploadUsage,
+  onOpenWorkspace,
+}: {
+  dashboard: CustomerWorkspaceDashboard
+  onRunSample: () => void
+  onUploadUsage: () => void
+  onOpenWorkspace: () => void
+}) {
+  const handlers: Record<CustomerWorkspaceDashboard['ctas'][number]['action'], () => void> = {
+    load_sample: onRunSample,
+    upload_usage: onUploadUsage,
+    open_workspace: onOpenWorkspace,
+  }
+
+  return (
+    <section data-testid="customer-dashboard-entry" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">고객용 웹앱</p>
+          <h2 className="mt-2 text-2xl font-semibold text-label-normal">{dashboard.heroTitle}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-label-neutral">
+            한 화면에서 샘플 실행, usage 업로드, 월간 리뷰, 의사결정 기록까지 바로 이어집니다.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <Badge tone="positive">최신 Google Gemini 3.5 Flash 단가 반영</Badge>
+            <Badge tone="neutral">가격 출처 확인일: 2026-05-24</Badge>
+            <Badge tone="caution">Gemini Omni / 비디오 비용은 공식 API 단가 확인 필요</Badge>
+            <Badge tone="neutral">사용자 단가 입력 시 시나리오 계산 가능</Badge>
+          </div>
+          <p className="mt-2 text-xs text-label-alternative">
+            고객 기본 화면에는 내부 workspace ID, snapshot ref, agent route를 노출하지 않습니다.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          {dashboard.ctas.map(cta => (
+            <Button
+              key={cta.id}
+              size="sm"
+              variant={cta.id === 'run_sparkclaw_sample' ? 'primary' : 'secondary'}
+              onClick={handlers[cta.action]}
+            >
+              {cta.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {dashboard.sections.map(section => (
+          <div key={section.id} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-label-normal">{section.label}</p>
+              {section.count !== null && <Badge tone="neutral">{fmtTokens(section.count)}</Badge>}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-label-alternative">{section.description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function DecisionAssistantPanel({
+  activeStage,
   teamEstimate,
   recommendations,
   riskCards,
   events,
+  agentRun,
+  operatingAgents,
   llmMode,
   savedDecisionCount,
   thresholdPolicy,
+  showInternal,
   onThresholdOverride,
   onAdopt,
   onReject,
 }: {
+  activeStage: DecisionStageId
   teamEstimate: TeamCostEstimate
   recommendations: OptimizationRecommendation[]
   riskCards: RiskCard[]
   events: TeamCostGraphEvent[]
+  agentRun: AgentRunResponse
+  operatingAgents: OperatingAgent[]
   llmMode: TeamCostLlmMode
   savedDecisionCount: number
   thresholdPolicy: ThresholdPolicy
+  showInternal: boolean
   onThresholdOverride: (id: ThresholdId, value: number) => void
   onAdopt: () => void
   onReject: () => void
 }) {
   const recommendation = recommendations[0]
   const assistantRefs = recommendation
-    ? [...new Set([...ASSISTANT_TOOL_REFS, ...recommendation.toolResultRefs])]
+    ? [...new Set([...ASSISTANT_TOOL_REFS, ...recommendation.toolResultRefs, ...agentRun.toolResultRefs])]
     : ASSISTANT_TOOL_REFS
+  const displayMode = agentRun.llmMode === 'provider-llm' || llmMode === 'provider-llm'
+    ? 'LLM assisted'
+    : 'Deterministic fallback'
+  const agentLabel = (agentId: string | null | undefined) => {
+    const agent = operatingAgents.find(item => item.id === agentId)
+    return agent?.label ?? agentId ?? 'Unassigned agent'
+  }
+  const calledAgentLabel = agentRun.calledAgentIds.length === operatingAgents.length
+    ? `${agentRun.calledAgentIds.length} agents`
+    : agentRun.calledAgentIds.map(agentLabel).join(', ')
+  const executionModeLabel = typeof agentRun.agentRoute.executionMode === 'string'
+    ? agentRun.agentRoute.executionMode
+    : ''
+  const supervisorText = showInternal
+    ? (agentRun.supervisorSummary || agentRun.answer)
+    : customerSafeAgentText(agentRun.supervisorSummary || agentRun.answer)
+  const stageAnswerText = showInternal
+    ? agentRun.answer
+    : customerSafeAgentText(agentRun.answer)
+  const warningText = showInternal
+    ? agentRun.warnings[0]
+    : 'AI 해석은 저장된 비용 근거를 기준으로 표시됩니다.'
 
   return (
     <aside data-testid="decision-assistant-panel" className="montage-console-right">
       <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase text-primary-normal">AI interpretation</p>
-          <Badge tone={llmMode === 'provider-llm' ? 'positive' : 'neutral'}>
-            {llmMode === 'provider-llm' ? 'LLM assisted' : 'Deterministic fallback'}
+          <Badge tone={displayMode === 'LLM assisted' ? 'positive' : 'neutral'}>
+            {displayMode}
           </Badge>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {showInternal && <Badge tone="primary">Agentic RAG</Badge>}
+          <Badge tone="neutral">{activeStage}</Badge>
+          {showInternal && executionModeLabel && (
+            <Badge tone="neutral">{executionModeLabel}</Badge>
+          )}
         </div>
         <p className="mt-2 text-sm text-label-neutral" lang="en">
           Cost Analyst is attached beside the deterministic forecast. It can explain refs, risk, and next decisions,
           but it does not create cost numbers.
         </p>
+        <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
+          <p className="text-xs font-semibold uppercase text-primary-normal">Supervisor synthesis</p>
+          <p className="mt-1 text-sm text-label-neutral">{supervisorText}</p>
+          {showInternal && (
+            <p className="mt-2 text-xs text-label-alternative" translate="no">
+              decision readiness: {agentRun.decisionReadiness}
+            </p>
+          )}
+          {showInternal && agentRun.disagreements.length > 0 && (
+            <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2">
+              <p className="text-xs font-semibold text-label-alternative">Reviewer notes</p>
+              <ul className="mt-1 grid gap-1 text-xs text-label-neutral">
+                {agentRun.disagreements.slice(0, 3).map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {showInternal && agentRun.nextQuestions.length > 0 && (
+            <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2">
+              <p className="text-xs font-semibold text-label-alternative">Next questions</p>
+              <ul className="mt-1 grid gap-1 text-xs text-label-neutral">
+                {agentRun.nextQuestions.slice(0, 3).map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
+          <p className="text-xs font-semibold uppercase text-primary-normal">Stage answer</p>
+          <p className="mt-1 text-sm text-label-neutral">{stageAnswerText}</p>
+          {showInternal && agentRun.calledAgentIds.length > 0 && (
+            <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-2">
+              <p className="text-xs font-semibold uppercase text-primary-normal">Called agents</p>
+              <p className="mt-1 text-xs text-label-neutral">{calledAgentLabel}</p>
+              <p className="mt-1 text-xs text-label-alternative">
+                primary: {agentLabel(agentRun.primaryAgentId)}
+                {agentRun.reviewerAgentIds.length > 0 && ` | reviewers: ${agentRun.reviewerAgentIds.map(agentLabel).join(', ')}`}
+              </p>
+              {agentRun.snapshotVersion && (
+                <p className="mt-1 text-xs text-label-alternative" translate="no">{agentRun.snapshotVersion}</p>
+              )}
+            </div>
+          )}
+          {showInternal && agentRun.usedTools.length > 0 && (
+            <p className="mt-2 text-xs text-label-alternative" translate="no">
+              used tools: {agentRun.usedTools.join(', ')}
+            </p>
+          )}
+          {agentRun.warnings.length > 0 && (
+            <p className="mt-2 text-xs text-status-cautionary">{warningText}</p>
+          )}
+        </div>
         <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
           <p className="text-xs font-semibold text-label-alternative">Current monthly cost</p>
           <p data-testid="assistant-monthly-cost" className="mt-1 text-xl font-semibold text-label-normal" translate="no">
@@ -665,11 +1076,29 @@ function DecisionAssistantPanel({
             top agent share {fmtPercent(teamEstimate.topAgentShare)}
           </p>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {assistantRefs.slice(0, 6).map(refId => (
-            <ToolRefChip key={refId} refId={refId} />
-          ))}
-        </div>
+        {showInternal ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assistantRefs.slice(0, 6).map(refId => (
+              <ToolRefChip key={refId} refId={refId} />
+            ))}
+            {agentRun.riskCardIds.slice(0, 3).map(refId => (
+              <ToolRefChip key={refId} refId={`risk:${refId}`} />
+            ))}
+            {agentRun.evidenceRefs.slice(0, 3).map(refId => (
+              <ToolRefChip key={refId} refId={`evidence:${refId}`} />
+            ))}
+            {agentRun.assetRefs.slice(0, 6).map(refId => (
+              <ToolRefChip key={refId} refId={refId} />
+            ))}
+            {[...new Set(agentRun.events.flatMap(event => event.usedCapabilityTools ?? []))].slice(0, 4).map(toolName => (
+              <ToolRefChip key={`capability-${toolName}`} refId={`tool:${toolName}`} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-label-alternative">
+            근거와 실행 경로는 결정 기록에 저장됩니다. 내부 ref는 관리자 모드에서만 표시됩니다.
+          </p>
+        )}
       </div>
 
       <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
@@ -716,7 +1145,9 @@ function DecisionAssistantPanel({
           <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
             <p className="text-sm font-semibold text-label-normal">{riskCards[0].title}</p>
             <p className="mt-1 text-xs text-label-neutral">{riskCards[0].impact}</p>
-            <p className="mt-2 text-xs text-label-alternative" translate="no">risk:{riskCards[0].id}</p>
+            {showInternal && (
+              <p className="mt-2 text-xs text-label-alternative" translate="no">risk:{riskCards[0].id}</p>
+            )}
           </div>
         ) : (
           <p className="mt-3 text-sm text-label-alternative">No risk card is linked, so adoption remains blocked.</p>
@@ -741,6 +1172,7 @@ function DecisionAssistantPanel({
         </p>
       </div>
 
+      {showInternal && (
       <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
         <p className="text-xs font-semibold uppercase text-primary-normal">Agent events</p>
         <div className="mt-3 grid gap-2">
@@ -755,8 +1187,21 @@ function DecisionAssistantPanel({
               </div>
             </div>
           ))}
+          {agentRun.events.slice(0, 4).map((event, index) => (
+            <div key={`agent-run-${event.agentId ?? event.type}-${index}`} className="rounded-wds bg-fill-alternative p-2">
+              <p className="text-xs font-semibold text-label-normal">{agentLabel(event.agentId)}</p>
+              <p className="mt-1 text-xs text-label-neutral">{event.message}</p>
+              <p className="mt-1 text-xs text-label-alternative" translate="no">{event.calledAgentTool}</p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {(event.toolResultRefs ?? []).slice(0, 3).map(refId => (
+                  <ToolRefChip key={refId} refId={refId} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
+      )}
     </aside>
   )
 }
@@ -764,9 +1209,11 @@ function DecisionAssistantPanel({
 function WedgeADecisionLogPanel({
   decisions,
   onDelete,
+  showInternal,
 }: {
   decisions: Decision[]
   onDelete: (id: string) => void
+  showInternal: boolean
 }) {
   const wedgeDecisions = decisions.filter(decision => (
     decision.what.includes('AI team cost')
@@ -804,6 +1251,7 @@ function WedgeADecisionLogPanel({
                   Delete operating decision
                 </Button>
               </div>
+              {showInternal ? (
               <div className="mt-3 grid gap-3 md:grid-cols-3">
                 <div className="rounded-wds bg-fill-alternative p-2">
                   <p className="text-xs font-semibold text-label-neutral">Risk cards</p>
@@ -813,16 +1261,19 @@ function WedgeADecisionLogPanel({
                   <p className="text-xs font-semibold text-label-neutral">Tool refs</p>
                   <p className="mt-1 text-xs text-label-alternative" translate="no">{decision.toolResultRefs.join(', ')}</p>
                 </div>
-                <pre className="overflow-x-auto rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral" translate="no">
-                  {JSON.stringify({
-                    assumptions: decision.assumptions,
-                    performanceSnapshot: decision.performanceSnapshot,
-                    costSnapshot: decision.costSnapshot,
-                    thresholdSnapshot: decision.thresholdSnapshot,
-                    factSourceSnapshot: decision.factSourceSnapshot,
-                  }, null, 2)}
-                </pre>
+                <div className="rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral">
+                  <p className="font-semibold">Ledger snapshots</p>
+                  <p className="mt-1" translate="no">performanceSnapshot: {Object.keys(decision.performanceSnapshot).join(', ') || 'none'}</p>
+                  <p translate="no">costSnapshot: {Object.keys(decision.costSnapshot).join(', ') || 'none'}</p>
+                  <p translate="no">thresholdSnapshot: {Object.keys(decision.thresholdSnapshot).join(', ') || 'none'}</p>
+                  <p translate="no">factSourceSnapshot: {decision.factSourceSnapshot.length}</p>
+                </div>
               </div>
+              ) : (
+                <div className="mt-3 rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral">
+                  근거 ref, snapshot, agent route는 결정 감사 기록에 저장되고 관리자 모드에서만 표시됩니다.
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -940,6 +1391,11 @@ function ActualUsagePerformanceLogsPanel({
 
 function App() {
   const { t, i18n } = useTranslation()
+  const showInternal = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    return params.get('debug') === '1' || params.get('mode') === 'admin'
+  }, [])
   const [workspaceId] = useState(loadWorkspaceId)
   const [remoteBackendStatus, setRemoteBackendStatus] = useState<RemoteBackendStatus>('checking')
   const [remoteBackendMessage, setRemoteBackendMessage] = useState('Checking P1 backend persistence')
@@ -955,6 +1411,9 @@ function App() {
   const [teamCostAgents, setTeamCostAgents] = useState<AgentSpec[]>(cloneAgentCatalog)
   const [teamCostEvents, setTeamCostEvents] = useState<TeamCostGraphEvent[]>([])
   const [teamCostLlmMode, setTeamCostLlmMode] = useState<TeamCostLlmMode>('deterministic-fallback')
+  const [agentRun, setAgentRun] = useState<AgentRunResponse>(EMPTY_AGENT_RUN_RESPONSE)
+  const [requestedOperatingAgentId, setRequestedOperatingAgentId] = useState<OperatingAgentId | null>(null)
+  const [agentExecutionMode, setAgentExecutionMode] = useState<AgentRunExecutionMode>('stage_committee')
   const [thresholdPolicy, setThresholdPolicy] = useState<ThresholdPolicy>(DEFAULT_THRESHOLD_POLICY)
   const [teamCostWorkItems, setTeamCostWorkItems] = useState<WorkCatalogItem[]>(() => (
     DEFAULT_TEAM_COST_WORK_ITEMS.map(item => ({ ...item }))
@@ -1193,12 +1652,147 @@ function App() {
     ])
     return MODELS.filter(model => modelIds.has(model.id))
   }, [state.candidateModel.id, state.currentModel.id, teamCostAgents])
+  const currentFactSources = useMemo(
+    () => factSourceSnapshotFromModels(decisionFactSourceModels, new Date().toISOString().slice(0, 10)),
+    [decisionFactSourceModels],
+  )
+  const operatingAssetSummary = useMemo(() => p0OperatingAssetSummary(), [])
+  const operatingAssetHealth = useMemo(() => {
+    const staleCount = currentFactSources.filter(source => source.verificationStatus === 'stale').length
+    return [
+      `provider_registry: ${staleCount > 0 ? `${staleCount} stale fact source warning` : 'fresh'}`,
+      `usage_schema_mapping: ${importedUsage?.importHealthReport?.status ?? 'waiting_for_import'}`,
+      `operating_ledger: ${decisions.length} rows`,
+      `operating_agents: ${operatingAssetSummary.activeAgentCount} active roles`,
+      `p1_automation_modules: ${P1_AUTOMATION_MODULES.length} automation_ready`,
+    ]
+  }, [
+    currentFactSources,
+    decisions.length,
+    importedUsage?.importHealthReport?.status,
+    operatingAssetSummary.activeAgentCount,
+  ])
+  const customerDashboard = useMemo(() => buildCustomerWorkspaceDashboard({
+    workspaceId,
+    organizationName: 'SparkClaw',
+    uploadCount: importedUsage ? 1 : 0,
+    decisionCount: decisions.length,
+    monthlyReviewCount: weeklyReportRun ? 1 : 0,
+    reportCount: decisions.length > 0 ? 1 : 0,
+  }), [decisions.length, importedUsage, weeklyReportRun, workspaceId])
+  const operatingLedgerRows = useMemo(() => decisions
+    .filter(decision => decision.operatingLedger)
+    .map(decision => ({
+      id: decision.id,
+      ...decision.operatingLedger,
+    })), [decisions])
+  const agentSnapshot = useMemo(() => {
+    const primaryRecommendation = teamCostRecommendations[0]
+    return buildAgentSnapshot({
+      activeStage: activeDecisionStage,
+      toolResults: {
+        'team.monthlyCostUsd': teamCostEstimate.monthlyCostUsd,
+        'team.topAgentShare': teamCostEstimate.topAgentShare,
+        'optimization.primary.monthlySavingsUsd': primaryRecommendation?.monthlySavingsUsd ?? 0,
+        monthlyAiCogs: importedUsage?.totalCostUsd ?? 0,
+      },
+      deterministicEvents: teamCostEvents.map(event => ({ ...event })),
+      thresholdPolicy,
+      metricFlags: teamCostBottlenecks.map(flag => ({ ...flag })),
+      riskCards: [...riskCards, ...teamCostRiskCards].map(card => ({ ...card, source: `risk:${card.evidenceId}` })),
+      benchmarkCards: TEAM_COST_BENCHMARKS.map(card => ({ ...card, source: `benchmark:${card.evidenceId}` })),
+      decisionHistory: decisions.map(decision => ({ ...decision })),
+      factSources: currentFactSources,
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+      operatingAssets: OPERATING_ASSETS.map(asset => ({ ...asset })),
+      providerRegistry: currentFactSources.map(source => ({ ...source })),
+      modelPerfMatrix: MODEL_PERF_MATRIX.map(row => ({ ...row })),
+      operatingLedger: operatingLedgerRows,
+      officialSourceRegistry: OFFICIAL_SOURCE_REGISTRY.map(source => ({ ...source })),
+      officialSourceSnippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS.map(snippet => ({ ...snippet })),
+      modelReleaseCandidates: INITIAL_MODEL_RELEASE_CANDIDATES.map(candidate => ({ ...candidate })),
+      pricingFactCandidates: INITIAL_PRICING_FACT_CANDIDATES.map(candidate => ({ ...candidate })),
+      fxRateSnapshots: INITIAL_FX_RATE_SNAPSHOTS.map(snapshot => ({ ...snapshot })),
+      trustInspection: importedUsage?.trustInspection ?? null,
+      formulaVersion: COST_FORMULA_VERSION,
+      providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
+      frontOperatingSystem: AGENTCOST_FRONT_OPERATING_SYSTEM,
+    })
+  }, [
+    activeDecisionStage,
+    currentFactSources,
+    decisions,
+    importedUsage?.totalCostUsd,
+    importedUsage?.trustInspection,
+    operatingLedgerRows,
+    riskCards,
+    teamCostBottlenecks,
+    teamCostEstimate.monthlyCostUsd,
+    teamCostEstimate.topAgentShare,
+    teamCostEvents,
+    teamCostRecommendations,
+    teamCostRiskCards,
+    thresholdPolicy,
+  ])
+  const officialWatchtowerSummary = useMemo(() => officialWatchtowerCoverageSummary(), [])
+
+  const handleDecisionStageChange = (stage: DecisionStageId) => {
+    setActiveDecisionStage(stage)
+    setRequestedOperatingAgentId(null)
+    setAgentExecutionMode('stage_committee')
+  }
+
+  const handleOperatingAgentSelect = (agentId: OperatingAgentId) => {
+    setRequestedOperatingAgentId(agentId)
+    setAgentExecutionMode('single_agent')
+  }
+
+  const handleRunFullOperatingReview = () => {
+    setRequestedOperatingAgentId(null)
+    setAgentExecutionMode('all_hands')
+  }
 
   const decisionAuditSnapshot = () => ({
     thresholdSnapshot: thresholdPolicy,
-    factSourceSnapshot: factSourceSnapshotFromModels(decisionFactSourceModels, new Date().toISOString().slice(0, 10)),
+    factSourceSnapshot: currentFactSources,
     aiMode: teamCostLlmMode === 'provider-llm' ? 'llm_assisted' as const : 'deterministic_fallback' as const,
   })
+
+  const trustReviewSnapshot = (summary: UsageImportSummary | null = importedUsage): TrustReviewMetadata => ({
+    status: summary?.trustInspection?.status ?? 'unknown',
+    warnings: summary?.trustInspection?.warnings ?? [],
+    retentionNote: summary?.trustInspection?.retentionNote ?? 'Raw prompt was not collected for this demo snapshot.',
+  })
+
+  const reportReviewSnapshot = (summary: UsageImportSummary | null = importedUsage): ReportReviewMetadata => ({
+    noRawPrompt: !(summary?.trustInspection?.warnings ?? []).includes('raw_prompt_detected'),
+    noUncitedNumbers: true,
+    providerSourceVisible: currentFactSources.length > 0,
+    formulaVersionVisible: true,
+  })
+
+  const decisionReviewMetadata = (summary: UsageImportSummary | null = importedUsage) => ({
+    trustReview: trustReviewSnapshot(summary),
+    reportReview: reportReviewSnapshot(summary),
+  })
+
+  const agentReviewSnapshot = (stage: DecisionStageId = activeDecisionStage) => {
+    const usedCapabilityTools = [...new Set([
+      ...agentRun.usedTools,
+      ...agentRun.events.flatMap(event => event.usedCapabilityTools ?? []),
+    ])]
+    const stageSnapshotVersion = agentRun.snapshotVersion && agentRun.snapshotVersion.startsWith(`snapshot:${stage}:`)
+      ? agentRun.snapshotVersion
+      : agentSnapshot.snapshotVersion.replace(/^snapshot:[^:]+:/, `snapshot:${stage}:`)
+    return {
+      calledAgentIds: agentRun.calledAgentIds,
+      primaryAgentId: agentRun.primaryAgentId,
+      reviewerAgentIds: agentRun.reviewerAgentIds,
+      usedCapabilityTools,
+      snapshotVersion: stageSnapshotVersion,
+      supervisorSummary: agentRun.supervisorSummary || agentRun.answer,
+    }
+  }
 
   const handleThresholdOverride = (id: ThresholdId, value: number) => {
     setThresholdPolicy(policy => mergeThresholdPolicy(policy, { [id]: Math.min(1, Math.max(0, value)) }))
@@ -1255,6 +1849,47 @@ function App() {
       cancelled = true
     }
   }, [showTeamCostSimulator, teamCostAgents, teamCostCompanyProfile])
+
+  useEffect(() => {
+    let cancelled = false
+    void runAgentRuntime({
+      apiKey: '',
+      mode: activeDecisionStage === 'decision-log' ? 'decision_support' : 'report',
+      activeStage: activeDecisionStage,
+      question: `Explain the ${activeDecisionStage} decision for the SparkClaw AI team cost workspace.`,
+      requestedAgentId: requestedOperatingAgentId,
+      executionMode: agentExecutionMode,
+      snapshotVersion: agentSnapshot.snapshotVersion,
+      toolResults: agentSnapshot.toolResults,
+      deterministicEvents: agentSnapshot.deterministicEvents,
+      thresholdPolicy: agentSnapshot.thresholdPolicy,
+      metricFlags: agentSnapshot.metricFlags,
+      riskCards: agentSnapshot.riskCards,
+      benchmarkCards: agentSnapshot.benchmarkCards,
+      decisionHistory: agentSnapshot.decisionHistory,
+      factSources: agentSnapshot.factSources,
+      operatingAgents: agentSnapshot.operatingAgents,
+      operatingAssets: agentSnapshot.operatingAssets,
+      providerRegistry: agentSnapshot.providerRegistry,
+      modelPerfMatrix: agentSnapshot.modelPerfMatrix,
+      operatingLedger: agentSnapshot.operatingLedger,
+      trustInspection: agentSnapshot.trustInspection,
+      formulaVersion: agentSnapshot.formulaVersion,
+      providerRegistryVersion: agentSnapshot.providerRegistryVersion,
+      dataLimitations: agentSnapshot.dataLimitations,
+      frontOperatingSystem: agentSnapshot.frontOperatingSystem,
+    }).then(result => {
+      if (!cancelled) setAgentRun(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeDecisionStage,
+    agentExecutionMode,
+    agentSnapshot,
+    requestedOperatingAgentId,
+  ])
 
   const applyUsageSummary = (summary: UsageImportSummary) => {
     setImportedUsage(summary)
@@ -1317,6 +1952,115 @@ function App() {
     }
   }
 
+  const handleSparkClawDemoLoaded = async (summary: UsageImportSummary) => {
+    setShowTeamCostSimulator(true)
+    setActiveDecisionStage('decision-log')
+    const existingDemo = decisions.some(decision => decision.assumptions.demo === 'sample/demo')
+    if (existingDemo) return
+    const recommendation = teamCostRecommendations[0]
+    const cards = recommendation ? retrieveRiskCards(recommendation.riskTags) : riskCards
+    const auditSnapshot = decisionAuditSnapshot()
+    const reviewMetadata = decisionReviewMetadata(summary)
+    const nowMs = Date.now()
+    const operatingEntries = [
+      createOperatingLedgerEntry({
+        kind: 'policy',
+        what: 'Provider Registry sample update',
+        why: 'Official model price facts need visible source freshness before customer reporting.',
+        assumptions: { demo: 'sample/demo', asset: 'provider_registry' },
+        toolResultRefs: ['asset:provider_registry', 'tool:monthlyAiCogs'],
+        riskCards: ['risk-cache-staleness'],
+        status: 'adopted',
+        createdAt: new Date(nowMs + 1_000).toISOString(),
+        ...auditSnapshot,
+        agentReview: agentReviewSnapshot('decision-log'),
+        ...reviewMetadata,
+        operatingLedger: {
+          workstream: 'Provider Registry',
+          source: 'official pricing page snapshot',
+          agentUsed: 'Provider & API Intelligence Agent',
+          proposedChange: 'Expose source freshness and keep registry as the numeric fact authority.',
+          humanDecision: 'Approve P0 registry snapshot for demo reporting.',
+          artifactUpdated: 'provider_registry p0',
+          impact: 'Customer report can explain which official model facts were used.',
+          followUp: 'P1 official docs change monitor remains automation_ready.',
+        },
+      }),
+      createOperatingLedgerEntry({
+        kind: 'attribution',
+        what: 'Usage Schema Mapping sample import',
+        why: 'SparkClaw usage rows must preserve customer, plan, session, and agent-run attribution.',
+        assumptions: { demo: 'sample/demo', asset: 'usage_schema_mapping' },
+        toolResultRefs: ['asset:usage_schema_mapping', 'tool:monthlyAiCogs'],
+        riskCards: ['risk-agent-loop-runaway'],
+        status: 'adopted',
+        createdAt: new Date(nowMs + 2_000).toISOString(),
+        ...auditSnapshot,
+        agentReview: agentReviewSnapshot('decision-log'),
+        ...reviewMetadata,
+        operatingLedger: {
+          workstream: 'Usage Data Ingestion',
+          source: 'SparkClaw sample CSV',
+          agentUsed: 'Usage Data Ingestion Agent',
+          proposedChange: 'Normalize CSV into normalized_usage_table and report missing dimensions explicitly.',
+          humanDecision: 'Approve sample import after preserving attribution dimensions.',
+          artifactUpdated: 'usage_schema_mapping sparkclaw',
+          impact: 'Cost attribution can roll up by customer, feature, model, plan, session, and agent run.',
+          followUp: 'Add customer-specific mapping memory when real uploads arrive.',
+        },
+      }),
+      createOperatingLedgerEntry({
+        kind: 'policy',
+        what: 'Model routing quality gate',
+        why: 'Cheaper model routing is a what-if until task-level quality validation exists.',
+        assumptions: { demo: 'sample/demo', asset: 'model_perf_matrix' },
+        toolResultRefs: ['asset:model_perf_matrix', 'tool:optimization.primary.monthlySavingsUsd'],
+        riskCards: ['risk-model-routing-quality'],
+        status: 'adopted',
+        createdAt: new Date(nowMs + 3_000).toISOString(),
+        ...auditSnapshot,
+        agentReview: agentReviewSnapshot('decision-log'),
+        ...reviewMetadata,
+        operatingLedger: {
+          workstream: 'Model Routing',
+          source: 'SparkClaw optimization recommendation',
+          agentUsed: 'Model & Inference Research Agent, Optimization & Routing Agent',
+          proposedChange: 'Keep model downgrade as eval-needed what-if instead of definitive waste.',
+          humanDecision: 'Hold production routing until quality sample passes.',
+          artifactUpdated: 'model_perf_matrix p0, optimization_playbook p0',
+          impact: 'Report shows savings beside risk and validation requirements.',
+          followUp: 'Run representative task eval before routing production traffic.',
+        },
+      }),
+    ]
+    const decision = createDecision({
+      kind: 'approve',
+      what: 'SparkClaw sample/demo decision',
+      why: 'This customer is unprofitable until AI COGS, routing, and pricing policy are corrected.',
+      assumptions: {
+        demo: 'sample/demo',
+        importedRequests: summary.requestCount,
+        importedCostUsd: summary.totalCostUsd,
+        recommendationId: recommendation?.id ?? 'sparkclaw-demo',
+      },
+      toolResultRefs: [
+        'tool:team.monthlyCostUsd',
+        'tool:team.topAgentShare',
+        'tool:optimization.primary.monthlySavingsUsd',
+        'tool:monthlyAiCogs',
+      ],
+      riskCards: cards.map(card => card.id),
+      status: 'adopted',
+      createdAt: new Date(nowMs).toISOString(),
+      performanceSnapshot: teamCostPerformanceSnapshot(),
+      costSnapshot: teamCostCostSnapshot(),
+      ...auditSnapshot,
+      agentReview: agentReviewSnapshot('decision-log'),
+      ...reviewMetadata,
+    })
+    await persistDecisions([decision, ...operatingEntries, ...decisions])
+  }
+
   const teamCostPerformanceSnapshot = () => ({
     throughput: deliverablePerformanceSummary.throughput,
     costPerDeliverableUsd: deliverablePerformanceSummary.costPerDeliverableUsd,
@@ -1351,6 +2095,8 @@ function App() {
       riskCards: riskCards.map(card => card.id),
       status: 'adopted',
       ...decisionAuditSnapshot(),
+      agentReview: agentReviewSnapshot(),
+      ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1383,6 +2129,8 @@ function App() {
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
+      agentReview: agentReviewSnapshot(),
+      ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1409,6 +2157,8 @@ function App() {
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
+      agentReview: agentReviewSnapshot(),
+      ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1435,6 +2185,8 @@ function App() {
       performanceSnapshot: teamCostPerformanceSnapshot(),
       costSnapshot: teamCostCostSnapshot(),
       ...decisionAuditSnapshot(),
+      agentReview: agentReviewSnapshot(),
+      ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
@@ -1462,6 +2214,40 @@ function App() {
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = exportDecisionLogFileName()
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
+  const handleExportOnePageReport = () => {
+    if (typeof document === 'undefined') return
+    const report = buildOnePageReportArtifact({
+      title: 'SparkClaw AI Team Cost Decision Report',
+      executiveSummary: agentRun.supervisorSummary || agentRun.report,
+      metrics: [
+        { label: 'Monthly AI team cost', value: fmtCurrency(teamCostEstimate.monthlyCostUsd) },
+        { label: 'Top agent share', value: fmtPercent(teamCostEstimate.topAgentShare) },
+      ],
+      recommendations: teamCostRecommendations[0] ? [teamCostRecommendations[0].title] : [],
+      risks: (teamCostRiskCards.length > 0 ? teamCostRiskCards : riskCards).map(card => card.title),
+      refs: [
+        ...(agentRun.toolResultRefs.length > 0 ? agentRun.toolResultRefs : ASSISTANT_TOOL_REFS),
+        agentSnapshot.snapshotVersion,
+      ],
+      trust: {
+        status: importedUsage?.trustInspection?.status ?? 'unknown',
+        dataLimitations: importedUsage?.trustInspection?.analysisScope.blocked ?? ['raw prompt was not collected'],
+        retentionNote: importedUsage?.trustInspection?.retentionNote ?? 'Raw prompt was not collected for this demo snapshot.',
+      },
+      formulaVersion: COST_FORMULA_VERSION,
+      providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
+      snapshotVersion: agentSnapshot.snapshotVersion,
+      decisionRefs: decisions.map(decision => decision.id),
+    })
+    const content = report.markdown
+    const blob = new Blob([content], { type: 'text/markdown' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'sparkclaw-ai-team-cost-decision-report.md'
     link.click()
     URL.revokeObjectURL(link.href)
   }
@@ -1642,6 +2428,187 @@ function App() {
     decision.what.includes('AI team cost') || decision.what.includes('Human Operating Decision')
   )).length
 
+  const teamCostSimulatorStack = showTeamCostSimulator ? (
+    <div className="grid gap-4 md:gap-6">
+      <TeamCostDemoPathPanel savedDecisionCount={savedTeamCostDecisionCount} />
+      <CompanyWorkInputPanel
+        companyType={teamCostCompanyProfile.companyType}
+        stage={teamCostCompanyProfile.stage}
+        monthlyBudgetUsd={teamCostCompanyProfile.monthlyBudgetUsd}
+        workItems={teamCostWorkItems}
+        onCompanyTypeChange={companyType => setTeamCostCompanyProfile(profile => ({ ...profile, companyType }))}
+        onStageChange={stage => setTeamCostCompanyProfile(profile => ({ ...profile, stage }))}
+        onMonthlyBudgetUsdChange={monthlyBudgetUsd => setTeamCostCompanyProfile(profile => ({
+          ...profile,
+          monthlyBudgetUsd: Number.isFinite(monthlyBudgetUsd) ? Math.max(0, monthlyBudgetUsd) : 0,
+        }))}
+        onWorkItemEnabledChange={handleTeamCostWorkItemEnabledChange}
+        onWorkItemMonthlyVolumeChange={handleTeamCostWorkItemMonthlyVolumeChange}
+      />
+      <AITeamSpecPanel
+        agents={teamCostAgents}
+        models={MODELS}
+        accountability={teamCostAccountability}
+        onMonthlyRunsChange={handleTeamCostMonthlyRunsChange}
+        onModelChange={handleTeamCostModelChange}
+        onCallsPerRunChange={handleTeamCostCallsPerRunChange}
+        onRetryRateChange={handleTeamCostRetryRateChange}
+        onCacheHitRateChange={handleTeamCostCacheHitRateChange}
+        onHumanReviewGateChange={handleTeamCostHumanReviewGateChange}
+        onArtifactTokensChange={handleTeamCostArtifactTokensChange}
+        onArtifactReuseChange={handleTeamCostArtifactReuseChange}
+        onAssignedTasksChange={handleTeamCostAssignedTasksChange}
+        onAccountabilityChange={handleTeamCostAccountabilityChange}
+      />
+      <TeamCostForecastPanel
+        teamEstimate={teamCostEstimate}
+        estimates={teamCostEstimates}
+        bottlenecks={teamCostBottlenecks}
+        deliverables={attributedDeliverables}
+        performanceSummary={deliverablePerformanceSummary}
+      />
+      <OptimizationReviewPanel
+        recommendations={teamCostRecommendations}
+        events={teamCostEvents}
+        riskCards={teamCostRiskCards}
+        currentMonthlyCostUsd={teamCostEstimate.monthlyCostUsd}
+        operatingDecisionKind={operatingDecisionKind}
+        operatingDecisionReason={operatingDecisionReason}
+        onAdopt={handleAdoptTeamCostOptimization}
+        onReject={handleRejectTeamCostOptimization}
+        onOperatingDecisionKindChange={setOperatingDecisionKind}
+        onOperatingDecisionReasonChange={setOperatingDecisionReason}
+        onRecordOperatingDecision={handleRecordOperatingDecision}
+      />
+      <WedgeADecisionLogPanel decisions={decisions} onDelete={handleDeleteDecision} showInternal={showInternal} />
+      <ActualUsagePerformanceLogsPanel
+        usageSnapshotRef={usageSnapshotRef}
+        usageHistory={usageHistory}
+        calibration={teamCostCalibration}
+        canApplyCalibration={hasOperatingDecisionForCalibration}
+        weeklyReportRun={weeklyReportRun}
+        onGenerateCalibration={handleGenerateCalibrationProposal}
+        onApplyCalibration={handleApplyCalibrationProposal}
+        onCreateWeeklyReport={handleCreateWeeklyReport}
+      />
+    </div>
+  ) : null
+
+  const stageWorkspace = (
+    <div className="grid gap-4">
+      {activeDecisionStage === 'design' && (
+        <>
+          <Surface
+            id="import"
+            eyebrow="Usage log entry point"
+            title="1. Import"
+            description="Start from CSV logs or the SparkClaw sample. Token fields come from logs; business denominators stay explicit."
+          >
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
+              <UsageImportPanel
+                importedSummary={importedUsage}
+                onImport={handleUsageImport}
+                onSparkClawDemo={handleSparkClawDemoLoaded}
+              />
+              <TeamDesignerPanel config={aiTeamConfiguration} />
+            </div>
+          </Surface>
+          {teamCostSimulatorStack}
+        </>
+      )}
+
+      {activeDecisionStage === 'cost' && (
+        <>
+          <OperationalSignalSummary summary={operationalSignals} />
+          <CostAttributionWorkspace attribution={attribution} />
+          <MarginRiskWorkspace
+            planMargins={planMargins}
+            customerMargins={customerMargins}
+            topDecileShare={heavyUsers.topDecileShare}
+          />
+        </>
+      )}
+
+      {activeDecisionStage === 'bottleneck' && (
+        <>
+          <Surface
+            eyebrow="Waste and bottleneck"
+            title="Bottleneck Detection"
+            description="Flags cite rule, self-baseline, or peer-benchmark basis before any optimization is proposed."
+          >
+            <TeamCostForecastPanel
+              teamEstimate={teamCostEstimate}
+              estimates={teamCostEstimates}
+              bottlenecks={teamCostBottlenecks}
+              deliverables={attributedDeliverables}
+              performanceSummary={deliverablePerformanceSummary}
+            />
+          </Surface>
+        </>
+      )}
+
+      {activeDecisionStage === 'optimize' && (
+        <>
+          <PricingSimulatorWorkspace
+            scenarios={scenarios}
+            riskCards={riskCards}
+            onAdopt={handleAdoptCreditScenario}
+          />
+          <OptimizationReviewPanel
+            recommendations={teamCostRecommendations}
+            events={teamCostEvents}
+            riskCards={teamCostRiskCards}
+            currentMonthlyCostUsd={teamCostEstimate.monthlyCostUsd}
+            operatingDecisionKind={operatingDecisionKind}
+            operatingDecisionReason={operatingDecisionReason}
+            onAdopt={handleAdoptTeamCostOptimization}
+            onReject={handleRejectTeamCostOptimization}
+            onOperatingDecisionKindChange={setOperatingDecisionKind}
+            onOperatingDecisionReasonChange={setOperatingDecisionReason}
+            onRecordOperatingDecision={handleRecordOperatingDecision}
+          />
+          <Surface
+            id="report"
+            eyebrow="Agent output"
+            title="5. Report Output"
+            description="The report keeps deterministic numbers and model provenance visible, while the agent layer drafts grounded interpretation."
+          >
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
+              <SummaryCard state={legacyState} />
+              <AgentReportWorkspace events={agentEvents} showInternal={showInternal} />
+            </div>
+          </Surface>
+        </>
+      )}
+
+      {activeDecisionStage === 'decision-log' && (
+        <>
+          <DecisionLogWorkspace
+            decisions={decisions}
+            onDelete={handleDeleteDecision}
+            onExport={handleExportDecisions}
+            showInternal={showInternal}
+          />
+          <WedgeADecisionLogPanel decisions={decisions} onDelete={handleDeleteDecision} showInternal={showInternal} />
+          <OnePageReportPanel
+            agentRun={agentRun}
+            teamEstimate={teamCostEstimate}
+            recommendation={teamCostRecommendations[0]}
+            decisions={decisions}
+            riskCards={teamCostRiskCards.length > 0 ? teamCostRiskCards : riskCards}
+            onExport={handleExportOnePageReport}
+            operatingAssetHealth={operatingAssetHealth}
+            trustInspection={importedUsage?.trustInspection}
+            formulaVersion={COST_FORMULA_VERSION}
+            providerRegistryVersion={PROVIDER_REGISTRY_VERSION}
+            snapshotVersion={agentSnapshot.snapshotVersion}
+            showInternal={showInternal}
+          />
+        </>
+      )}
+    </div>
+  )
+
   return (
     <div
       data-testid="app-shell"
@@ -1712,18 +2679,33 @@ function App() {
       <main id="workspace" data-testid="decision-console-shell" className="montage-console-shell">
         <LifecycleNavigation
           activeStage={activeDecisionStage}
-          agents={teamCostAgents}
+          operatingAgents={OPERATING_AGENTS}
+          selectedAgentId={requestedOperatingAgentId}
           savedDecisionCount={savedTeamCostDecisionCount}
-          onStageChange={setActiveDecisionStage}
+          showInternal={showInternal}
+          onStageChange={handleDecisionStageChange}
+          onAgentSelect={handleOperatingAgentSelect}
+          onRunAllHands={handleRunFullOperatingReview}
         />
 
         <section data-testid="decision-workspace-panel" className="montage-console-main">
+          <CustomerDashboardEntryPanel
+            dashboard={customerDashboard}
+            onRunSample={() => {
+              setShowTeamCostSimulator(true)
+              setActiveDecisionStage('design')
+            }}
+            onUploadUsage={() => setActiveDecisionStage('design')}
+            onOpenWorkspace={() => setActiveDecisionStage('decision-log')}
+          />
+
           <DecisionWorkspaceIntro
             activeStage={activeDecisionStage}
             remoteBackendStatus={remoteBackendStatus}
             remoteBackendMessage={remoteBackendMessage}
             workspaceId={workspaceId}
-            onOpenTeamCost={() => setShowTeamCostSimulator(open => !open)}
+            showInternal={showInternal}
+            onOpenTeamCost={() => setShowTeamCostSimulator(true)}
           />
 
           <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
@@ -1737,133 +2719,51 @@ function App() {
             </div>
           </div>
 
-          {showTeamCostSimulator && (
-            <div className="grid gap-4 md:gap-6">
-              <TeamCostDemoPathPanel savedDecisionCount={savedTeamCostDecisionCount} />
-              <CompanyWorkInputPanel
-                companyType={teamCostCompanyProfile.companyType}
-                stage={teamCostCompanyProfile.stage}
-                monthlyBudgetUsd={teamCostCompanyProfile.monthlyBudgetUsd}
-                workItems={teamCostWorkItems}
-                onCompanyTypeChange={companyType => setTeamCostCompanyProfile(profile => ({ ...profile, companyType }))}
-                onStageChange={stage => setTeamCostCompanyProfile(profile => ({ ...profile, stage }))}
-                onMonthlyBudgetUsdChange={monthlyBudgetUsd => setTeamCostCompanyProfile(profile => ({
-                  ...profile,
-                  monthlyBudgetUsd: Number.isFinite(monthlyBudgetUsd) ? Math.max(0, monthlyBudgetUsd) : 0,
-                }))}
-                onWorkItemEnabledChange={handleTeamCostWorkItemEnabledChange}
-                onWorkItemMonthlyVolumeChange={handleTeamCostWorkItemMonthlyVolumeChange}
-              />
-              <AITeamSpecPanel
-                agents={teamCostAgents}
-                models={MODELS}
-                accountability={teamCostAccountability}
-                onMonthlyRunsChange={handleTeamCostMonthlyRunsChange}
-                onModelChange={handleTeamCostModelChange}
-                onCallsPerRunChange={handleTeamCostCallsPerRunChange}
-                onRetryRateChange={handleTeamCostRetryRateChange}
-                onCacheHitRateChange={handleTeamCostCacheHitRateChange}
-                onHumanReviewGateChange={handleTeamCostHumanReviewGateChange}
-                onArtifactTokensChange={handleTeamCostArtifactTokensChange}
-                onArtifactReuseChange={handleTeamCostArtifactReuseChange}
-                onAssignedTasksChange={handleTeamCostAssignedTasksChange}
-                onAccountabilityChange={handleTeamCostAccountabilityChange}
-              />
-              <TeamCostForecastPanel
-                teamEstimate={teamCostEstimate}
-                estimates={teamCostEstimates}
-                bottlenecks={teamCostBottlenecks}
-                deliverables={attributedDeliverables}
-                performanceSummary={deliverablePerformanceSummary}
-              />
-              <OptimizationReviewPanel
-                recommendations={teamCostRecommendations}
-                events={teamCostEvents}
-                riskCards={teamCostRiskCards}
-                currentMonthlyCostUsd={teamCostEstimate.monthlyCostUsd}
-                operatingDecisionKind={operatingDecisionKind}
-                operatingDecisionReason={operatingDecisionReason}
-                onAdopt={handleAdoptTeamCostOptimization}
-                onReject={handleRejectTeamCostOptimization}
-                onOperatingDecisionKindChange={setOperatingDecisionKind}
-                onOperatingDecisionReasonChange={setOperatingDecisionReason}
-                onRecordOperatingDecision={handleRecordOperatingDecision}
-              />
-              <WedgeADecisionLogPanel decisions={decisions} onDelete={handleDeleteDecision} />
-              <ActualUsagePerformanceLogsPanel
-                usageSnapshotRef={usageSnapshotRef}
-                usageHistory={usageHistory}
-                calibration={teamCostCalibration}
-                canApplyCalibration={hasOperatingDecisionForCalibration}
-                weeklyReportRun={weeklyReportRun}
-                onGenerateCalibration={handleGenerateCalibrationProposal}
-                onApplyCalibration={handleApplyCalibrationProposal}
-                onCreateWeeklyReport={handleCreateWeeklyReport}
-              />
+          {showInternal && (
+          <div data-testid="operating-asset-health" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-primary-normal">Operating asset health</p>
+              <Badge tone="primary">{operatingAssetSummary.activeAgentCount} active operating agents</Badge>
             </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {operatingAssetHealth.map(item => (
+                <Badge key={item} tone={item.includes('stale') || item.includes('needs_mapping') ? 'caution' : 'neutral'}>
+                  {item}
+                </Badge>
+              ))}
+              {P1_AUTOMATION_MODULES.slice(0, 3).map(module => (
+                <Badge key={module.id} tone="neutral">
+                  {module.label}: automation_ready
+                </Badge>
+              ))}
+            </div>
+            <div data-testid="official-updates-panel" className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+              <p className="text-xs font-semibold uppercase text-primary-normal">Official Research Watchtower</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge tone="primary">{officialWatchtowerSummary.activeSourceCount} official sources</Badge>
+                <Badge tone="caution">{officialWatchtowerSummary.activeChineseProviderGroupCount} China provider groups</Badge>
+                <Badge tone="neutral">{INITIAL_MODEL_RELEASE_CANDIDATES.length} model release candidates</Badge>
+                <Badge tone="neutral">FX review required for CNY pricing</Badge>
+              </div>
+            </div>
+          </div>
           )}
 
-          <div className="grid gap-4">
-            <Surface
-              id="import"
-              eyebrow="Usage log entry point"
-              title="1. Import"
-              description="Start from CSV logs or the SparkClaw sample. Token fields come from logs; business denominators stay explicit."
-            >
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
-                <UsageImportPanel importedSummary={importedUsage} onImport={handleUsageImport} />
-                <TeamDesignerPanel config={aiTeamConfiguration} />
-              </div>
-            </Surface>
-
-            <OperationalSignalSummary summary={operationalSignals} />
-
-            <CostAttributionWorkspace attribution={attribution} />
-
-            <div id="margin">
-              <MarginRiskWorkspace
-                planMargins={planMargins}
-                customerMargins={customerMargins}
-                topDecileShare={heavyUsers.topDecileShare}
-              />
-            </div>
-
-            <div id="pricing">
-              <PricingSimulatorWorkspace
-                scenarios={scenarios}
-                riskCards={riskCards}
-                onAdopt={handleAdoptCreditScenario}
-              />
-            </div>
-
-            <Surface
-              id="report"
-              eyebrow="Agent output"
-              title="5. Report Output"
-              description="The report keeps deterministic numbers and model provenance visible, while the agent layer drafts grounded interpretation."
-            >
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
-                <SummaryCard state={legacyState} />
-                <AgentReportWorkspace events={agentEvents} />
-              </div>
-            </Surface>
-
-            <DecisionLogWorkspace
-              decisions={decisions}
-              onDelete={handleDeleteDecision}
-              onExport={handleExportDecisions}
-            />
-          </div>
+          {stageWorkspace}
         </section>
 
         <DecisionAssistantPanel
+          activeStage={activeDecisionStage}
           teamEstimate={teamCostEstimate}
           recommendations={teamCostRecommendations}
           riskCards={teamCostRiskCards}
           events={teamCostEvents}
+          agentRun={agentRun}
+          operatingAgents={OPERATING_AGENTS}
           llmMode={teamCostLlmMode}
           savedDecisionCount={savedTeamCostDecisionCount}
           thresholdPolicy={thresholdPolicy}
+          showInternal={showInternal}
           onThresholdOverride={handleThresholdOverride}
           onAdopt={handleAdoptTeamCostOptimization}
           onReject={handleRejectTeamCostOptimization}

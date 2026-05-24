@@ -27,6 +27,15 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   deepseek: 'DeepSeek',
   alibaba: 'Alibaba',
   moonshot: 'Moonshot',
+  zai: 'Z.ai / GLM',
+  minimax: 'MiniMax',
+  bytedance: 'ByteDance',
+  baidu: 'Baidu',
+  tencent: 'Tencent',
+  stepfun: 'StepFun',
+  '01ai': '01.AI',
+  baichuan: 'Baichuan',
+  sensetime: 'SenseTime',
 }
 
 interface Props {

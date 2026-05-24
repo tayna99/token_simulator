@@ -4,11 +4,13 @@
 
 ## 1. 수집 전 원칙
 
-- 새 pain tag를 만들지 않는다.
+- 새 pain tag를 만들지 않는다. 새 태그가 필요하면 먼저 [pain_taxonomy.md](pain_taxonomy.md)와 validator의 허용 태그를 같이 업데이트한다.
 - evidence마다 `pain_tag`는 1~3개만 붙인다.
 - 개인 구독/한도 불만과 팀/제품/마진 문제를 분리한다.
 - `frequency_signal`과 `business_keyword_frequency`를 섞지 않는다.
 - `pain_margin_unknown`은 기능/고객/보고서/job 단위 원가나 판매 가격 대비 마진이 있을 때만 붙인다.
+- URL/날짜/quote가 모두 확인된 row만 [evidence_board.csv](evidence_board.csv)에 넣는다.
+- quote가 없거나 직접 검증하지 못한 후보, 중복 후보, Group C 내부 도구 후보는 [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv)에 보관한다.
 
 ## 2. Stream A: 많이 보이는 불만
 
@@ -47,16 +49,29 @@
 
 1. 후보를 찾는다.
 2. 원문 링크와 날짜를 확인한다.
-3. `raw_quote`는 짧게 보존한다.
+3. `exact_quote`는 짧게 보존한다.
 4. `summary_ko`는 한국어로 쉽게 쓴다.
 5. persona를 붙인다: solo dev, startup CTO, PM, infra engineer, finance/ops 등.
-6. context를 붙인다: personal, team, production, enterprise 등.
+6. group을 붙인다: `A`, `B`, `A+B`.
 7. `pain_tag`를 1~3개만 붙인다.
-8. `severity`, `frequency_signal`, `wtp_score`를 1~5로 입력한다.
-9. `opportunity_score = severity * frequency_signal * wtp_score`를 계산한다.
-10. business keyword 후보 수와 채택 수를 `business_keyword_frequency.csv`에 업데이트한다.
+8. `frequency_signal`, `wtp_score`를 1~5로 입력한다.
+9. `evidence_strength`를 `low`, `medium`, `high` 중 하나로 입력한다.
+10. `quote_verified`를 `true`, `false`, `pending` 중 하나로 입력한다.
+11. business keyword 후보 수와 채택 수를 `business_keyword_frequency.csv`에 업데이트한다.
+12. `npm run research:validate`로 CSV 계약을 검증한다.
 
-## 6. 50개 이후 판정
+## 6. 후보 시트 사용 규칙
+
+공식 Evidence Board는 제품 주장에 쓸 수 있는 검증 원장이다. 후보 시트는 버리기 아까운 리서치 재료를 보관하는 곳이다.
+
+| 시트 | 사용 기준 | 제품 주장 사용 가능 여부 |
+| --- | --- | --- |
+| `evidence_board.csv` | URL, 날짜, quote가 확인됨 | 가능 |
+| `evidence_candidates_unverified.csv` | quote 없음, 접근 제한, 중복, off-domain, Group C 후보 | 불가. 재검증 후 승격 필요 |
+
+후보를 공식 원장으로 승격할 때는 `candidate_id`를 `GR-*`로 새로 부여하고, `quote_status`가 아니라 `quote_verified=true/false/pending` 규칙을 따른다.
+
+## 7. 50개 이후 판정
 
 아래 빈칸을 채울 수 있어야 한다.
 

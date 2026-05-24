@@ -1,8 +1,43 @@
 import type { FactSourceSnapshot, ThresholdPolicy } from '../../metrics/lib/thresholdPolicy'
+import type { TrustInspectionStatus } from '../../trust/lib/securityMiddleware'
+import type { TrustWarning } from '../../trust/lib/dataIntakePolicy'
 
 export type DecisionStatus = 'adopted' | 'rejected' | 'superseded'
 export type OperatingDecisionKind = 'approve' | 'automate' | 'authority' | 'policy' | 'attribution' | 'ownership'
 export type DecisionAiMode = 'llm_assisted' | 'deterministic_fallback' | 'unknown'
+
+export interface OperatingLedgerMetadata {
+  workstream: string
+  source: string
+  agentUsed: string
+  proposedChange: string
+  humanDecision: string
+  artifactUpdated: string
+  impact: string
+  followUp: string
+}
+
+export interface AgentReviewMetadata {
+  calledAgentIds: string[]
+  primaryAgentId: string | null
+  reviewerAgentIds: string[]
+  usedCapabilityTools: string[]
+  snapshotVersion: string
+  supervisorSummary: string
+}
+
+export interface TrustReviewMetadata {
+  status: TrustInspectionStatus | 'unknown'
+  warnings: TrustWarning[] | string[]
+  retentionNote: string
+}
+
+export interface ReportReviewMetadata {
+  noRawPrompt: boolean
+  noUncitedNumbers: boolean
+  providerSourceVisible: boolean
+  formulaVersionVisible: boolean
+}
 
 export interface DecisionInput {
   kind?: OperatingDecisionKind
@@ -18,6 +53,10 @@ export interface DecisionInput {
   thresholdSnapshot?: Partial<ThresholdPolicy>
   factSourceSnapshot?: FactSourceSnapshot[]
   aiMode?: DecisionAiMode
+  operatingLedger?: OperatingLedgerMetadata | null
+  agentReview?: AgentReviewMetadata | null
+  trustReview?: TrustReviewMetadata | null
+  reportReview?: ReportReviewMetadata | null
 }
 
 export interface Decision extends DecisionInput {
@@ -29,6 +68,10 @@ export interface Decision extends DecisionInput {
   thresholdSnapshot: Partial<ThresholdPolicy>
   factSourceSnapshot: FactSourceSnapshot[]
   aiMode: DecisionAiMode
+  operatingLedger: OperatingLedgerMetadata | null
+  agentReview: AgentReviewMetadata | null
+  trustReview: TrustReviewMetadata | null
+  reportReview: ReportReviewMetadata | null
 }
 
 const STORAGE_KEY = 'token-simulator:decision-log'
@@ -64,7 +107,41 @@ export function createDecision(input: DecisionInput): Decision {
     thresholdSnapshot: input.thresholdSnapshot ?? {},
     factSourceSnapshot: input.factSourceSnapshot ?? [],
     aiMode: input.aiMode ?? 'unknown',
+    operatingLedger: input.operatingLedger ?? null,
+    agentReview: input.agentReview ?? null,
+    trustReview: input.trustReview ?? null,
+    reportReview: input.reportReview ?? null,
   }
+}
+
+function isPresentText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function validateOperatingLedgerMetadata(value: OperatingLedgerMetadata): void {
+  const missing = ([
+    'workstream',
+    'source',
+    'agentUsed',
+    'proposedChange',
+    'humanDecision',
+    'artifactUpdated',
+    'impact',
+    'followUp',
+  ] as const).filter(key => !isPresentText(value[key]))
+  if (missing.length > 0) {
+    throw new Error(`Operating ledger entry requires ${missing.join(', ')}`)
+  }
+}
+
+export function createOperatingLedgerEntry(
+  input: DecisionInput & { operatingLedger: OperatingLedgerMetadata },
+): Decision & { operatingLedger: OperatingLedgerMetadata } {
+  validateOperatingLedgerMetadata(input.operatingLedger)
+  return createDecision({
+    ...input,
+    kind: input.kind ?? 'policy',
+  }) as Decision & { operatingLedger: OperatingLedgerMetadata }
 }
 
 export function serializeDecisionLog(decisions: Decision[]): string {
@@ -83,6 +160,35 @@ function isDecisionAiMode(value: unknown): value is DecisionAiMode {
   return typeof value === 'string' && DECISION_AI_MODES.has(value as DecisionAiMode)
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+function isAgentReviewMetadata(value: unknown): value is AgentReviewMetadata {
+  if (!isRecord(value)) return false
+  return isStringArray(value.calledAgentIds)
+    && (typeof value.primaryAgentId === 'string' || value.primaryAgentId === null)
+    && isStringArray(value.reviewerAgentIds)
+    && isStringArray(value.usedCapabilityTools)
+    && typeof value.snapshotVersion === 'string'
+    && typeof value.supervisorSummary === 'string'
+}
+
+function isTrustReviewMetadata(value: unknown): value is TrustReviewMetadata {
+  if (!isRecord(value)) return false
+  return typeof value.status === 'string'
+    && isStringArray(value.warnings)
+    && typeof value.retentionNote === 'string'
+}
+
+function isReportReviewMetadata(value: unknown): value is ReportReviewMetadata {
+  if (!isRecord(value)) return false
+  return typeof value.noRawPrompt === 'boolean'
+    && typeof value.noUncitedNumbers === 'boolean'
+    && typeof value.providerSourceVisible === 'boolean'
+    && typeof value.formulaVersionVisible === 'boolean'
+}
+
 function isDecision(value: unknown): value is DecisionInput & { id: string; createdAt: string } {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<Decision>
@@ -99,6 +205,10 @@ function isDecision(value: unknown): value is DecisionInput & { id: string; crea
     && (!('thresholdSnapshot' in candidate) || isRecord(candidate.thresholdSnapshot))
     && (!('factSourceSnapshot' in candidate) || Array.isArray(candidate.factSourceSnapshot))
     && (!('aiMode' in candidate) || isDecisionAiMode(candidate.aiMode))
+    && (!('operatingLedger' in candidate) || candidate.operatingLedger === null || isRecord(candidate.operatingLedger))
+    && (!('agentReview' in candidate) || candidate.agentReview === null || isAgentReviewMetadata(candidate.agentReview))
+    && (!('trustReview' in candidate) || candidate.trustReview === null || isTrustReviewMetadata(candidate.trustReview))
+    && (!('reportReview' in candidate) || candidate.reportReview === null || isReportReviewMetadata(candidate.reportReview))
 }
 
 function normalizeDecision(decision: DecisionInput & { id: string; createdAt: string }): Decision {
@@ -110,6 +220,10 @@ function normalizeDecision(decision: DecisionInput & { id: string; createdAt: st
     thresholdSnapshot: isRecord(decision.thresholdSnapshot) ? decision.thresholdSnapshot as Partial<ThresholdPolicy> : {},
     factSourceSnapshot: Array.isArray(decision.factSourceSnapshot) ? decision.factSourceSnapshot : [],
     aiMode: isDecisionAiMode(decision.aiMode) ? decision.aiMode : 'unknown',
+    operatingLedger: isRecord(decision.operatingLedger) ? decision.operatingLedger as unknown as OperatingLedgerMetadata : null,
+    agentReview: isAgentReviewMetadata(decision.agentReview) ? decision.agentReview : null,
+    trustReview: isTrustReviewMetadata(decision.trustReview) ? decision.trustReview : null,
+    reportReview: isReportReviewMetadata(decision.reportReview) ? decision.reportReview : null,
   }
 }
 

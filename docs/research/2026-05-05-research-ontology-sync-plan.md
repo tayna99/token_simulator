@@ -14,14 +14,14 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 ## 싱크 기준
 
-1. 제품 정의의 중심 pain은 `pain_margin_unknown`, `pain_quality_tradeoff`, `pain_provider_compare`, `pain_cost_unpredictable`이다.
-2. `pain_tracking_wrong`은 중요하지만 제품의 최종 가치라기보다 신뢰도와 데이터 수집의 전제다.
+1. 제품 정의의 중심 pain은 `pain_margin_unknown`, `pain_customer_profitability_unknown`, `pain_heavy_user_loss`, `pain_usage_pricing_mismatch`, `pain_feature_cost_unknown`이다.
+2. `pain_tracking_wrong`과 `pain_cost_unpredictable`은 중요하지만 제품의 최종 가치라기보다 유입과 데이터 신뢰도의 전제다.
 3. `pain_team_budget`은 알림/가드레일 후보지만, MVP 기본 UI 복귀는 50개 evidence 이후로 미룬다.
 4. `pain_token_waste`와 `pain_limit_confusion`은 개발자 불만이 크지만 B2B 구매 신호를 더 확인해야 한다.
 
 ## 다음 40개 evidence 수집 기준
 
-현재 10개 pilot은 developer tooling과 tracking bug에 치우쳐 있다. 다음 evidence는 아래 표현이 있는 글을 우선 수집한다.
+현재 Grok evidence는 margin/pricing 방향을 강화했다. 다음 evidence는 아래 표현이 있는 글을 계속 우선 수집한다.
 
 - cost per customer
 - gross margin
@@ -69,12 +69,14 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 ## MVP 반영 계획
 
-### P0 유지
+### P0 유지/강화
 
 - CSV usage import
 - 기능별 비용 Top 분석
-- 비즈니스 단위 원가
+- 고객/비즈니스 단위 원가
 - 기능별 판매가와 gross margin
+- heavy-user profitability
+- usage-based / credit / hybrid pricing simulation
 - raw cost vs effective cost
 - PM/CEO/개발자용 보고서
 
@@ -82,7 +84,7 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 - provider별 가격표 override
 - usage/billing reconciliation
-- customer/key별 비용 분석
+- AI COGS 분리 리포트
 
 ### P2 또는 archive 유지
 
@@ -95,7 +97,10 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 - [ ] HN/GitHub 자동 후보 수집 스크립트로 margin/pricing 키워드 후보를 뽑는다.
 - [ ] Reddit은 수동으로 usage-based pricing, AI SaaS margin, cost per user 키워드를 본다.
-- [ ] EV-011부터 EV-050까지 evidence를 추가한다.
+- [x] GR-030부터 GR-033까지 Core Engine attribution evidence를 추가했다.
+- [x] GR-034부터 GR-037까지 plan-level LLM cost / gross margin evidence를 추가했다.
+- [x] GR-038로 CFO/CEO/Board reporting용 margin erosion benchmark를 추가했다.
+- [ ] GR-039부터 다음 evidence를 추가한다. 묶음 후보는 개별 URL/날짜/quote가 확인될 때만 추가한다.
 - [ ] `npm run research:validate`로 점수와 태그 규칙을 검증한다.
 - [ ] Top Pain 10과 MVP P0/P1/P2를 다시 산출한다.
 - [ ] 제품 정의 문구와 README를 50개 evidence 결과에 맞춰 갱신한다.

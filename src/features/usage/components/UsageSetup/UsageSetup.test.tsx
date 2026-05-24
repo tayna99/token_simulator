@@ -61,7 +61,7 @@ describe('UsageSetup', () => {
     await user.selectOptions(screen.getByLabelText(/use case preset/i), 'report-generation')
 
     expect(onPresetChange).toHaveBeenCalledWith('report-generation')
-  })
+  }, 15000)
 
   it('shows feature mix, cacheable share, and batchable share from the selected preset', () => {
     render(

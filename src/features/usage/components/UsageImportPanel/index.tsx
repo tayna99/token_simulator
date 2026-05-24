@@ -5,6 +5,7 @@ import { parseUsageCsv, type UsageImportSummary } from '../../../../lib/usageImp
 import { Button, Field, MetricTile } from '../../../../shared/ui/primitives'
 import { fmtCurrency, fmtTokens } from '../../../../lib/format'
 import { SPARK_CLAW_SAMPLE_CSV } from '../../data/sparkClawSample'
+import { ImportTrustCheckPanel } from '../../../trust/components/ImportTrustCheckPanel'
 
 const SAMPLE_USAGE_CSV = [
   'timestamp,feature,model,input_tokens,output_tokens,total_cost,latency_ms,customer_id',
@@ -17,9 +18,10 @@ const SAMPLE_USAGE_CSV = [
 interface Props {
   importedSummary?: UsageImportSummary | null
   onImport: (summary: UsageImportSummary) => void
+  onSparkClawDemo?: (summary: UsageImportSummary) => void
 }
 
-export function UsageImportPanel({ importedSummary, onImport }: Props) {
+export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }: Props) {
   const { t } = useTranslation()
   const [rawCsv, setRawCsv] = useState(SAMPLE_USAGE_CSV)
   const [error, setError] = useState('')
@@ -40,6 +42,7 @@ export function UsageImportPanel({ importedSummary, onImport }: Props) {
     setRawCsv(SPARK_CLAW_SAMPLE_CSV)
     setError('')
     onImport(summary)
+    onSparkClawDemo?.(summary)
   }
 
   const loadFile = async (file: File | undefined) => {
@@ -67,17 +70,17 @@ export function UsageImportPanel({ importedSummary, onImport }: Props) {
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
             />
           </Field>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button variant="primary" size="sm" onClick={applyCsv}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button variant="primary" size="sm" className="whitespace-nowrap" onClick={applyCsv}>
               {t('usageImport.apply')}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => setRawCsv(SAMPLE_USAGE_CSV)}>
+            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={() => setRawCsv(SAMPLE_USAGE_CSV)}>
               {t('usageImport.sample')}
             </Button>
-            <Button variant="secondary" size="sm" onClick={applySparkClawSample}>
+            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={applySparkClawSample}>
               Load SparkClaw sample
             </Button>
-            <label className="inline-flex h-8 cursor-pointer items-center justify-center rounded-wds border border-line-solid bg-surface-normal px-3 text-xs font-semibold text-label-normal hover:bg-fill-alternative">
+            <label className="inline-flex h-8 cursor-pointer items-center justify-center whitespace-nowrap rounded-wds border border-line-solid bg-surface-normal px-3 text-xs font-semibold text-label-normal hover:bg-fill-alternative">
               {t('usageImport.upload')}
               <input
                 type="file"
@@ -89,6 +92,7 @@ export function UsageImportPanel({ importedSummary, onImport }: Props) {
           </div>
           {error && <p className="text-xs text-status-negative">{error}</p>}
           <p className="text-xs text-label-alternative">{t('usageImport.noManualTokens')}</p>
+          <ImportTrustCheckPanel result={importedSummary?.trustInspection} />
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">

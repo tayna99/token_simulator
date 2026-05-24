@@ -1,10 +1,10 @@
-# Cost-Quality Decision Workspace Implementation Plan
+# AI SaaS Cost-Quality-Margin Decision Workspace Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the simulator from a pure cost calculator into a cost-quality-latency-risk decision workspace that still makes the savings number immediately obvious.
+**Goal:** Turn the simulator from a pure cost calculator into a workspace that turns LLM operational logs into customer-, feature-, model-, plan-, and session-level cost, then connects that cost to gross margin, pricing decisions, and cost-quality-latency-risk tradeoffs.
 
-**Architecture:** Keep raw token pricing and monthly cost math inside `src/lib/calculator.ts`. Add a separate decision layer for quality, latency, operational risk, feature mix, and conditional savings levers, then surface those results through a five-step UX: usage setup, current cost, alternatives, lever recommendations, and report output.
+**Architecture:** Keep raw token pricing and monthly cost math inside `src/lib/calculator.ts`. Add a Core Engine that turns usage logs into attributed cost by customer, feature, model, plan, session, and agent run. Surface those results through a six-step UX: usage import, operational signal summary, cost attribution, margin analysis, pricing simulation, and report output.
 
 **Tech Stack:** Vite 6, React 18, TypeScript 5, Tailwind CSS 3, Recharts, html-to-image, Vitest 4, Testing Library.
 
@@ -12,22 +12,43 @@
 
 ## Product Shape
 
-The new first-run path should read like an operator's workflow:
+## 2026-05-07 Research Alignment
 
-1. Define service usage.
-2. Understand the current model's cost.
-3. Compare a candidate model, including quality and risk.
-4. Rank savings levers with conditions.
-5. Export a PM, developer, or CEO report.
+The product positioning is no longer "LLM 비용 계산기." The stronger direction is:
+
+> LLM 운영 로그를 고객·기능·모델·플랜·세션 단위 원가로 재분류하고, AI SaaS의 마진과 가격정책 판단으로 연결하는 워크스페이스.
+
+The core product question is:
+
+> 우리 AI 기능은 고객별·기능별로 얼마의 원가를 만들고, 어떤 고객이나 기능이 마진을 깨고 있는가?
+
+The product model is:
+
+> Group A는 entry point, Core Engine은 비용 귀속 레이어, Group B는 paid value다.
+
+- Group A: entry point. Frequent developer/operations complaints such as token spike, cache miss, quota, agent loop, and provider delay explain adoption and onboarding.
+- Core Engine: cost attribution layer. It maps usage to customer, feature, model, plan, session, and agent run cost.
+- Group B: paid value. Customer profitability, plan gross margin, heavy-user loss, usage-based pricing, credit pricing, and CEO/CFO/Board reporting explain why a company pays.
+
+The new first-run path should read like an AI SaaS unit economics workflow:
+
+1. Bring in LLM usage.
+2. Summarize operational signals such as token spikes, cache miss candidates, and agent loop cost.
+3. Attribute cost by customer, feature, model, plan, session, and agent run.
+4. Understand raw cost, effective cost, and plan/customer gross margin.
+5. Simulate pricing choices: usage-based, credit, hybrid, cap, and overage.
+6. Export a PM, developer, CEO/CFO, or Finance report.
 
 The headline savings number remains the strongest demo artifact: examples like `$287/mo -> $10/mo` and `96.3% savings` should stay visually prominent. The change is that every savings claim gets an adjacent quality/risk assessment so the UI does not imply that cheaper is automatically better.
 
 ## MVP Scope
 
-Build these four surfaces first:
+Build these surfaces first:
 
 - Usage input and presets: RAG chatbot, document summary, code generation, customer inquiry classification, report generation.
-- Current model vs candidate model comparison: monthly cost, annual cost, cost/request, input/output breakdown.
+- Current model vs candidate model comparison: monthly cost, annual cost, cost/request, customer cost, input/output breakdown.
+- Attribution and business unit economics: customer, feature, model, plan, session, and agent-run cost; cost per customer/report/ticket/job; selling price; gross margin; heavy-user loss.
+- Pricing scenarios: seat, usage-based, credit, hybrid, cap, and overage assumptions where the user provides the denominator, selling price, and plan assumptions.
 - Savings simulation: model switch, prompt caching, batch processing, output token cap, feature-level routing.
 - Report generation: PM summary, developer breakdown, CEO savings summary.
 

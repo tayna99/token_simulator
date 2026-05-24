@@ -37,4 +37,20 @@ describe('ModelSelector', () => {
     expect(screen.getAllByText(/\$5.00 \/ \$30.00 per 1M tokens/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/under 270K/i)).toBeInTheDocument()
   })
+
+  it('shows announced models without API pricing but disables them for deterministic cost selection', () => {
+    render(
+      <ModelSelector
+        label="Candidate model"
+        value="claude-sonnet-4.6"
+        onChange={vi.fn()}
+      />
+    )
+
+    const omniOption = screen.getByRole('option', {
+      name: /Gemini Omni Flash - API pricing not published/i,
+    }) as HTMLOptionElement
+
+    expect(omniOption).toBeDisabled()
+  })
 })

@@ -16,9 +16,9 @@
 | `docs/cost-quality-decision-workspace.md` | cost-quality-risk UX 계획 | 싼 모델 추천만으로는 위험하며 quality/risk/effective cost가 필요하다. |
 | `PLAN.md` | developer-first decision workspace 계획 | 기능 갤러리가 아니라 의사결정 흐름을 좁혀야 한다. |
 | `docs/architecture/folder-structure.md` | MVP 구조와 archive 기준 | guardrails/developer diagnostics는 research-gated로 보류되어 있다. |
-| `docs/research/pain_taxonomy.md` | pain 분류 기준 | `pain_margin_unknown`, `pain_quality_tradeoff`, `pain_provider_compare`, `pain_cost_unpredictable`이 제품 정의상 핵심이다. |
-| `docs/research/token_cost_ontology.md` | Evidence -> Pain -> Feature 연결 | 제품은 Evidence를 PM/CEO/개발자 리포트로 변환하는 구조다. |
-| `docs/research/developer-token-cost-pain-report.md` | 10개 pilot 결과 | 현재 pilot은 tracking/cost bug에 치우쳐 있고 margin/pricing evidence가 부족하다. |
+| `docs/research/pain_taxonomy.md` | pain 분류 기준 | `pain_margin_unknown`, `pain_customer_profitability_unknown`, `pain_heavy_user_loss`, `pain_usage_pricing_mismatch`, `pain_feature_cost_unknown`이 MVP 핵심 pain이다. |
+| `docs/research/token_cost_ontology.md` | Evidence -> Pain -> Feature 연결 | 제품은 `LLM usage -> feature cost -> customer cost -> gross margin -> pricing decision` 흐름으로 evidence를 PM/CEO/개발자 리포트로 변환한다. |
+| `docs/research/developer-token-cost-pain-report.md` | Grok evidence report | Group A는 개발자 유입 이유, Group B는 회사가 돈 낼 이유라는 결론을 정리한다. |
 | `docs/research/2026-05-05-research-ontology-sync-plan.md` | repo/Obsidian 싱크 계획 | 다음 40개 evidence는 business keyword를 의도적으로 모아야 한다. |
 | `docs/research/business_keyword_frequency.csv` | business keyword 빈도표 | business keyword 빈도는 evidence별 `frequency_signal`과 분리해야 한다. |
 | Obsidian 제품 정의/핵심/프로토콜/온톨로지 문서 | 기획 원본 | 최종 포지션은 "AI 기능의 원가·마진·가격정책을 해석해주는 도구"다. |
@@ -46,15 +46,13 @@ MVP는 "토큰 수 입력 계산기"가 아니라 아래 질문에 답해야 한
 
 ### 2.2 현재 evidence는 치우쳐 있다
 
-10개 pilot의 Top Pain은 아래와 같다.
+최신 Grok evidence의 Top Pain은 validator로 계산한다.
 
-```text
-pain_tracking_wrong: 286
-pain_cost_unpredictable: 180
-pain_provider_compare: 124
+```bash
+npm run research:validate
 ```
 
-이 결과는 개발자 도구와 usage/cost tracking 문제를 잘 보여준다. 하지만 제품 정의의 가장 돈 되는 축인 `cost per customer`, `gross margin`, `usage-based pricing`, `AI SaaS margin`, `PM/CEO/Finance` evidence는 아직 부족하다.
+현재는 `pain_usage_pricing_mismatch`, `pain_margin_unknown`, `pain_heavy_user_loss`, `pain_customer_profitability_unknown` 계열이 강하다. 이 결과는 제품 정의의 가장 돈 되는 축인 `cost per customer`, `gross margin`, `usage-based pricing`, `AI SaaS margin`, `PM/CEO/Finance` evidence를 더 모아야 한다는 판단과 맞다.
 
 ### 2.3 그래서 리서치 표본을 두 갈래로 나눠야 한다
 
@@ -88,7 +86,6 @@ pain_provider_compare: 124
 평가 기준:
 
 - `frequency_signal`
-- `severity`
 - `pain_tag`
 - `possible_feature`
 
@@ -177,25 +174,25 @@ usage-based pricing 후보 12개 발견, 그중 6개 채택
 | 위험 | 개인 불만에 끌려감 | 표본이 적어서 과해석 |
 | MVP 반영 | 진입점/설명 보강 | 핵심 기능/가격 검증 |
 
-## 5. 다음 40개 Evidence 수집 설계
+## 5. 다음 Evidence 수집 설계
 
-현재 EV-001~EV-010은 pilot이다. 다음은 EV-011~EV-050까지 채운다.
+현재 공식 Evidence Board는 `GR-038`까지 채웠다. 다음 확장은 `GR-039`부터 50개까지 채운다.
 
 | 구분 | 목표 채택 수 | 목적 |
 | --- | ---: | --- |
-| Stream A: 많이 보이는 불만 | 16 | 제품 진입점과 개발자 pain 확인 |
-| Stream B: 돈 되는 신호 | 24 | 구매 가능성과 MVP 핵심 가치 확인 |
-| 합계 | 40 | 50개 v1 evidence 완성 |
+| Stream A: 많이 보이는 불만 | 3~4 | 제품 진입점과 개발자 pain 확인 |
+| Stream B: 돈 되는 신호 | 8~9 | 구매 가능성과 MVP 핵심 가치 확인 |
+| 합계 | 12 | 50개 v1 evidence 완성 |
 
 Stream B 안에서는 아래 목표를 둔다.
 
 | keyword_group | 목표 채택 수 | 핵심 pain |
 | --- | ---: | --- |
-| `cost_per_customer` | 5 | `pain_margin_unknown` |
+| `cost_per_customer` | 5 | `pain_customer_profitability_unknown` |
 | `gross_margin` | 5 | `pain_margin_unknown` |
-| `usage_based_pricing` | 5 | `pain_margin_unknown`, `pain_cost_unpredictable` |
-| `ai_saas_margin` | 5 | `pain_margin_unknown`, `pain_quality_tradeoff` |
-| `pm_ceo_finance` | 4 | `pain_margin_unknown`, `pain_team_budget` |
+| `usage_based_pricing` | 5 | `pain_usage_pricing_mismatch` |
+| `ai_saas_margin` | 5 | `pain_margin_unknown`, `pain_heavy_user_loss` |
+| `pm_ceo_finance` | 4 | `pain_board_reporting_gap`, `pain_ai_cogs_untracked` |
 
 ## 6. 채택 기준
 
@@ -227,7 +224,7 @@ Stream B 안에서는 아래 목표를 둔다.
 다음 조건 중 2개 이상이면 현재 MVP 방향을 계속 밀고 간다.
 
 - `pain_margin_unknown`이 Top 5 안에 들어온다.
-- `pain_quality_tradeoff`가 Top 5 안에 들어온다.
+- `pain_customer_profitability_unknown` 또는 `pain_heavy_user_loss`가 Top 5 안에 들어온다.
 - Stream B evidence가 20개 이상 채택된다.
 - `pm_ceo_finance` evidence가 4개 이상 채택된다.
 - business keyword evidence의 평균 `wtp_score >= 4`다.
@@ -338,7 +335,7 @@ AI feature pricing
 작업:
 
 - pain_tag 1~3개만 부여
-- `severity`, `frequency_signal`, `wtp_score` 입력
+- `frequency_signal`, `wtp_score`, `evidence_strength`, `quote_verified` 입력
 - business keyword 후보/채택 수 업데이트
 - 개인 불만과 B2B signal 분리
 

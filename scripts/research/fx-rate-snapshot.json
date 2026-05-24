@@ -1,0 +1,8 @@
+{
+  "base": "CNY",
+  "quote": "USD",
+  "rate": null,
+  "source": "manual_review_required",
+  "capturedAt": null,
+  "note": "Native CNY pricing is preserved. USD conversion requires an explicit FX snapshot before customer-facing calculations."
+}

@@ -5,7 +5,6 @@ import { UsageImportPanel } from './index'
 
 describe('UsageImportPanel', () => {
   it('parses pasted CSV and sends imported usage summary', async () => {
-    const user = userEvent.setup()
     const onImport = vi.fn()
     render(<UsageImportPanel onImport={onImport} />)
 
@@ -14,7 +13,7 @@ describe('UsageImportPanel', () => {
         value: 'feature,model,input_tokens,output_tokens,total_cost\nrag_chat,claude-sonnet-4.6,1000,500,0.01',
       },
     })
-    await user.click(screen.getByRole('button', { name: /apply csv usage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /apply csv usage/i }))
 
     expect(onImport).toHaveBeenCalledTimes(1)
     expect(onImport.mock.calls[0][0]).toMatchObject({

@@ -1,5 +1,5 @@
 // src/components/ScenarioPlanner/ScenarioPlanner.test.tsx
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect } from 'vitest'
 import { ScenarioPlanner } from './index'
@@ -86,13 +86,11 @@ describe('ScenarioPlanner', () => {
   })
 
   it('allows editing traffic multiplier', async () => {
-    const user = userEvent.setup()
     render(<ScenarioPlanner state={BASE_STATE} />)
     const trafficInputs = screen.getAllByLabelText(/best traffic multiplier/i)
     const bestTraffic = trafficInputs[0] as HTMLInputElement
 
-    await user.clear(bestTraffic)
-    await user.type(bestTraffic, '0.5')
+    fireEvent.change(bestTraffic, { target: { value: '0.5' } })
     expect(bestTraffic.value).toBe('0.5')
   })
 

@@ -1,5 +1,6 @@
 import { calculateCost } from '../../../lib/calculator'
 import type { Model } from '../../../data/models'
+import { inspectUsageImportSecurity, type TrustInspectionResult } from '../../trust/lib/securityMiddleware'
 
 export interface UsageImportRow {
   timestamp: string | null
@@ -16,6 +17,26 @@ export interface UsageImportRow {
   customerId: string | null
   status: string | null
   costSource: 'explicit' | 'model_price' | 'missing_model'
+}
+
+export type UsageAttributionDimension = 'customer' | 'feature' | 'model' | 'plan' | 'session' | 'agent_run'
+export type ImportHealthStatus = 'ready' | 'needs_mapping' | 'invalid'
+
+export interface UsageImportHealthReport {
+  status: ImportHealthStatus
+  rowCount: number
+  missingDimensionCounts: Record<UsageAttributionDimension, number>
+  piiCandidateCount: number
+  errors: string[]
+}
+
+export interface UsageSchemaMappingProfile {
+  normalizedTable: 'normalized_usage_table'
+  sourceColumns: string[]
+  columns: Partial<Record<
+    'timestamp' | 'request_id' | 'customer_id' | 'plan_id' | 'feature' | 'model' | 'session_id' | 'agent_run_id' | 'input_tokens' | 'output_tokens' | 'total_cost' | 'latency_ms' | 'status',
+    string[]
+  >>
 }
 
 export interface FeatureUsageSummary {
@@ -42,7 +63,26 @@ export interface UsageImportSummary {
   avgOutputTokensPerRequest: number
   p95OutputTokens: number
   topFeatureByCost: FeatureUsageSummary | null
+  importHealthReport?: UsageImportHealthReport
+  schemaMappingProfile?: UsageSchemaMappingProfile
+  trustInspection?: TrustInspectionResult
 }
+
+const FIELD_KEYS = {
+  timestamp: ['timestamp', 'created_at', 'createdAt'],
+  request_id: ['request_id', 'requestId', 'id'],
+  customer_id: ['customer_id', 'customerId', 'user_id', 'userId'],
+  plan_id: ['plan_id', 'planId', 'plan'],
+  feature: ['feature', 'route', 'use_case', 'useCase'],
+  model: ['model', 'model_id', 'modelId'],
+  session_id: ['session_id', 'sessionId', 'conversation_id', 'conversationId'],
+  agent_run_id: ['agent_run_id', 'agentRunId', 'run_id', 'runId'],
+  input_tokens: ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'],
+  output_tokens: ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'],
+  total_cost: ['total_cost', 'cost_usd', 'cost', 'totalCost'],
+  latency_ms: ['latency_ms', 'latencyMs', 'latency'],
+  status: ['status', 'result'],
+} as const
 
 function parseCsvLine(line: string): string[] {
   const values: string[] = []
@@ -85,6 +125,60 @@ function valueFor(record: Record<string, string>, keys: string[]): string | unde
   return keys.map(key => record[key]).find(value => value !== undefined && value !== '')
 }
 
+function mappingProfile(headers: string[]): UsageSchemaMappingProfile {
+  return {
+    normalizedTable: 'normalized_usage_table',
+    sourceColumns: headers,
+    columns: Object.fromEntries(
+      Object.entries(FIELD_KEYS).map(([field, keys]) => [
+        field,
+        keys.filter(key => headers.includes(key)),
+      ]),
+    ) as UsageSchemaMappingProfile['columns'],
+  }
+}
+
+function emptyMissingDimensionCounts(): Record<UsageAttributionDimension, number> {
+  return {
+    customer: 0,
+    feature: 0,
+    model: 0,
+    plan: 0,
+    session: 0,
+    agent_run: 0,
+  }
+}
+
+function piiCandidateCount(rawCsv: string): number {
+  const emailMatches = rawCsv.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []
+  const phoneMatches = rawCsv.match(/\b(?:\+?\d[\d\s().-]{7,}\d)\b/g) ?? []
+  return emailMatches.length + phoneMatches.length
+}
+
+function healthReport(
+  rows: UsageImportRow[],
+  errors: string[],
+  rawCsv: string,
+): UsageImportHealthReport {
+  const missingDimensionCounts = rows.reduce((acc, row) => {
+    if (!row.customerId) acc.customer += 1
+    if (!row.feature) acc.feature += 1
+    if (!row.modelId) acc.model += 1
+    if (!row.planId) acc.plan += 1
+    if (!row.sessionId) acc.session += 1
+    if (!row.agentRunId) acc.agent_run += 1
+    return acc
+  }, emptyMissingDimensionCounts())
+  const hasMissingDimensions = Object.values(missingDimensionCounts).some(count => count > 0)
+  return {
+    status: errors.length > 0 ? 'invalid' : hasMissingDimensions ? 'needs_mapping' : 'ready',
+    rowCount: rows.length,
+    missingDimensionCounts,
+    piiCandidateCount: piiCandidateCount(rawCsv),
+    errors,
+  }
+}
+
 function rowCost(
   record: Record<string, string>,
   model: Model | undefined,
@@ -116,7 +210,8 @@ function percentile(values: number[], ratio: number): number {
 }
 
 export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSummary {
-  const empty = (errors: string[] = []): UsageImportSummary => ({
+  const trustInspection = inspectUsageImportSecurity({ filename: 'inline.csv', rawCsv })
+  const empty = (errors: string[] = [], headers: string[] = []): UsageImportSummary => ({
     rows: [],
     featureSummaries: [],
     errors,
@@ -128,6 +223,9 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     avgOutputTokensPerRequest: 0,
     p95OutputTokens: 0,
     topFeatureByCost: null,
+    importHealthReport: healthReport([], errors, rawCsv),
+    schemaMappingProfile: mappingProfile(headers),
+    trustInspection,
   })
   const lines = rawCsv
     .split(/\r?\n/)
@@ -140,17 +238,17 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
 
   const headers = parseCsvLine(lines[0]).map(header => header.trim())
   const requiredColumns = [
-    { label: 'feature', keys: ['feature', 'route', 'use_case', 'useCase'] },
-    { label: 'model', keys: ['model', 'model_id', 'modelId'] },
-    { label: 'input_tokens', keys: ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'] },
-    { label: 'output_tokens', keys: ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'] },
+    { label: 'feature', keys: FIELD_KEYS.feature },
+    { label: 'model', keys: FIELD_KEYS.model },
+    { label: 'input_tokens', keys: FIELD_KEYS.input_tokens },
+    { label: 'output_tokens', keys: FIELD_KEYS.output_tokens },
   ]
   const missingRequired = requiredColumns
     .filter(group => !group.keys.some(key => headers.includes(key)))
     .map(group => `Missing required column: ${group.label}`)
 
   if (missingRequired.length > 0) {
-    return empty(missingRequired)
+    return empty(missingRequired, headers)
   }
 
   const rows = lines.slice(1).map(line => {
@@ -159,27 +257,27 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
       acc[header] = values[index] ?? ''
       return acc
     }, {})
-    const feature = textFrom(valueFor(record, ['feature', 'route', 'use_case', 'useCase']), 'unknown')
-    const modelId = textFrom(valueFor(record, ['model', 'model_id', 'modelId']), '')
+    const feature = textFrom(valueFor(record, [...FIELD_KEYS.feature]), 'unknown')
+    const modelId = textFrom(valueFor(record, [...FIELD_KEYS.model]), '')
     const model = models.find(item => item.id === modelId || item.name === modelId)
-    const inputTokens = Math.round(numberFrom(valueFor(record, ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'])))
-    const outputTokens = Math.round(numberFrom(valueFor(record, ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'])))
+    const inputTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.input_tokens])))
+    const outputTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.output_tokens])))
     const cost = rowCost(record, model, inputTokens, outputTokens)
 
     return {
-      timestamp: valueFor(record, ['timestamp', 'created_at', 'createdAt']) ?? null,
-      requestId: valueFor(record, ['request_id', 'requestId', 'id']) ?? null,
+      timestamp: valueFor(record, [...FIELD_KEYS.timestamp]) ?? null,
+      requestId: valueFor(record, [...FIELD_KEYS.request_id]) ?? null,
       feature,
       modelId,
-      planId: valueFor(record, ['plan_id', 'planId', 'plan']) ?? null,
-      sessionId: valueFor(record, ['session_id', 'sessionId', 'conversation_id', 'conversationId']) ?? null,
-      agentRunId: valueFor(record, ['agent_run_id', 'agentRunId', 'run_id', 'runId']) ?? null,
+      planId: valueFor(record, [...FIELD_KEYS.plan_id]) ?? null,
+      sessionId: valueFor(record, [...FIELD_KEYS.session_id]) ?? null,
+      agentRunId: valueFor(record, [...FIELD_KEYS.agent_run_id]) ?? null,
       inputTokens,
       outputTokens,
       totalCostUsd: cost.totalCostUsd,
-      latencyMs: numberFrom(valueFor(record, ['latency_ms', 'latencyMs', 'latency'])) || null,
-      customerId: valueFor(record, ['customer_id', 'customerId', 'user_id', 'userId']) ?? null,
-      status: valueFor(record, ['status', 'result']) ?? null,
+      latencyMs: numberFrom(valueFor(record, [...FIELD_KEYS.latency_ms])) || null,
+      customerId: valueFor(record, [...FIELD_KEYS.customer_id]) ?? null,
+      status: valueFor(record, [...FIELD_KEYS.status]) ?? null,
       costSource: cost.costSource,
     }
   })
@@ -239,5 +337,8 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     avgOutputTokensPerRequest: requestCount > 0 ? Math.round(totals.totalOutputTokens / requestCount) : 0,
     p95OutputTokens: percentile(rows.map(row => row.outputTokens), 0.95),
     topFeatureByCost: featureSummaries[0] ?? null,
+    importHealthReport: healthReport(rows, [], rawCsv),
+    schemaMappingProfile: mappingProfile(headers),
+    trustInspection,
   }
 }

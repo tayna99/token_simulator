@@ -78,3 +78,24 @@ def test_team_cost_agent_endpoint_contract(monkeypatch):
     assert body["llmMode"] == "provider-llm"
     assert body["events"][-1]["type"] == "report_draft"
     assert "API team report" in body["events"][-1]["message"]
+
+
+def test_agent_run_endpoint_contract():
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/agent/run",
+        json={
+            "mode": "ask",
+            "activeStage": "cost",
+            "question": "What is breaking margin?",
+            "toolResults": {"monthlyAiCogs": 4820},
+            "riskCards": [{"id": "risk-model-routing-quality", "tags": ["routing"], "source": "risk:test"}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["llmMode"] in ["deterministic-fallback", "provider-llm"]
+    assert "tool:monthlyAiCogs" in body["toolResultRefs"]
+    assert body["answer"]

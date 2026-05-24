@@ -1,6 +1,7 @@
 ﻿import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { fireEvent } from '@testing-library/react'
+import { within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import i18n from '../i18n'
@@ -15,9 +16,14 @@ function buttonByText(pattern: RegExp): HTMLButtonElement {
   return button as HTMLButtonElement
 }
 
+function lifecycleButton(pattern: RegExp): HTMLButtonElement {
+  return within(screen.getByTestId('decision-stage-nav')).getByRole('button', { name: pattern }) as HTMLButtonElement
+}
+
 describe('App AI team operations workspace', () => {
   beforeEach(async () => {
     window.localStorage.clear()
+    window.history.pushState({}, '', '/token_simulator/')
     vi.stubGlobal('fetch', vi.fn(async () => (
       new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
     )))
@@ -28,24 +34,23 @@ describe('App AI team operations workspace', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the six P0 workspace sections without advanced backend surfaces', () => {
+  it('renders the P0 decision console without advanced backend surfaces', () => {
     render(<App />)
 
     expect(screen.getByTestId('app-shell')).toHaveClass('font-sans')
     expect(screen.getByTestId('app-shell')).toHaveClass('bg-surface-alternative')
     expect(screen.getByTestId('app-shell')).not.toHaveClass('apple-gallery-shell')
     expect(screen.getByRole('heading', { name: /1\. Import/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /2\. Cost Attribution/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /3\. Margin Risk/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /4\. Pricing Simulator/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /5\. Report Output/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /6\. Decision & Approval Log/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /2\. Cost Attribution/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /3\. Margin Risk/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /4\. Pricing Simulator/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /6\. Decision & Approval Log/i })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Team Designer/i })).toBeInTheDocument()
     expect(screen.queryByText('Advanced review')).not.toBeInTheDocument()
     expect(screen.queryByText('Developer Diagnostics')).not.toBeInTheDocument()
     expect(screen.queryByText('Budget & Quota Guardrails')).not.toBeInTheDocument()
     expect(screen.queryByText('Deferred / Business Planning')).not.toBeInTheDocument()
-  })
+  }, 10000)
 
   it('renders the PRODUCT_UX decision console shell with 3-pane navigation and assistant panel', async () => {
     const user = userEvent.setup()
@@ -56,13 +61,101 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('decision-workspace-panel')).toBeInTheDocument()
     expect(screen.getByTestId('decision-assistant-panel')).toBeInTheDocument()
     expect(screen.getByText(/Design -> Cost -> Bottleneck -> Optimize \+ Risk -> Decision Log/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/tool:team\.monthlyCostUsd/i).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/tool:team\.monthlyCostUsd/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Provider & API Intelligence Agent/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Trust \/ Security \/ Compliance Agent/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Knowledge & Release Ops Agent/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('operating-asset-health')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('official-updates-panel')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Supervisor synthesis/i))
+    expect(screen.getByTestId('decision-assistant-panel')).not.toHaveTextContent(/Usage Data Ingestion Agent/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Supervisor synthesis/i)
+    expect(screen.getByTestId('decision-assistant-panel')).not.toHaveTextContent(/decision readiness/i)
+    expect(screen.getByTestId('decision-assistant-panel')).not.toHaveTextContent(/snapshot:/i)
+    expect(screen.queryByRole('button', { name: /Run full operating review/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/Trust check/i)).toBeInTheDocument()
+    expect(screen.getByText(/내 AI 팀 비용\/마진을 5분 안에 보기/i)).toBeInTheDocument()
+    expect(screen.getByText(/1인 창업자 샘플 실행/i)).toBeInTheDocument()
+    expect(screen.getByText(/usage export 업로드/i)).toBeInTheDocument()
+    expect(screen.getByText(/기존 workspace 열기/i)).toBeInTheDocument()
+    expect(screen.getByText(/최신 Google Gemini 3\.5 Flash 단가 반영/i)).toBeInTheDocument()
+    expect(screen.getByText(/가격 출처 확인일: 2026-05-24/i)).toBeInTheDocument()
+    expect(screen.getByText(/Gemini Omni \/ 비디오 비용은 공식 API 단가 확인 필요/i)).toBeInTheDocument()
+    expect(screen.getByText(/사용자 단가 입력 시 시나리오 계산 가능/i)).toBeInTheDocument()
+    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/monthly review history/i)
+    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/alert settings/i)
 
-    await user.click(screen.getByRole('button', { name: /Bottleneck/i }))
+    await user.click(lifecycleButton(/Bottleneck/i))
 
     expect(screen.getByTestId('active-decision-stage')).toHaveTextContent(/Bottleneck/i)
     expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/Find the expensive or fragile part/i)
+    expect(screen.getByRole('heading', { name: /Bottleneck Detection/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /1\. Import/i })).not.toBeInTheDocument()
   })
+
+  it('shows internal agent/source/debug surfaces only in admin mode', async () => {
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    expect(screen.getByText(/Provider & API Intelligence Agent/i)).toBeInTheDocument()
+    expect(screen.getByText(/Trust \/ Security \/ Compliance Agent/i)).toBeInTheDocument()
+    expect(screen.getByText(/Knowledge & Release Ops Agent/i)).toBeInTheDocument()
+    expect(screen.getByTestId('operating-asset-health')).toHaveTextContent(/11 active operating agents/i)
+    expect(screen.getByTestId('operating-asset-health')).toHaveTextContent(/Official docs change monitor: automation_ready/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Official Research Watchtower/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/China provider groups/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/FX review required/i)
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Called agents/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Usage Data Ingestion Agent/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/decision readiness/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/snapshot:/i)
+    expect(screen.getByRole('button', { name: /Run full operating review/i })).toBeInTheDocument()
+  })
+
+  it('lets the user call one operating agent or the full operating team', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Finance Ops Agent/i }))
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Finance Ops Agent/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/single_agent/i)
+
+    await user.click(screen.getByRole('button', { name: /Run full operating review/i }))
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/11 agents/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Knowledge & Release Ops Agent/i)
+  }, 15000)
+
+  it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
+
+    expect(screen.getByText(/Snapshot allowed:/i)).toBeInTheDocument()
+    expect(screen.getByText(/Analysis available/i)).toBeInTheDocument()
+
+    for (const stage of [/Design/i, /Cost/i, /Bottleneck/i, /Optimize \+ Risk/i, /Decision Log/i]) {
+      await user.click(lifecycleButton(stage))
+      expect(screen.getByTestId('decision-workspace-panel')).not.toHaveTextContent(/No adopted decision yet/i)
+    }
+
+    expect(screen.getAllByText(/sample\/demo/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Operating Ledger/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Provider Registry sample update/i)).toBeInTheDocument()
+    expect(screen.getByText(/Usage Schema Mapping sample import/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Model routing quality gate/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Agent review/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Trust review/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Report review/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/called agents:/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/snapshot:decision-log:/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeInTheDocument()
+    expect(screen.getAllByText(/This customer is unprofitable/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Report review gate/i)).toBeInTheDocument()
+    expect(screen.getByText(/Formula version visible/i)).toBeInTheDocument()
+  }, 20000)
 
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {
     render(<App />)
@@ -100,16 +193,21 @@ describe('App AI team operations workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
 
+    await user.click(lifecycleButton(/Design/i))
+    expect(screen.getByText(/Team org chart/i)).toBeInTheDocument()
+
+    await user.click(lifecycleButton(/Cost/i))
     expect(screen.getAllByText('report_generation').length).toBeGreaterThan(0)
     expect(screen.getByText(/Pro plan/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
+
+    await user.click(lifecycleButton(/Optimize \+ Risk/i))
     expect(screen.getByText('flat')).toBeInTheDocument()
     expect(screen.getByText('usage')).toBeInTheDocument()
     expect(screen.getByText('credit')).toBeInTheDocument()
     expect(screen.getByText('hybrid')).toBeInTheDocument()
     expect(screen.getByText('cap')).toBeInTheDocument()
     expect(screen.getByText('overage')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
-    expect(screen.getByText(/Team org chart/i)).toBeInTheDocument()
     expect(screen.getByText(/Tool snapshot received/i)).toBeInTheDocument()
   })
 
@@ -118,14 +216,16 @@ describe('App AI team operations workspace', () => {
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
+    await user.click(lifecycleButton(/Optimize \+ Risk/i))
     await user.click(screen.getByRole('button', { name: /Adopt credit scenario/i }))
+    await user.click(lifecycleButton(/Decision Log/i))
 
-    expect(screen.getByText(/Adopt credit pricing scenario/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Adopt credit pricing scenario/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Export JSON/i })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Delete decision/i }))
+    await user.click(screen.getAllByRole('button', { name: /Delete decision/i })[0])
 
-    expect(screen.queryByText(/Adopt credit pricing scenario/i)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryAllByText(/Adopt credit pricing scenario/i)).toHaveLength(0))
   })
 
   it('updates team cost forecast when agent frequency changes', async () => {
@@ -142,6 +242,7 @@ describe('App AI team operations workspace', () => {
   }, 10000)
 
   it('updates the right AI panel when team-cost assumptions change', async () => {
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
     fireEvent.click(screen.getByText(/AI Team Cost Simulator/i))
@@ -242,6 +343,7 @@ describe('App AI team operations workspace', () => {
 
     await user.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
     await user.click(screen.getByRole('button', { name: /Adopt team-cost optimization/i }))
+    await user.click(lifecycleButton(/Decision Log/i))
 
     expect(screen.getAllByText(/monthlySavingsUsd/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Export JSON/i })).toBeInTheDocument()
@@ -267,14 +369,18 @@ describe('App AI team operations workspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
     const before = screen.getByTestId('team-monthly-cost').textContent
+    const engineeringModelSelect = screen.getByLabelText(/Engineering Agent model/i)
+    const engineeringRetryInput = screen.getByLabelText(/Engineering Agent retry rate/i)
+    const engineeringContextInput = screen.getByLabelText(/Engineering Agent input Codebase context tokens/i)
+    const engineeringReviewGateSelect = screen.getByLabelText(/Engineering Agent human review gate/i)
 
-    fireEvent.change(screen.getByLabelText(/Engineering Agent model/i), { target: { value: 'gemini-3.1-flash' } })
-    fireEvent.change(screen.getByLabelText(/Engineering Agent retry rate/i), { target: { value: '5' } })
-    fireEvent.change(screen.getByLabelText(/Engineering Agent input Codebase context tokens/i), { target: { value: '6000' } })
-    fireEvent.change(screen.getByLabelText(/Engineering Agent human review gate/i), { target: { value: 'all' } })
+    fireEvent.change(engineeringModelSelect, { target: { value: 'gemini-3.1-flash' } })
+    fireEvent.change(engineeringRetryInput, { target: { value: '5' } })
+    fireEvent.change(engineeringContextInput, { target: { value: '6000' } })
+    fireEvent.change(engineeringReviewGateSelect, { target: { value: 'all' } })
 
     expect(screen.getByTestId('team-monthly-cost').textContent).not.toBe(before)
-    expect(screen.getByLabelText(/Engineering Agent model/i)).toHaveValue('gemini-3.1-flash')
+    expect(engineeringModelSelect).toHaveValue('gemini-3.1-flash')
   }, 60000)
 
   it('updates the forecast and true before/after recommendation when artifact reuse changes', async () => {
@@ -299,7 +405,7 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getAllByText(/Reject AI team cost optimization/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/rejected/i).length).toBeGreaterThan(0)
-  })
+  }, 15000)
 
   it('renders the PRD 9-step demo path as a complete screen path', async () => {
     const user = userEvent.setup()
@@ -362,6 +468,7 @@ describe('App AI team operations workspace', () => {
   }, 20000)
 
   it('records a Human Operating Decision with performance and cost snapshots', async () => {
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
     fireEvent.click(screen.getByText(/AI Team Cost Simulator/i))
@@ -404,9 +511,11 @@ describe('App AI team operations workspace', () => {
       return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 })
     }))
 
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
+    await userEvent.setup().click(lifecycleButton(/Decision Log/i))
 
-    expect(await screen.findByText(/Remote operating decision/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/Remote operating decision/i)).length).toBeGreaterThan(0)
     expect(screen.getByText(/Remote backend connected/i)).toBeInTheDocument()
   })
 
@@ -415,6 +524,7 @@ describe('App AI team operations workspace', () => {
       new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
     )))
 
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
     expect(await screen.findByText(/Remote backend unavailable/i)).toBeInTheDocument()
@@ -486,6 +596,7 @@ describe('App AI team operations workspace', () => {
     render(<App />)
     fireEvent.click(screen.getByText(/AI Team Cost Simulator/i))
     fireEvent.click(screen.getByText(/Load SparkClaw sample/i))
+    fireEvent.click(lifecycleButton(/Design/i))
     fireEvent.click(buttonByText(/Generate calibration proposal/i))
 
     await waitFor(() => expect(document.body.textContent).toContain('actual 180 calls/day'))

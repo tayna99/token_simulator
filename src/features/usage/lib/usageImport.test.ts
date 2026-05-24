@@ -73,4 +73,45 @@ describe('parseUsageCsv', () => {
     expect(result.totalCostUsd).toBeCloseTo(0.5)
     expect(result.rows[0].costSource).toBe('model_price')
   })
+
+  it('reports import health and missing attribution dimensions without guessing values', () => {
+    const csv = [
+      'timestamp,feature,model,input_tokens,output_tokens',
+      '2026-05-01,classification,gemini-3.1-flash,1000,500',
+    ].join('\n')
+
+    const result = parseUsageCsv(csv, MODELS)
+
+    expect(result.importHealthReport!.status).toBe('needs_mapping')
+    expect(result.importHealthReport!.missingDimensionCounts).toMatchObject({
+      customer: 1,
+      plan: 1,
+      session: 1,
+      agent_run: 1,
+    })
+    expect(result.schemaMappingProfile!.normalizedTable).toBe('normalized_usage_table')
+    expect(result.schemaMappingProfile!.columns.feature).toContain('feature')
+    expect(result.rows[0]).toMatchObject({
+      customerId: null,
+      planId: null,
+      sessionId: null,
+      agentRunId: null,
+    })
+    expect(result.trustInspection?.status).toBe('needs_mapping')
+    expect(result.trustInspection?.analysisScope.blocked).toContain('plan_margin')
+  })
+
+  it('attaches trust inspection that blocks raw prompt and API key exports', () => {
+    const csv = [
+      'timestamp,prompt,api_key,feature,model,input_tokens,output_tokens',
+      '2026-05-01,"raw customer text",sk-test,classification,gemini-3.1-flash,1000,500',
+    ].join('\n')
+
+    const result = parseUsageCsv(csv, MODELS)
+
+    expect(result.trustInspection?.status).toBe('blocked')
+    expect(result.trustInspection?.allowedForSnapshot).toBe(false)
+    expect(result.trustInspection?.warnings).toContain('raw_prompt_detected')
+    expect(result.trustInspection?.warnings).toContain('api_key_candidate_detected')
+  })
 })
