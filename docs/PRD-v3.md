@@ -1,9 +1,9 @@
-# PRD: AgentPayroll v3.1
+# PRD: AgentPayroll v3.2
 
 부제: **AI SaaS Cost · Margin · Decision Operating System**
-문서 버전: 3.1 · 2026-05-24
+문서 버전: 3.2 · 2026-05-24
 상태: Draft
-관계: `docs/PRD-v2.md`를 폐기하지 않는다. v2.4는 복구된 구현 사실 정본이고, v3.1은 현재 합의된 제품 방향과 다음 MVP 순서를 정리한 새 정본 후보다.
+관계: `docs/PRD-v2.md`를 폐기하지 않는다. v2.5는 복구된 구현 사실 정본이고, v3.2는 현재 합의된 제품 방향과 다음 MVP 순서를 정리한 새 정본 후보다.
 
 ---
 
@@ -70,7 +70,7 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse 같은 도구�
 
 | 영역 | 현재 상태 |
 | --- | --- |
-| 모델/레이더 카탈로그 | `models.ts` 기준 42종, 19 provider/source, `pricingStatus` 포함 |
+| 모델/레이더 카탈로그 | `models.ts` 기준 45종, 20 provider/source, `pricingStatus` 포함. Cursor Composer 2.5 Standard/Fast와 Alibaba Qwen3.7-Max 포함 |
 | 사용 기록 | CSV import, SparkClaw sample, bootcamp placeholder sample |
 | 비용 계산 | text + multimodal skeleton, `calculateCost`, `calculateModalityCost`, `calculateMultimodalScenario` |
 | 비용 귀속 | customer / feature / model / plan / session / agent_run |

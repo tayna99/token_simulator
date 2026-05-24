@@ -15,6 +15,10 @@ import { rollupUsageByAxis, type AttributionAxis, type AttributionResult } from 
 import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../features/usage/data/sparkClawSample'
 import { customerProfitability, heavyUserDetection, marginByPlan, type CustomerMarginRow, type MarginRow } from '../features/unit-economics/lib/margin'
 import { calculatePricingScenario, type ScenarioResult } from '../features/pricing/lib/pricingScenario'
+import { buildRateCardDraft, type RateCardDraft } from '../features/pricing/lib/rateCardDraft'
+import { buildPricingFreshnessBadge, type PricingFreshnessBadge } from '../features/facts/lib/pricingFreshness'
+import { buildDecisionHeader, type DecisionHeader } from '../features/decision-loop/lib/decisionHeader'
+import { canExportOnePageReport } from '../features/decision-loop/lib/exportGate'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
 import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
@@ -491,6 +495,9 @@ function OnePageReportPanel({
   formulaVersion,
   providerRegistryVersion,
   snapshotVersion,
+  rateCardDraft,
+  pricingFreshness,
+  decisionHeader,
   showInternal,
 }: {
   agentRun: AgentRunResponse
@@ -504,9 +511,13 @@ function OnePageReportPanel({
   formulaVersion: string
   providerRegistryVersion: string
   snapshotVersion: string
+  rateCardDraft: RateCardDraft
+  pricingFreshness: PricingFreshnessBadge[]
+  decisionHeader: DecisionHeader
   showInternal: boolean
 }) {
   const dataLimitations = trustInspection?.analysisScope.blocked ?? ['raw prompt was not collected']
+  const exportGate = canExportOnePageReport(decisions)
   const onePageReport = buildOnePageReportArtifact({
     title: 'SparkClaw AI Cost Snapshot',
     executiveSummary: 'AI COGS is concentrated in the highest-volume AI team work and requires a human operating decision.',
@@ -529,6 +540,9 @@ function OnePageReportPanel({
     providerRegistryVersion,
     snapshotVersion,
     decisionRefs: decisions.map(decision => decision.id),
+    decisionChoice: exportGate.decisionChoice,
+    rateCardDraft,
+    pricingFreshness,
   })
   const artifact = buildReportArtifact({
     audience: 'ceo_cfo',
@@ -553,9 +567,29 @@ function OnePageReportPanel({
       eyebrow="One-page export"
       title="CEO/CFO/PM/Developer Report"
       description="A paid-value one-pager that keeps cost, margin, risk, decision refs, and AI citations together."
-      action={<Button size="sm" variant="primary" onClick={onExport}>Export one-page report</Button>}
+      action={<Button size="sm" variant="primary" onClick={onExport} disabled={!exportGate.allowed}>Export one-page report</Button>}
     >
       <div className="rounded-wds-lg border border-line-neutral bg-fill-alternative p-4">
+        <section className="mb-3 rounded-wds border border-status-cautionary/30 bg-status-cautionary/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-status-cautionary">{decisionHeader.title}</p>
+          <p className="mt-1 text-sm font-semibold text-label-normal">{decisionHeader.question}</p>
+          <p className="mt-1 text-xs text-label-neutral">{decisionHeader.reason}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge tone={decisionHeader.recommendedChoice === 'hold' ? 'caution' : 'positive'}>
+              recommended: {decisionHeader.recommendedChoice}
+            </Badge>
+            {exportGate.allowed ? (
+              <Badge tone="positive">decision: {exportGate.decisionChoice}</Badge>
+            ) : (
+              <Badge tone="caution">decision required</Badge>
+            )}
+          </div>
+        </section>
+        {!exportGate.allowed && (
+          <p className="mb-3 rounded-wds border border-status-cautionary/30 bg-surface-normal p-3 text-xs text-label-neutral">
+            {exportGate.reason}
+          </p>
+        )}
         <h3 className="text-base font-semibold">{artifact.title}</h3>
         <div className="mt-3 grid gap-3">
           {artifact.sections.map(section => (
@@ -1672,6 +1706,48 @@ function App() {
     () => factSourceSnapshotFromModels(decisionFactSourceModels, new Date().toISOString().slice(0, 10)),
     [decisionFactSourceModels],
   )
+  const pricingFreshnessSnapshot = useMemo(
+    () => decisionFactSourceModels.map(model => buildPricingFreshnessBadge({
+      model,
+      capturedAt: new Date().toISOString(),
+    })),
+    [decisionFactSourceModels],
+  )
+  const primaryRateCardDraft = useMemo(() => {
+    const recommendation = teamCostRecommendations[0]
+    const costPerRequest = teamCostEstimate.monthlyRequests > 0
+      ? teamCostEstimate.monthlyCostUsd / teamCostEstimate.monthlyRequests
+      : 0
+    return buildRateCardDraft({
+      policyType: 'usage_cap',
+      includedCredits: Math.round(Math.max(0, teamCostEstimate.monthlyRequests * 0.8)),
+      overagePricePerRequest: Number((costPerRequest * 1.25).toFixed(4)),
+      capUsdPerCustomer: Math.round(Math.max(0, recommendation?.after.monthlyCostUsd ?? teamCostEstimate.monthlyCostUsd)),
+      affectedCustomerCount: Math.max(1, customerMargins.filter(row => row.marginRisk !== 'healthy').length),
+      marginBasisRefs: [
+        'tool:margin.plan.pro',
+        'basis:rule:gross_margin_thin_pct',
+        ...(recommendation?.toolResultRefs ?? []),
+      ],
+    })
+  }, [
+    customerMargins,
+    teamCostEstimate.monthlyCostUsd,
+    teamCostEstimate.monthlyRequests,
+    teamCostRecommendations,
+  ])
+  const decisionHeader = useMemo(() => buildDecisionHeader({
+    recommendationTitle: teamCostRecommendations[0]?.title ?? 'Review AI team cost policy',
+    monthlySavingsUsd: teamCostRecommendations[0]?.monthlySavingsUsd ?? 0,
+    riskCardIds: teamCostRiskCards.map(card => card.id),
+    pricingFreshnessState: pricingFreshnessSnapshot.some(item => item.state === 'source_changed')
+      ? 'source_changed'
+      : pricingFreshnessSnapshot.some(item => item.state === 'tbd')
+        ? 'tbd'
+        : pricingFreshnessSnapshot.some(item => item.state === 'estimated')
+          ? 'estimated'
+          : 'verified',
+  }), [pricingFreshnessSnapshot, teamCostRecommendations, teamCostRiskCards])
   const operatingAssetSummary = useMemo(() => p0OperatingAssetSummary(), [])
   const operatingAssetHealth = useMemo(() => {
     const staleCount = currentFactSources.filter(source => source.verificationStatus === 'stale').length

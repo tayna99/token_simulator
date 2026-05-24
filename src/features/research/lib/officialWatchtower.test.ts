@@ -41,6 +41,29 @@ describe('officialWatchtower', () => {
     }
   })
 
+  it('tracks current Cursor Composer and Qwen3.7-Max official sources', () => {
+    expect(OFFICIAL_SOURCE_REGISTRY).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'cursor-composer-25-changelog',
+        modelOwner: 'cursor',
+        servingProvider: 'cursor',
+        modelFamilies: ['composer'],
+        sourceKind: 'changelog',
+        url: 'https://cursor.com/changelog/composer-2-5',
+        officialSourceTrust: 'official_pricing',
+      }),
+      expect.objectContaining({
+        id: 'alibaba-qwen37-modelstudio',
+        modelOwner: 'alibaba_qwen',
+        servingProvider: 'alibaba_model_studio',
+        modelFamilies: ['qwen'],
+        sourceKind: 'pricing',
+        url: 'https://modelstudio.alibabacloud.com/',
+        officialSourceTrust: 'official_pricing',
+      }),
+    ]))
+  })
+
   it('keeps first-party and cloud-hosted candidates separate', () => {
     const firstParty = buildModelReleaseCandidate({
       detectedAt: '2026-05-24T00:00:00.000Z',

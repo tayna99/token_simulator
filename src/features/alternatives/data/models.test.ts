@@ -88,6 +88,84 @@ describe('MODELS catalog', () => {
     expect(isCostCalculableModel(model!)).toBe(true)
   })
 
+  it('tracks Cursor Composer 2.5 standard and fast pricing as separate calculable tiers', () => {
+    const standard = getModelById('composer-2.5')
+    const fast = getModelById('composer-2.5-fast')
+
+    expect(standard).toMatchObject({
+      id: 'composer-2.5',
+      name: 'Composer 2.5',
+      provider: 'cursor',
+      inputPrice: 0.5,
+      outputPrice: 2.5,
+      pricingStatus: 'verified',
+      apiPricingAvailable: true,
+      requiresCustomPricing: false,
+      sourceUrl: 'https://cursor.com/changelog/composer-2-5',
+      officialAnnouncementUrl: 'https://cursor.com/blog/composer-2-5',
+      modelOwner: 'cursor',
+      modelFamily: 'composer',
+      servingProvider: 'cursor',
+      pricingRegion: 'global',
+      currency: 'USD',
+      accessPath: 'subscription_plan',
+      officialSourceTrust: 'official_pricing',
+      lastVerifiedAt: '2026-05-24',
+    })
+    expect(fast).toMatchObject({
+      id: 'composer-2.5-fast',
+      name: 'Composer 2.5 Fast',
+      provider: 'cursor',
+      inputPrice: 3,
+      outputPrice: 15,
+      pricingStatus: 'verified',
+      apiPricingAvailable: true,
+      requiresCustomPricing: false,
+      sourceUrl: 'https://cursor.com/changelog/composer-2-5',
+      officialAnnouncementUrl: 'https://cursor.com/blog/composer-2-5',
+      modelOwner: 'cursor',
+      modelFamily: 'composer',
+      servingProvider: 'cursor',
+      pricingRegion: 'global',
+      currency: 'USD',
+      accessPath: 'subscription_plan',
+      officialSourceTrust: 'official_pricing',
+      lastVerifiedAt: '2026-05-24',
+    })
+    expect(standard?.pricingNotes).toMatch(/Kimi K2\.5/i)
+    expect(fast?.pricingNotes).toMatch(/default/i)
+    expect(isCostCalculableModel(standard!)).toBe(true)
+    expect(isCostCalculableModel(fast!)).toBe(true)
+  })
+
+  it('tracks Qwen3.7-Max separately from older Qwen Max rows with verified Model Studio list pricing', () => {
+    const model = getModelById('qwen3.7-max')
+
+    expect(model).toMatchObject({
+      id: 'qwen3.7-max',
+      name: 'Qwen3.7-Max',
+      provider: 'alibaba',
+      inputPrice: 2.5,
+      outputPrice: 7.5,
+      pricingStatus: 'verified',
+      apiPricingAvailable: true,
+      requiresCustomPricing: false,
+      sourceUrl: 'https://modelstudio.alibabacloud.com/',
+      officialAnnouncementUrl: 'https://www.alibabacloud.com/en/campaign/qwen-discount?_p_lc=1',
+      modelOwner: 'alibaba_qwen',
+      modelFamily: 'qwen',
+      servingProvider: 'alibaba_model_studio',
+      pricingRegion: 'international_singapore',
+      currency: 'USD',
+      accessPath: 'cloud_model_studio',
+      officialSourceTrust: 'official_pricing',
+      lastVerifiedAt: '2026-05-24',
+    })
+    expect(model?.pricingNotes).toMatch(/50% promotional pricing/i)
+    expect(getModelById('qwen-3-max')?.id).toBe('qwen-3-max')
+    expect(isCostCalculableModel(model!)).toBe(true)
+  })
+
   it('tracks Chinese model owner and serving provider separately from display provider', () => {
     const qwen = getModelById('qwen-3-max')
     const kimi = getModelById('kimi-k2')

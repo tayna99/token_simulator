@@ -1,5 +1,9 @@
 export type ReportAudience = 'developer' | 'pm' | 'ceo_cfo' | 'board'
 
+import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
+import type { PricingFreshnessBadge } from '../../facts/lib/pricingFreshness'
+import type { RateCardDraft } from '../../pricing/lib/rateCardDraft'
+
 export interface ReportSection {
   title: string
   body: string
@@ -43,6 +47,9 @@ export interface OnePageReportArtifactInput {
   providerRegistryVersion: string
   snapshotVersion?: string
   decisionRefs?: string[]
+  decisionChoice?: DecisionChoice
+  rateCardDraft?: RateCardDraft
+  pricingFreshness?: PricingFreshnessBadge[]
 }
 
 export interface OnePageReportArtifact {
@@ -118,6 +125,23 @@ export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): O
     ...(input.trust.dataLimitations.length > 0
       ? input.trust.dataLimitations.map(item => `- Data limitation: ${item}`)
       : ['- Data limitation: none']),
+    '',
+    '## Operating decision',
+    `- Decision choice: ${input.decisionChoice ?? 'not recorded'}`,
+    ...(input.rateCardDraft ? [
+      '- Rate-card draft',
+      `  - Policy type: ${input.rateCardDraft.policyType}`,
+      `  - Included credits: ${input.rateCardDraft.includedCredits}`,
+      `  - Overage price per request: ${input.rateCardDraft.overagePricePerRequest}`,
+      `  - Customer cap: ${input.rateCardDraft.capUsdPerCustomer}`,
+      `  - Affected customers: ${input.rateCardDraft.affectedCustomerCount}`,
+      `  - Execution mode: ${input.rateCardDraft.executionMode}`,
+      ...input.rateCardDraft.marginBasisRefs.map(ref => `  - Margin basis ref: ${ref}`),
+    ] : ['- Rate-card draft: none']),
+    ...(input.pricingFreshness?.length ? [
+      '- Pricing freshness',
+      ...input.pricingFreshness.map(item => `  - ${item.modelId}: ${item.label} (${item.customerLabel})`),
+    ] : ['- Pricing freshness: not attached']),
     '',
     '## Calculation provenance',
     `- Formula version: ${input.formulaVersion}`,

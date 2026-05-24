@@ -1,8 +1,11 @@
 import type { FactSourceSnapshot, ThresholdPolicy } from '../../metrics/lib/thresholdPolicy'
 import type { TrustInspectionStatus } from '../../trust/lib/securityMiddleware'
 import type { TrustWarning } from '../../trust/lib/dataIntakePolicy'
+import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
+import type { PricingFreshnessBadge } from '../../facts/lib/pricingFreshness'
+import type { RateCardDraft } from '../../pricing/lib/rateCardDraft'
 
-export type DecisionStatus = 'adopted' | 'rejected' | 'superseded'
+export type DecisionStatus = 'adopted' | 'rejected' | 'held' | 'superseded'
 export type OperatingDecisionKind = 'approve' | 'automate' | 'authority' | 'policy' | 'attribution' | 'ownership'
 export type DecisionAiMode = 'llm_assisted' | 'deterministic_fallback' | 'unknown'
 
@@ -47,11 +50,14 @@ export interface DecisionInput {
   toolResultRefs: string[]
   riskCards: string[]
   status: DecisionStatus
+  decisionChoice?: DecisionChoice | null
   createdAt?: string
   performanceSnapshot?: Record<string, unknown>
   costSnapshot?: Record<string, unknown>
   thresholdSnapshot?: Partial<ThresholdPolicy>
   factSourceSnapshot?: FactSourceSnapshot[]
+  rateCardDraft?: RateCardDraft | null
+  pricingFreshnessSnapshot?: PricingFreshnessBadge[]
   aiMode?: DecisionAiMode
   operatingLedger?: OperatingLedgerMetadata | null
   agentReview?: AgentReviewMetadata | null
@@ -67,6 +73,9 @@ export interface Decision extends DecisionInput {
   costSnapshot: Record<string, unknown>
   thresholdSnapshot: Partial<ThresholdPolicy>
   factSourceSnapshot: FactSourceSnapshot[]
+  decisionChoice: DecisionChoice | null
+  rateCardDraft: RateCardDraft | null
+  pricingFreshnessSnapshot: PricingFreshnessBadge[]
   aiMode: DecisionAiMode
   operatingLedger: OperatingLedgerMetadata | null
   agentReview: AgentReviewMetadata | null
@@ -84,6 +93,7 @@ const DECISION_KINDS = new Set<OperatingDecisionKind>([
   'ownership',
 ])
 const DECISION_AI_MODES = new Set<DecisionAiMode>(['llm_assisted', 'deterministic_fallback', 'unknown'])
+const DECISION_CHOICES = new Set<DecisionChoice>(['adopt', 'reject', 'hold'])
 
 function idFromTimestamp(createdAt: string): string {
   return `decision-${createdAt.replace(/[^0-9A-Za-z]/g, '-')}`
@@ -106,6 +116,9 @@ export function createDecision(input: DecisionInput): Decision {
     costSnapshot: input.costSnapshot ?? {},
     thresholdSnapshot: input.thresholdSnapshot ?? {},
     factSourceSnapshot: input.factSourceSnapshot ?? [],
+    decisionChoice: input.decisionChoice ?? null,
+    rateCardDraft: input.rateCardDraft ?? null,
+    pricingFreshnessSnapshot: input.pricingFreshnessSnapshot ?? [],
     aiMode: input.aiMode ?? 'unknown',
     operatingLedger: input.operatingLedger ?? null,
     agentReview: input.agentReview ?? null,
@@ -160,8 +173,36 @@ function isDecisionAiMode(value: unknown): value is DecisionAiMode {
   return typeof value === 'string' && DECISION_AI_MODES.has(value as DecisionAiMode)
 }
 
+function isDecisionChoice(value: unknown): value is DecisionChoice {
+  return typeof value === 'string' && DECISION_CHOICES.has(value as DecisionChoice)
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+function isRateCardDraft(value: unknown): value is RateCardDraft {
+  if (!isRecord(value)) return false
+  return typeof value.policyType === 'string'
+    && typeof value.includedCredits === 'number'
+    && typeof value.overagePricePerRequest === 'number'
+    && typeof value.capUsdPerCustomer === 'number'
+    && typeof value.affectedCustomerCount === 'number'
+    && isStringArray(value.marginBasisRefs)
+    && value.executionMode === 'draft_only'
+    && value.stripeExecutable === false
+    && value.requiresHumanApproval === true
+}
+
+function isPricingFreshnessBadge(value: unknown): value is PricingFreshnessBadge {
+  if (!isRecord(value)) return false
+  return typeof value.modelId === 'string'
+    && ['verified', 'estimated', 'tbd', 'source_changed'].includes(String(value.state))
+    && typeof value.label === 'string'
+    && typeof value.customerLabel === 'string'
+    && typeof value.recheckRequired === 'boolean'
+    && typeof value.sourceUrl === 'string'
+    && typeof value.lastVerifiedAt === 'string'
 }
 
 function isAgentReviewMetadata(value: unknown): value is AgentReviewMetadata {
@@ -196,7 +237,7 @@ function isDecision(value: unknown): value is DecisionInput & { id: string; crea
     && typeof candidate.what === 'string'
     && typeof candidate.why === 'string'
     && typeof candidate.createdAt === 'string'
-    && (candidate.status === 'adopted' || candidate.status === 'rejected' || candidate.status === 'superseded')
+    && (candidate.status === 'adopted' || candidate.status === 'rejected' || candidate.status === 'held' || candidate.status === 'superseded')
     && Array.isArray(candidate.toolResultRefs)
     && Array.isArray(candidate.riskCards)
     && (!('kind' in candidate) || isOperatingDecisionKind(candidate.kind))
@@ -204,6 +245,9 @@ function isDecision(value: unknown): value is DecisionInput & { id: string; crea
     && (!('costSnapshot' in candidate) || isRecord(candidate.costSnapshot))
     && (!('thresholdSnapshot' in candidate) || isRecord(candidate.thresholdSnapshot))
     && (!('factSourceSnapshot' in candidate) || Array.isArray(candidate.factSourceSnapshot))
+    && (!('decisionChoice' in candidate) || candidate.decisionChoice === null || isDecisionChoice(candidate.decisionChoice))
+    && (!('rateCardDraft' in candidate) || candidate.rateCardDraft === null || isRateCardDraft(candidate.rateCardDraft))
+    && (!('pricingFreshnessSnapshot' in candidate) || (Array.isArray(candidate.pricingFreshnessSnapshot) && candidate.pricingFreshnessSnapshot.every(isPricingFreshnessBadge)))
     && (!('aiMode' in candidate) || isDecisionAiMode(candidate.aiMode))
     && (!('operatingLedger' in candidate) || candidate.operatingLedger === null || isRecord(candidate.operatingLedger))
     && (!('agentReview' in candidate) || candidate.agentReview === null || isAgentReviewMetadata(candidate.agentReview))
@@ -219,6 +263,11 @@ function normalizeDecision(decision: DecisionInput & { id: string; createdAt: st
     costSnapshot: isRecord(decision.costSnapshot) ? decision.costSnapshot : {},
     thresholdSnapshot: isRecord(decision.thresholdSnapshot) ? decision.thresholdSnapshot as Partial<ThresholdPolicy> : {},
     factSourceSnapshot: Array.isArray(decision.factSourceSnapshot) ? decision.factSourceSnapshot : [],
+    decisionChoice: isDecisionChoice(decision.decisionChoice) ? decision.decisionChoice : null,
+    rateCardDraft: isRateCardDraft(decision.rateCardDraft) ? decision.rateCardDraft : null,
+    pricingFreshnessSnapshot: Array.isArray(decision.pricingFreshnessSnapshot)
+      ? decision.pricingFreshnessSnapshot.filter(isPricingFreshnessBadge)
+      : [],
     aiMode: isDecisionAiMode(decision.aiMode) ? decision.aiMode : 'unknown',
     operatingLedger: isRecord(decision.operatingLedger) ? decision.operatingLedger as unknown as OperatingLedgerMetadata : null,
     agentReview: isAgentReviewMetadata(decision.agentReview) ? decision.agentReview : null,

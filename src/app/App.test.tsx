@@ -252,6 +252,30 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByText(/Formula version visible/i)).toBeInTheDocument()
   }, 20000)
 
+  it('blocks one-page export until adopt, reject, or hold is recorded', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(lifecycleButton(/Decision Log/i))
+
+    expect(screen.getByText(/오늘 내려야 할 결정/i)).toBeInTheDocument()
+    expect(screen.getByText(/Record adopt, reject, or hold before exporting/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeDisabled()
+  })
+
+  it('lets a user hold an optimization and then export the one-page report', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(lifecycleButton(/Optimize \+ Risk/i))
+    await user.click(screen.getByRole('button', { name: /Hold team-cost optimization/i }))
+    await user.click(lifecycleButton(/Decision Log/i))
+
+    await waitFor(() => expect(screen.getByText(/Hold AI team cost optimization/i)).toBeInTheDocument())
+    expect(screen.getByText(/decision: hold/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeEnabled()
+  }, 15000)
+
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {
     render(<App />)
 

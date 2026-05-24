@@ -1,5 +1,5 @@
-import { calculateCost } from '../../../lib/calculator'
-import type { Model } from '../../../data/models'
+import { calculateCost, calculateMultimodalScenario } from '../../../lib/calculator'
+import { isCostCalculableModel, type Model } from '../../../data/models'
 import { inspectUsageImportSecurity, type TrustInspectionResult } from '../../trust/lib/securityMiddleware'
 
 export interface UsageImportRow {
@@ -12,11 +12,20 @@ export interface UsageImportRow {
   agentRunId: string | null
   inputTokens: number
   outputTokens: number
+  imageInputTokens?: number
+  audioInputSeconds?: number
+  videoInputSeconds?: number
+  videoOutputSeconds?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  toolCallCount?: number
+  webSearchCount?: number
   totalCostUsd: number
   latencyMs: number | null
   customerId: string | null
   status: string | null
   costSource: 'explicit' | 'model_price' | 'missing_model'
+  pricingWarnings?: string[]
 }
 
 export type UsageAttributionDimension = 'customer' | 'feature' | 'model' | 'plan' | 'session' | 'agent_run'
@@ -28,13 +37,14 @@ export interface UsageImportHealthReport {
   missingDimensionCounts: Record<UsageAttributionDimension, number>
   piiCandidateCount: number
   errors: string[]
+  pricingWarnings?: string[]
 }
 
 export interface UsageSchemaMappingProfile {
   normalizedTable: 'normalized_usage_table'
   sourceColumns: string[]
   columns: Partial<Record<
-    'timestamp' | 'request_id' | 'customer_id' | 'plan_id' | 'feature' | 'model' | 'session_id' | 'agent_run_id' | 'input_tokens' | 'output_tokens' | 'total_cost' | 'latency_ms' | 'status',
+    'timestamp' | 'request_id' | 'customer_id' | 'plan_id' | 'feature' | 'model' | 'session_id' | 'agent_run_id' | 'input_tokens' | 'output_tokens' | 'image_input_tokens' | 'audio_input_seconds' | 'video_input_seconds' | 'video_output_seconds' | 'cache_read_tokens' | 'cache_write_tokens' | 'tool_call_count' | 'web_search_count' | 'total_cost' | 'latency_ms' | 'status',
     string[]
   >>
 }
@@ -55,6 +65,7 @@ export interface UsageImportSummary {
   rows: UsageImportRow[]
   featureSummaries: FeatureUsageSummary[]
   errors: string[]
+  pricingWarnings?: string[]
   requestCount: number
   totalInputTokens: number
   totalOutputTokens: number
@@ -79,6 +90,14 @@ const FIELD_KEYS = {
   agent_run_id: ['agent_run_id', 'agentRunId', 'run_id', 'runId'],
   input_tokens: ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'],
   output_tokens: ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'],
+  image_input_tokens: ['image_input_tokens', 'imageInputTokens', 'image_tokens', 'imageTokens'],
+  audio_input_seconds: ['audio_input_seconds', 'audioInputSeconds', 'audio_seconds', 'audioSeconds'],
+  video_input_seconds: ['video_input_seconds', 'videoInputSeconds', 'video_seconds', 'videoSeconds'],
+  video_output_seconds: ['video_output_seconds', 'videoOutputSeconds', 'generated_video_seconds', 'generatedVideoSeconds'],
+  cache_read_tokens: ['cache_read_tokens', 'cacheReadTokens', 'cached_tokens', 'cachedTokens'],
+  cache_write_tokens: ['cache_write_tokens', 'cacheWriteTokens'],
+  tool_call_count: ['tool_call_count', 'toolCallCount', 'tool_calls', 'toolCalls'],
+  web_search_count: ['web_search_count', 'webSearchCount', 'search_queries', 'searchQueries'],
   total_cost: ['total_cost', 'cost_usd', 'cost', 'totalCost'],
   latency_ms: ['latency_ms', 'latencyMs', 'latency'],
   status: ['status', 'result'],
@@ -187,7 +206,7 @@ function rowCost(
 ): { totalCostUsd: number; costSource: UsageImportRow['costSource'] } {
   const explicit = numberFrom(valueFor(record, ['total_cost', 'cost_usd', 'cost', 'totalCost']))
   if (explicit > 0) return { totalCostUsd: explicit, costSource: 'explicit' }
-  if (!model) return { totalCostUsd: 0, costSource: 'missing_model' }
+  if (!model || !isCostCalculableModel(model)) return { totalCostUsd: 0, costSource: 'missing_model' }
 
   return {
     totalCostUsd: calculateCost({
@@ -200,6 +219,30 @@ function rowCost(
     }).monthlyCost,
     costSource: 'model_price',
   }
+}
+
+function multimodalPricingWarnings(
+  model: Model | undefined,
+  input: Pick<UsageImportRow,
+    | 'imageInputTokens'
+    | 'audioInputSeconds'
+    | 'videoInputSeconds'
+    | 'videoOutputSeconds'
+    | 'webSearchCount'
+  >,
+): string[] {
+  if (!model) return []
+  const result = calculateMultimodalScenario({
+    model,
+    imageInputTokens: input.imageInputTokens,
+    audioInputSeconds: input.audioInputSeconds,
+    videoInputSeconds: input.videoInputSeconds,
+    videoOutputSeconds: input.videoOutputSeconds,
+    searchQueries: input.webSearchCount,
+  })
+  return result.lineItems
+    .filter(item => item.status === 'unsupported_pricing')
+    .map(item => `${item.modality}: unsupported_pricing`)
 }
 
 function percentile(values: number[], ratio: number): number {
@@ -215,6 +258,7 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     rows: [],
     featureSummaries: [],
     errors,
+    pricingWarnings: [],
     requestCount: 0,
     totalInputTokens: 0,
     totalOutputTokens: 0,
@@ -262,7 +306,22 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     const model = models.find(item => item.id === modelId || item.name === modelId)
     const inputTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.input_tokens])))
     const outputTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.output_tokens])))
+    const imageInputTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.image_input_tokens])))
+    const audioInputSeconds = numberFrom(valueFor(record, [...FIELD_KEYS.audio_input_seconds]))
+    const videoInputSeconds = numberFrom(valueFor(record, [...FIELD_KEYS.video_input_seconds]))
+    const videoOutputSeconds = numberFrom(valueFor(record, [...FIELD_KEYS.video_output_seconds]))
+    const cacheReadTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.cache_read_tokens])))
+    const cacheWriteTokens = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.cache_write_tokens])))
+    const toolCallCount = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.tool_call_count])))
+    const webSearchCount = Math.round(numberFrom(valueFor(record, [...FIELD_KEYS.web_search_count])))
     const cost = rowCost(record, model, inputTokens, outputTokens)
+    const pricingWarnings = multimodalPricingWarnings(model, {
+      imageInputTokens,
+      audioInputSeconds,
+      videoInputSeconds,
+      videoOutputSeconds,
+      webSearchCount,
+    })
 
     return {
       timestamp: valueFor(record, [...FIELD_KEYS.timestamp]) ?? null,
@@ -274,11 +333,20 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
       agentRunId: valueFor(record, [...FIELD_KEYS.agent_run_id]) ?? null,
       inputTokens,
       outputTokens,
+      imageInputTokens,
+      audioInputSeconds,
+      videoInputSeconds,
+      videoOutputSeconds,
+      cacheReadTokens,
+      cacheWriteTokens,
+      toolCallCount,
+      webSearchCount,
       totalCostUsd: cost.totalCostUsd,
       latencyMs: numberFrom(valueFor(record, [...FIELD_KEYS.latency_ms])) || null,
       customerId: valueFor(record, [...FIELD_KEYS.customer_id]) ?? null,
       status: valueFor(record, [...FIELD_KEYS.status]) ?? null,
       costSource: cost.costSource,
+      pricingWarnings,
     }
   })
 
@@ -324,11 +392,13 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     .sort((a, b) => b.totalCostUsd - a.totalCostUsd)
 
   const requestCount = rows.length
+  const pricingWarnings = [...new Set(rows.flatMap(row => row.pricingWarnings ?? []))]
 
   return {
     rows,
     featureSummaries,
     errors: [],
+    pricingWarnings,
     requestCount,
     totalInputTokens: totals.totalInputTokens,
     totalOutputTokens: totals.totalOutputTokens,

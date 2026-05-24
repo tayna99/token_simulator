@@ -237,6 +237,43 @@ describe('decisionLog', () => {
     expect(serializeDecisionLog([decision])).toContain('"reportReview"')
   })
 
+  it('stores adopt/reject/hold choice, rate card draft, and pricing freshness snapshot', () => {
+    const decision = createDecision({
+      what: 'Hold rate-card export',
+      why: 'Pricing source changed; recheck before customer export',
+      assumptions: {},
+      toolResultRefs: ['tool:margin.plan.pro'],
+      riskCards: ['risk-price-staleness'],
+      status: 'rejected',
+      decisionChoice: 'hold',
+      rateCardDraft: {
+        policyType: 'usage_cap',
+        includedCredits: 2500,
+        overagePricePerRequest: 0.08,
+        capUsdPerCustomer: 149,
+        affectedCustomerCount: 7,
+        marginBasisRefs: ['tool:margin.plan.pro'],
+        executionMode: 'draft_only',
+        stripeExecutable: false,
+        requiresHumanApproval: true,
+      },
+      pricingFreshnessSnapshot: [{
+        modelId: 'gemini-3.5-flash',
+        state: 'source_changed',
+        label: 'Source Changed',
+        customerLabel: 'Official source changed after this pricing decision. Recheck before relying on it.',
+        recheckRequired: true,
+        sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+        lastVerifiedAt: '2026-05-24',
+      }],
+    })
+
+    expect(decision.decisionChoice).toBe('hold')
+    expect(decision.rateCardDraft?.executionMode).toBe('draft_only')
+    expect(decision.pricingFreshnessSnapshot[0].state).toBe('source_changed')
+    expect(serializeDecisionLog([decision])).toContain('"decisionChoice": "hold"')
+  })
+
   it('normalizes legacy decisions without trust or report review metadata', () => {
     const storage = {
       getItem: () => JSON.stringify([{
@@ -254,5 +291,6 @@ describe('decisionLog', () => {
     const decision = loadDecisionLog(storage)[0]
     expect(decision.trustReview).toBeNull()
     expect(decision.reportReview).toBeNull()
+    expect(decision.decisionChoice).toBeNull()
   })
 })

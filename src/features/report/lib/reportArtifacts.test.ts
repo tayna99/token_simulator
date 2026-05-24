@@ -70,4 +70,48 @@ describe('buildReportArtifact', () => {
     expect(report.markdown).toContain('provider_registry_v0.4')
     expect(report.markdown).toContain('tool:monthlyAiCogs')
   })
+
+  it('includes decision choice, draft-only rate card, and pricing freshness in the one-page report', () => {
+    const report = buildOnePageReportArtifact({
+      title: 'SparkClaw AI Cost Snapshot',
+      executiveSummary: 'The operating team reviewed the recommendation.',
+      metrics: [{ label: 'AI COGS', value: '$612' }],
+      recommendations: ['Hold until pricing source is rechecked.'],
+      risks: ['Official source changed.'],
+      refs: ['tool:margin.plan.pro'],
+      trust: {
+        status: 'ready',
+        dataLimitations: [],
+        retentionNote: 'No raw prompt stored.',
+      },
+      formulaVersion: 'cost_formula_v0.3',
+      providerRegistryVersion: 'provider_registry_v0.4',
+      decisionChoice: 'hold',
+      rateCardDraft: {
+        policyType: 'usage_cap',
+        includedCredits: 2500,
+        overagePricePerRequest: 0.08,
+        capUsdPerCustomer: 149,
+        affectedCustomerCount: 7,
+        marginBasisRefs: ['tool:margin.plan.pro'],
+        executionMode: 'draft_only',
+        stripeExecutable: false,
+        requiresHumanApproval: true,
+      },
+      pricingFreshness: [{
+        modelId: 'gemini-3.5-flash',
+        state: 'source_changed',
+        label: 'Source Changed',
+        customerLabel: 'Official source changed after this pricing decision. Recheck before relying on it.',
+        recheckRequired: true,
+        sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+        lastVerifiedAt: '2026-05-24',
+      }],
+    })
+
+    expect(report.markdown).toContain('Decision choice: hold')
+    expect(report.markdown).toContain('Rate-card draft')
+    expect(report.markdown).toContain('draft_only')
+    expect(report.markdown).toContain('Source Changed')
+  })
 })

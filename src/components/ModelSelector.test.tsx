@@ -53,4 +53,31 @@ describe('ModelSelector', () => {
 
     expect(omniOption).toBeDisabled()
   })
+
+  it('renders Cursor Composer models under the Cursor provider label', () => {
+    render(
+      <ModelSelector
+        label="Candidate model"
+        value="composer-2.5-fast"
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getAllByText(/Cursor/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Composer 2\.5 Fast/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/\$3.00 \/ \$15.00 per 1M tokens/i).length).toBeGreaterThan(0)
+  })
+
+  it('renders unknown context windows without showing a zero-token limit', () => {
+    render(
+      <ModelSelector
+        label="Candidate model"
+        value="qwen3.7-max"
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Context not listed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Context 0$/i)).not.toBeInTheDocument()
+  })
 })

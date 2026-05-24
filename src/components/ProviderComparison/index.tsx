@@ -22,6 +22,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   google: 'Google',
   xai: 'xAI',
   microsoft: 'Microsoft',
+  cursor: 'Cursor',
   meta: 'Meta',
   mistral: 'Mistral',
   deepseek: 'DeepSeek',

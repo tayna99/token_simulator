@@ -15,6 +15,7 @@ const PROVIDER_NAMES: Record<Provider, string> = {
   google: 'Google',
   xai: 'xAI',
   microsoft: 'Microsoft',
+  cursor: 'Cursor',
   meta: 'Meta',
   mistral: 'Mistral',
   deepseek: 'DeepSeek',
@@ -47,6 +48,9 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
   const priceLabel = (model: Model) => isCostCalculableModel(model)
     ? fmtPricePerMillion(model.inputPrice, model.outputPrice)
     : 'API pricing not published'
+  const contextLabel = (model: Model) => Number.isFinite(model.contextWindow) && model.contextWindow > 0
+    ? `${t('model.context')} ${fmtTokens(model.contextWindow)}`
+    : t('model.contextUnknown', { defaultValue: 'Context not listed' })
 
   return (
     <div className="flex flex-col gap-1">
@@ -82,7 +86,7 @@ export function ModelSelector({ label, value, onChange, disabledModelId }: Props
         <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-medium text-gray-800">{PROVIDER_NAMES[selectedModel.provider]}</span>
-            <span>{t('model.context')} {fmtTokens(selectedModel.contextWindow)}</span>
+            <span>{contextLabel(selectedModel)}</span>
             <span>{priceLabel(selectedModel)}</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">

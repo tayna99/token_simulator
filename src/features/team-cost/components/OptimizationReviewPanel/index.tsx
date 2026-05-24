@@ -14,6 +14,7 @@ interface OptimizationReviewPanelProps {
   operatingDecisionReason: string
   onAdopt: () => void
   onReject: () => void
+  onHold: () => void
   onOperatingDecisionKindChange: (kind: OperatingDecisionKind) => void
   onOperatingDecisionReasonChange: (reason: string) => void
   onRecordOperatingDecision: () => void
@@ -37,6 +38,7 @@ export function OptimizationReviewPanel({
   operatingDecisionReason,
   onAdopt,
   onReject,
+  onHold,
   onOperatingDecisionKindChange,
   onOperatingDecisionReasonChange,
   onRecordOperatingDecision,
@@ -114,6 +116,14 @@ export function OptimizationReviewPanel({
                 disabled={recommendations.length === 0}
               >
                 Reject team-cost optimization
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={onHold}
+                disabled={recommendations.length === 0}
+              >
+                Hold team-cost optimization
               </Button>
             </div>
           </div>

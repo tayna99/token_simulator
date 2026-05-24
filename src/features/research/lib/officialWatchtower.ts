@@ -4,6 +4,7 @@ export type ModelOwner =
   | 'openai'
   | 'anthropic'
   | 'google'
+  | 'cursor'
   | 'deepseek'
   | 'alibaba_qwen'
   | 'moonshot_kimi'
@@ -23,6 +24,7 @@ export type ModelOwner =
 
 export type ServingProvider =
   | 'first_party'
+  | 'cursor'
   | 'alibaba_model_studio'
   | 'baidu_qianfan'
   | 'volcano_ark'
@@ -38,6 +40,7 @@ export type ServingProvider =
   | 'custom'
 
 export type ModelFamily =
+  | 'composer'
   | 'qwen'
   | 'kimi'
   | 'deepseek'

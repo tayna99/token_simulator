@@ -1,11 +1,11 @@
 ﻿# PRD: AgentPayroll (LLM Cost Simulator)
 
 부제: **AI SaaS Cost · Margin · Pricing Decision Workspace**
-문서 버전: 2.4 (복구 + 부트캠프 검증 + create_agent front operating context 반영) · 2026-05-24
+문서 버전: 2.5 (복구 + 부트캠프 검증 + 모델 카탈로그 갱신) · 2026-05-24
 상태: Draft · 작성: 제품팀
 독자: 내부(PM/Eng/Design) + 외부(투자자/스폰서)
 
-> 이 PRD는 `C:\token_simulator/` 코드베이스에 실제로 구현된 기능 — `src/lib/calculator.ts` 단일 계산 경로, 42종 모델/레이더 카탈로그, CSV 사용 기록 임포트, 6축 비용 귀속, 마진 엔진, 가격 시나리오 시뮬레이션, AI 팀 설계, 5단계 인입 게이트, 11종 운영 분석 에이전트, Read-only Capability Tools 23종, Front Operating System context, Supervisor Synthesis, 2-ledger 결정 저장소, 역할별 리포트 — 를 기준으로 정리한 정본이다. 기존 `docs/PRD.md`(v1.0)는 product narrative 중심, 본 v2.x는 **구현 사실 ↔ 제품 가치** 매핑 중심. v2.1에서 아키텍처 다이어그램과의 1:1 정합성 보강(§9 전면 재작성).
+> 이 PRD는 `C:\token_simulator/` 코드베이스에 실제로 구현된 기능 — `src/lib/calculator.ts` 단일 계산 경로, 45종 모델/레이더 카탈로그, CSV 사용 기록 임포트, 6축 비용 귀속, 마진 엔진, 가격 시나리오 시뮬레이션, AI 팀 설계, 5단계 인입 게이트, 11종 운영 분석 에이전트, Read-only Capability Tools 23종, Front Operating System context, Supervisor Synthesis, 2-ledger 결정 저장소, 역할별 리포트 — 를 기준으로 정리한 정본이다. 기존 `docs/PRD.md`(v1.0)는 product narrative 중심, 본 v2.x는 **구현 사실 ↔ 제품 가치** 매핑 중심. v2.1에서 아키텍처 다이어그램과의 1:1 정합성 보강(§9 전면 재작성).
 
 ---
 
@@ -126,7 +126,7 @@ Design (팀 짜기) → Cost (비용 보기) → Bottleneck (새는 곳) → Opt
 ### 7.1 P0 — MVP (현재 출시 상태)
 
 **모델 카탈로그 & 결정론 계산 엔진** 🟢
-- 19개 provider/model source(OpenAI, Anthropic, Google, xAI, Microsoft, Meta, Mistral, DeepSeek, Alibaba, Moonshot, Z.ai/GLM, MiniMax, ByteDance, Baidu, Tencent, StepFun, 01.AI, Baichuan, SenseTime), 42종 모델/레이더 entry. 각 모델은 input/output 단가, context window, release date, cache discount, batch discount, source URL, lastVerifiedAt, `pricingStatus` 보유.
+- 20개 provider/model source(OpenAI, Anthropic, Google, xAI, Microsoft, Meta, Mistral, DeepSeek, Alibaba, Moonshot, Cursor, Z.ai/GLM, MiniMax, ByteDance, Baidu, Tencent, StepFun, 01.AI, Baichuan, SenseTime), 45종 모델/레이더 entry. 각 모델은 input/output 단가, context window, release date, cache discount, batch discount, source URL, lastVerifiedAt, `pricingStatus` 보유.
 - `calculateCost(input)` → monthlyCost, annualCost, inputCost/outputCost, cached/uncached split, costPerRequest, cacheSavings, batchSavings.
 - `calculateMigrationDelta(current, candidate)` → monthlyDelta, annualDelta, savingPercent.
 - NaN/음수/비유한 입력은 0으로 클램프, ratio는 [0,1]로 클램프.
@@ -508,7 +508,7 @@ total_cost, latency_ms, status
 | --- | --- |
 | 단일 계산 경로 | `src/lib/calculator.ts` → `src/domain/cost/calculator.ts` |
 | 단일 포맷 경로 | `src/lib/format.ts` |
-| 모델 카탈로그 | `src/features/alternatives/data/models.ts` (현재 **42종 모델/레이더 entry**, 19 provider/source, Modality 타입 + pricingStatus 포함) |
+| 모델 카탈로그 | `src/features/alternatives/data/models.ts` (현재 **45종 모델/레이더 entry**, 20 provider/source, Modality 타입 + pricingStatus 포함) |
 | 모델 단가 모니터링 | `scripts/research/check-provider-pricing.mjs`, `scripts/research/.pricing-hashes.json` |
 | 사용 기록 임포트 | `src/features/usage/lib/usageImport.ts`, `attribution.ts`, `operationalSignals.ts` |
 | 마진 엔진 | `src/features/unit-economics/lib/{margin,unitEconomics,effectiveCost,businessMetrics}.ts` |
@@ -551,8 +551,9 @@ total_cost, latency_ms, status
 | `prototypes/landing-montage.html` | 랜딩 프로토타입 |
 
 ### 15.3 변경 이력
+- v2.5 (2026-05-24) — Cursor Composer 2.5 Standard/Fast와 Alibaba Qwen3.7-Max를 공식 가격 출처 기준으로 모델 카탈로그에 추가했다. Composer 2.5는 Cursor provider의 subscription-plan 모델로 분리하고, Qwen3.7-Max는 기존 `qwen-3-max`와 별도 row(`qwen3.7-max`)로 유지한다. 공식 source registry에 Cursor changelog와 Alibaba Model Studio landing을 추가했다. 현재 카탈로그 사실: 45종 모델/레이더 entry, 20 provider/source.
 - v2.4 (2026-05-24) — Python LangChain `create_agent` 통합 사실을 반영했다. `AgentRunInput.frontOperatingSystem`과 `src/features/front-operating/lib/frontOperatingContext.ts`를 핵심 파일 맵에 추가하고, `build_agent_tools()`가 제공하는 front operating read-only tools 4종(`retrieve_front_operating_system`, `retrieve_front_operating_assets`, `retrieve_front_operating_gate`, `retrieve_learning_loop_records`)을 §7.1/§9.8에 명시했다. Read-only Capability Tools 총수를 23종으로 정정했다.
-- v2.3 (2026-05-24, 복구 + 방향성 보강) — 파일 잘림/중복 tail 사건 복구. §9.6~§9.10은 v2.1 구조를 유지하고, §9.11~§9.12는 현재 코드 단서(`Modality`, `pricingStatus`, `calculateModalityCost`, `calculateMultimodalScenario`, `check-provider-pricing.mjs`) 기준으로 보강했다. 중복으로 붙어 있던 오래된 §9.6~§15 tail을 제거했다. 현재 코드 사실로 정정: 모델/레이더 entry 42종, provider/source 19종, `App.tsx` 2,773 lines. §12에 MVP 2 SDK-lite, MVP 3 Alert/Margin Guard, MVP 4 Gateway/Proxy 순서를 반영하고, §15.4에 Bootcamp Validation Round 1을 추가했다.
+- v2.3 (2026-05-24, 복구 + 방향성 보강) — 파일 잘림/중복 tail 사건 복구. §9.6~§9.10은 v2.1 구조를 유지하고, §9.11~§9.12는 당시 코드 단서(`Modality`, `pricingStatus`, `calculateModalityCost`, `calculateMultimodalScenario`, `check-provider-pricing.mjs`) 기준으로 보강했다. 중복으로 붙어 있던 오래된 §9.6~§15 tail을 제거했다. 당시 코드 사실로 정정: 모델/레이더 entry 42종, provider/source 19종, `App.tsx` 2,773 lines. §12에 MVP 2 SDK-lite, MVP 3 Alert/Margin Guard, MVP 4 Gateway/Proxy 순서를 반영하고, §15.4에 Bootcamp Validation Round 1을 추가했다.
 - v2.2 (2026-05-24) — I/O 2026 (5/19) 반영. §2.4 시장 신호 신설, 모델 카탈로그에 Gemini 3.5 Flash / 3.5 Pro / Gemini Omni / Omni Flash 추가. Gemini 3.5 Flash는 공식 Gemini API pricing으로 `verified` 계산 가능 모델로 두고, Gemini 3.5 Pro / Omni / Omni Flash는 공식 발표 모델이지만 `pricingStatus='unavailable'`, `apiPricingAvailable=false`, `requiresCustomPricing=true`로 둔다. §9.11 멀티모달 비용 모델 신설(`Modality` 타입 + 미공개 단가 `unsupported_pricing`), §9.12 모델 신선도 모니터링 스크립트 신설(`check-provider-pricing.mjs`, npm `research:pricing`), §13에 R11/R12/R13 추가.
 - v2.1 (2026-05-24) — 다이어그램 ↔ PRD 1:1 매핑 보강. §7.1에 Data Intake Policy / Security Middleware 4단계 / 11 운영 분석 에이전트 추가. §9 전체 재작성: 5단계 인입 게이트(9.3), Python Stage Router 3 모드(9.4), Read-only Capability Tools 5 카테고리·16종(9.5), Supervisor Synthesis 계약(9.6), Human Decision & 2-Ledger 모델(9.7). §15.1 핵심 파일 맵에 trust / operating-assets / agent_service 추가.
 - v2.0 (2026-05-24) — 코드베이스 기준 정본화. 구현 현황(7장)과 핵심 파일 맵(15.1) 추가, 9종 AI 팀원·6축 attribution·LangGraph 레이어 명시.

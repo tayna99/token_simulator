@@ -1,5 +1,20 @@
 [
   {
+    "id": "cursor-composer-25-changelog",
+    "modelOwner": "cursor",
+    "servingProvider": "cursor",
+    "modelFamilies": ["composer"],
+    "sourceKind": "changelog",
+    "url": "https://cursor.com/changelog/composer-2-5",
+    "active": true,
+    "parserStrategy": "html_links",
+    "cadence": "daily",
+    "pricingRegion": "global",
+    "sourceLanguage": "en",
+    "officialSourceTrust": "official_pricing",
+    "ownerAgentIds": ["provider_api_intelligence", "knowledge_release_ops"]
+  },
+  {
     "id": "alibaba-model-studio-pricing",
     "modelOwner": "alibaba_qwen",
     "servingProvider": "alibaba_model_studio",
@@ -8,6 +23,21 @@
     "url": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
     "active": true,
     "parserStrategy": "parseAlibabaModelStudio",
+    "cadence": "daily",
+    "pricingRegion": "international_singapore",
+    "sourceLanguage": "en",
+    "officialSourceTrust": "official_pricing",
+    "ownerAgentIds": ["provider_api_intelligence", "knowledge_release_ops"]
+  },
+  {
+    "id": "alibaba-qwen37-modelstudio",
+    "modelOwner": "alibaba_qwen",
+    "servingProvider": "alibaba_model_studio",
+    "modelFamilies": ["qwen"],
+    "sourceKind": "pricing",
+    "url": "https://modelstudio.alibabacloud.com/",
+    "active": true,
+    "parserStrategy": "html_links",
     "cadence": "daily",
     "pricingRegion": "international_singapore",
     "sourceLanguage": "en",
