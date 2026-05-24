@@ -22,6 +22,31 @@ describe('projectSnapshotForRole', () => {
     expect(new Set([developer.assistant.title, pm.assistant.title, ceo.assistant.title]).size).toBe(3)
   })
 
+  it('returns actual workspace panel keys instead of abstract placeholder labels', () => {
+    const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
+    const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')
+    const ceo = projectSnapshotForRole(snapshot, 'ceo', 'internal')
+
+    expect(developer.panelOrder).toEqual(expect.arrayContaining([
+      'operational_signals',
+      'cost_attribution',
+      'report_output',
+    ]))
+    expect(pm.panelOrder).toEqual(expect.arrayContaining([
+      'cost_attribution',
+      'pricing_simulator',
+      'optimization_review',
+    ]))
+    expect(ceo.panelOrder).toEqual(expect.arrayContaining([
+      'margin_risk',
+      'one_page_report',
+      'decision_log',
+    ]))
+    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('model_tokens')
+    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('feature_cost')
+    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('profitability')
+  })
+
   it('masks internal refs for customer audience and preserves them for admin audience', () => {
     const customer = projectSnapshotForRole(snapshot, 'developer', 'customer')
     const internal = projectSnapshotForRole(snapshot, 'developer', 'internal')

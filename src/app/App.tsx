@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MODELS, getModelById, type Model } from '../features/alternatives/data/models'
 import { USE_CASE_PRESETS } from '../features/usage/data/workloadPresets'
@@ -19,7 +19,12 @@ import { buildRateCardDraft, type RateCardDraft } from '../features/pricing/lib/
 import { buildPricingFreshnessBadge, type PricingFreshnessBadge } from '../features/facts/lib/pricingFreshness'
 import { buildDecisionHeader, type DecisionHeader } from '../features/decision-loop/lib/decisionHeader'
 import { canExportOnePageReport } from '../features/decision-loop/lib/exportGate'
-import { projectSnapshotForRole, type RoleViewModel } from '../features/role-projection/lib/projectSnapshotForRole'
+import {
+  ROLE_PROJECTION_PANEL_LABELS,
+  projectSnapshotForRole,
+  type RoleProjectionPanelKey,
+  type RoleViewModel,
+} from '../features/role-projection/lib/projectSnapshotForRole'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
 import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
@@ -484,27 +489,147 @@ function AgentReportWorkspace({ events, showInternal }: { events: AgentEvent[]; 
   )
 }
 
+interface WorkspacePanelDefinition {
+  key: RoleProjectionPanelKey
+  node: ReactNode
+}
+
+function orderWorkspacePanels(
+  panels: WorkspacePanelDefinition[],
+  view: RoleViewModel,
+): WorkspacePanelDefinition[] {
+  return panels
+    .map((panel, index) => ({ panel, index }))
+    .sort((left, right) => {
+      const leftRank = view.panelOrder.indexOf(left.panel.key)
+      const rightRank = view.panelOrder.indexOf(right.panel.key)
+      const normalizedLeft = leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank
+      const normalizedRight = rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank
+      return normalizedLeft - normalizedRight || left.index - right.index
+    })
+    .map(item => item.panel)
+}
+
 function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
+  const visiblePanelOrder = view.panelOrder.filter(panel => panel !== 'debug_refs')
+
   return (
     <Surface
       data-testid="role-projection-panel"
       eyebrow="Role projection"
       title={view.title}
-      description="같은 deterministic snapshot을 역할별 판단 순서로 재배치합니다. 이 패널은 새 숫자를 계산하지 않습니다."
+      description="같은 deterministic snapshot을 역할별 workspace 순서로 재배치합니다. 이 패널은 새 숫자를 계산하지 않습니다."
     >
       <div className="grid gap-3 sm:grid-cols-3">
         {view.primaryKpis.map(kpi => (
           <MetricTile key={kpi.id} label={kpi.label} value={kpi.value} />
         ))}
       </div>
+      <p className="mt-3 text-xs text-label-alternative">
+        현재 역할 기준으로 중앙 workspace 카드가 아래 우선순위에 맞춰 정렬됩니다.
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        {view.panelOrder.map(panel => (
-          <Badge key={panel} tone={panel === 'debug_refs' ? 'caution' : 'neutral'}>
-            {panel}
+        {visiblePanelOrder.map(panel => (
+          <Badge key={panel} tone="neutral">
+            {ROLE_PROJECTION_PANEL_LABELS[panel]}
           </Badge>
         ))}
+        {view.panelOrder.includes('debug_refs') && (
+          <Badge tone="caution">{ROLE_PROJECTION_PANEL_LABELS.debug_refs}</Badge>
+        )}
       </div>
     </Surface>
+  )
+}
+
+function RateCardDraftPanel({
+  rateCardDraft,
+  exportGate,
+  decisionHeader,
+  showInternal,
+}: {
+  rateCardDraft: RateCardDraft
+  exportGate: ReturnType<typeof canExportOnePageReport>
+  decisionHeader: DecisionHeader
+  showInternal: boolean
+}) {
+  const readinessSteps = [
+    { label: '초안 생성됨', ready: true },
+    { label: exportGate.allowed ? '결정 기록됨' : '결정 기록 필요', ready: exportGate.allowed },
+    { label: exportGate.allowed ? 'Report export 가능' : 'Report export 대기', ready: exportGate.allowed },
+  ]
+
+  return (
+    <section aria-label="Rate card draft" className="mb-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-label-normal">Rate card draft</h3>
+        <Badge tone="caution">Draft only</Badge>
+      </div>
+      <p className="mt-1 text-xs text-label-alternative">
+        Stripe/Metronome 같은 billing 시스템은 실행하지 않고, 사람이 검토할 가격표 초안만 만듭니다.
+      </p>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <div className="rounded-wds border border-status-positive/30 bg-status-positive/10 p-3">
+          <p className="text-xs font-semibold uppercase text-status-positive">무엇인가</p>
+          <ul className="mt-2 grid gap-1 text-sm text-label-neutral">
+            <li>검토용 가격표 초안</li>
+            <li>결정 기록 후 export 가능</li>
+          </ul>
+        </div>
+        <div className="rounded-wds border border-status-cautionary/30 bg-status-cautionary/10 p-3">
+          <p className="text-xs font-semibold uppercase text-status-cautionary">무엇이 아닌가</p>
+          <ul className="mt-2 grid gap-1 text-sm text-label-neutral">
+            <li>실제 청구 실행 아님</li>
+            <li>고객에게 자동 적용 아님</li>
+          </ul>
+        </div>
+      </div>
+      <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <p className="text-xs font-semibold uppercase text-primary-normal">왜 이 초안인가</p>
+        <p className="mt-1 text-sm text-label-neutral">
+          {decisionHeader.reason} 그래서 {fmtTokens(rateCardDraft.affectedCustomerCount)}개 고객에 대해 {rateCardDraft.policyType} 가격표 초안을 검토합니다.
+        </p>
+      </div>
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+          <dt className="text-xs font-semibold text-label-alternative">Policy type</dt>
+          <dd className="mt-1 font-semibold text-label-normal">{rateCardDraft.policyType}</dd>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+          <dt className="text-xs font-semibold text-label-alternative">Included credits</dt>
+          <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.includedCredits)}</dd>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+          <dt className="text-xs font-semibold text-label-alternative">Overage</dt>
+          <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.overagePricePerRequest)} / request</dd>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+          <dt className="text-xs font-semibold text-label-alternative">Customer cap</dt>
+          <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.capUsdPerCustomer)}</dd>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+          <dt className="text-xs font-semibold text-label-alternative">Affected customers</dt>
+          <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.affectedCustomerCount)}</dd>
+        </div>
+      </dl>
+      <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <p className="text-xs font-semibold uppercase text-primary-normal">Export readiness</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {readinessSteps.map(step => (
+            <Badge key={step.label} tone={step.ready ? 'positive' : 'caution'}>
+              {step.label}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      {showInternal && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {rateCardDraft.marginBasisRefs.map(refId => (
+            <ToolRefChip key={refId} refId={refId} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -615,50 +740,20 @@ function OnePageReportPanel({
             {exportGate.reason}
           </p>
         )}
-        <section aria-label="Rate card draft" className="mb-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-label-normal">Rate card draft</h3>
-            <Badge tone="caution">Draft only</Badge>
-          </div>
-          <p className="mt-1 text-xs text-label-alternative">
-            Stripe/Metronome 같은 billing 시스템은 실행하지 않고, 사람이 검토할 가격표 초안만 만듭니다.
-          </p>
-          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
-              <dt className="text-xs font-semibold text-label-alternative">Policy type</dt>
-              <dd className="mt-1 font-semibold text-label-normal">{rateCardDraft.policyType}</dd>
-            </div>
-            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
-              <dt className="text-xs font-semibold text-label-alternative">Included credits</dt>
-              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.includedCredits)}</dd>
-            </div>
-            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
-              <dt className="text-xs font-semibold text-label-alternative">Overage</dt>
-              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.overagePricePerRequest)} / request</dd>
-            </div>
-            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
-              <dt className="text-xs font-semibold text-label-alternative">Customer cap</dt>
-              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtCurrency(rateCardDraft.capUsdPerCustomer)}</dd>
-            </div>
-            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
-              <dt className="text-xs font-semibold text-label-alternative">Affected customers</dt>
-              <dd className="mt-1 font-semibold text-label-normal" translate="no">{fmtTokens(rateCardDraft.affectedCustomerCount)}</dd>
-            </div>
-          </dl>
-          {showInternal && (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {rateCardDraft.marginBasisRefs.map(refId => (
-                <ToolRefChip key={refId} refId={refId} />
-              ))}
-            </div>
-          )}
-        </section>
+        <RateCardDraftPanel
+          rateCardDraft={rateCardDraft}
+          exportGate={exportGate}
+          decisionHeader={decisionHeader}
+          showInternal={showInternal}
+        />
         <h3 className="text-base font-semibold">{artifact.title}</h3>
         <div className="mt-3 grid gap-3">
           {artifact.sections.map(section => (
             <section key={section.title} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
               <p className="text-xs font-semibold uppercase text-primary-normal">{section.title}</p>
-              <p className="mt-1 text-sm text-label-neutral">{section.body}</p>
+              <p className="mt-1 text-sm text-label-neutral">
+                {showInternal ? section.body : customerSafeReportText(section.body)}
+              </p>
             </section>
           ))}
         </div>
@@ -843,6 +938,17 @@ function customerSafeAgentText(text: string): string {
     .replace(/agentic runtime unavailable/gi, 'AI 해석은 저장된 비용 근거를 기준으로 표시됩니다')
 }
 
+function customerSafeReportText(text: string): string {
+  if (text.includes('Deterministic refs:')) {
+    return `${text.split(' Deterministic refs:')[0]} 계산 근거는 관리자 감사 기록에 저장됩니다.`
+  }
+  if (text.includes('Risk refs:')) {
+    return '리스크 근거는 관리자 감사 기록에 저장됩니다.'
+  }
+  return customerSafeAgentText(text)
+    .replace(/\s*Evidence refs:.*$/i, ' 근거 기록은 관리자 감사 기록에 저장됩니다.')
+}
+
 function LifecycleNavigation({
   activeStage,
   operatingAgents,
@@ -1016,9 +1122,9 @@ function CustomerDashboardEntryPanel({
             <Badge tone="caution">Gemini Omni / 비디오 비용은 공식 API 단가 확인 필요</Badge>
             <Badge tone="neutral">사용자 단가 입력 시 시나리오 계산 가능</Badge>
           </div>
-          <p className="mt-2 text-xs text-label-alternative">
-            고객 기본 화면에는 내부 workspace ID, snapshot ref, agent route를 노출하지 않습니다.
-          </p>
+        <p className="mt-2 text-xs text-label-alternative">
+          고객 기본 화면에는 내부 실행 식별자와 기술 감사 정보를 노출하지 않습니다.
+        </p>
         </div>
         <div className="flex flex-wrap gap-2 lg:justify-end">
           {dashboard.ctas.map(cta => (
@@ -1395,7 +1501,7 @@ function WedgeADecisionLogPanel({
               </div>
               ) : (
                 <div className="mt-3 rounded-wds bg-fill-alternative p-2 text-xs text-label-neutral">
-                  근거 ref, snapshot, agent route는 결정 감사 기록에 저장되고 관리자 모드에서만 표시됩니다.
+                  상세 감사 근거는 결정 기록에 저장되고 관리자 모드에서만 표시됩니다.
                 </div>
               )}
             </div>
@@ -2747,121 +2853,184 @@ function App() {
     </div>
   ) : null
 
+  const renderWorkspacePanels = (panels: WorkspacePanelDefinition[]) => orderWorkspacePanels(panels, roleProjection)
+    .map((panel, index) => (
+      <div
+        key={panel.key}
+        data-testid={`workspace-panel-${panel.key}`}
+        className={index === 0 ? 'rounded-wds-lg ring-1 ring-primary-normal/30' : ''}
+      >
+        {panel.node}
+      </div>
+    ))
+
   const stageWorkspace = (
     <div className="grid gap-4">
       {activeDecisionStage === 'design' && (
-        <>
-          <Surface
-            id="import"
-            eyebrow="Usage log entry point"
-            title="1. Import"
-            description="Start from CSV logs or the SparkClaw sample. Token fields come from logs; business denominators stay explicit."
-          >
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
-              <UsageImportPanel
-                importedSummary={importedUsage}
-                onImport={handleUsageImport}
-                onSparkClawDemo={handleSparkClawDemoLoaded}
-              />
-              <TeamDesignerPanel config={aiTeamConfiguration} />
-            </div>
-          </Surface>
-          {teamCostSimulatorStack}
-        </>
+        renderWorkspacePanels([
+          {
+            key: 'import_workflow',
+            node: (
+              <Surface
+                id="import"
+                eyebrow="Usage log entry point"
+                title="1. Import"
+                description="Start from CSV logs or the SparkClaw sample. Token fields come from logs; business denominators stay explicit."
+              >
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
+                  <UsageImportPanel
+                    importedSummary={importedUsage}
+                    onImport={handleUsageImport}
+                    onSparkClawDemo={handleSparkClawDemoLoaded}
+                  />
+                  <TeamDesignerPanel config={aiTeamConfiguration} />
+                </div>
+              </Surface>
+            ),
+          },
+          {
+            key: 'team_cost_simulator',
+            node: teamCostSimulatorStack,
+          },
+        ])
       )}
 
       {activeDecisionStage === 'cost' && (
-        <>
-          <OperationalSignalSummary summary={operationalSignals} />
-          <CostAttributionWorkspace attribution={attribution} />
-          <MarginRiskWorkspace
-            planMargins={planMargins}
-            customerMargins={customerMargins}
-            topDecileShare={heavyUsers.topDecileShare}
-          />
-        </>
+        renderWorkspacePanels([
+          {
+            key: 'operational_signals',
+            node: <OperationalSignalSummary summary={operationalSignals} />,
+          },
+          {
+            key: 'cost_attribution',
+            node: <CostAttributionWorkspace attribution={attribution} />,
+          },
+          {
+            key: 'margin_risk',
+            node: (
+              <MarginRiskWorkspace
+                planMargins={planMargins}
+                customerMargins={customerMargins}
+                topDecileShare={heavyUsers.topDecileShare}
+              />
+            ),
+          },
+        ])
       )}
 
       {activeDecisionStage === 'bottleneck' && (
-        <>
-          <Surface
-            eyebrow="Waste and bottleneck"
-            title="Bottleneck Detection"
-            description="Flags cite rule, self-baseline, or peer-benchmark basis before any optimization is proposed."
-          >
-            <TeamCostForecastPanel
-              teamEstimate={teamCostEstimate}
-              estimates={teamCostEstimates}
-              bottlenecks={teamCostBottlenecks}
-              deliverables={attributedDeliverables}
-              performanceSummary={deliverablePerformanceSummary}
-            />
-          </Surface>
-        </>
+        renderWorkspacePanels([
+          {
+            key: 'team_forecast',
+            node: (
+              <Surface
+                eyebrow="Waste and bottleneck"
+                title="Bottleneck Detection"
+                description="Flags cite rule, self-baseline, or peer-benchmark basis before any optimization is proposed."
+              >
+                <TeamCostForecastPanel
+                  teamEstimate={teamCostEstimate}
+                  estimates={teamCostEstimates}
+                  bottlenecks={teamCostBottlenecks}
+                  deliverables={attributedDeliverables}
+                  performanceSummary={deliverablePerformanceSummary}
+                />
+              </Surface>
+            ),
+          },
+        ])
       )}
 
       {activeDecisionStage === 'optimize' && (
-        <>
-          <PricingSimulatorWorkspace
-            scenarios={scenarios}
-            riskCards={riskCards}
-            onAdopt={handleAdoptCreditScenario}
-          />
-          <OptimizationReviewPanel
-            recommendations={teamCostRecommendations}
-            events={teamCostEvents}
-            riskCards={teamCostRiskCards}
-            currentMonthlyCostUsd={teamCostEstimate.monthlyCostUsd}
-            operatingDecisionKind={operatingDecisionKind}
-            operatingDecisionReason={operatingDecisionReason}
-            onAdopt={handleAdoptTeamCostOptimization}
-            onReject={handleRejectTeamCostOptimization}
-            onHold={handleHoldTeamCostOptimization}
-            onOperatingDecisionKindChange={setOperatingDecisionKind}
-            onOperatingDecisionReasonChange={setOperatingDecisionReason}
-            onRecordOperatingDecision={handleRecordOperatingDecision}
-          />
-          <Surface
-            id="report"
-            eyebrow="Agent output"
-            title="5. Report Output"
-            description="The report keeps deterministic numbers and model provenance visible, while the agent layer drafts grounded interpretation."
-          >
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
-              <SummaryCard state={legacyState} />
-              <AgentReportWorkspace events={agentEvents} showInternal={showInternal} />
-            </div>
-          </Surface>
-        </>
+        renderWorkspacePanels([
+          {
+            key: 'pricing_simulator',
+            node: (
+              <PricingSimulatorWorkspace
+                scenarios={scenarios}
+                riskCards={riskCards}
+                onAdopt={handleAdoptCreditScenario}
+              />
+            ),
+          },
+          {
+            key: 'optimization_review',
+            node: (
+              <OptimizationReviewPanel
+                recommendations={teamCostRecommendations}
+                events={teamCostEvents}
+                riskCards={teamCostRiskCards}
+                currentMonthlyCostUsd={teamCostEstimate.monthlyCostUsd}
+                operatingDecisionKind={operatingDecisionKind}
+                operatingDecisionReason={operatingDecisionReason}
+                onAdopt={handleAdoptTeamCostOptimization}
+                onReject={handleRejectTeamCostOptimization}
+                onHold={handleHoldTeamCostOptimization}
+                onOperatingDecisionKindChange={setOperatingDecisionKind}
+                onOperatingDecisionReasonChange={setOperatingDecisionReason}
+                onRecordOperatingDecision={handleRecordOperatingDecision}
+              />
+            ),
+          },
+          {
+            key: 'report_output',
+            node: (
+              <Surface
+                id="report"
+                eyebrow="Agent output"
+                title="5. Report Output"
+                description="The report keeps deterministic numbers and model provenance visible, while the agent layer drafts grounded interpretation."
+              >
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
+                  <SummaryCard state={legacyState} />
+                  <AgentReportWorkspace events={agentEvents} showInternal={showInternal} />
+                </div>
+              </Surface>
+            ),
+          },
+        ])
       )}
 
       {activeDecisionStage === 'decision-log' && (
-        <>
-          <DecisionLogWorkspace
-            decisions={decisions}
-            onDelete={handleDeleteDecision}
-            onExport={handleExportDecisions}
-            showInternal={showInternal}
-          />
-          <WedgeADecisionLogPanel decisions={decisions} onDelete={handleDeleteDecision} showInternal={showInternal} />
-          <OnePageReportPanel
-            agentRun={agentRun}
-            teamEstimate={teamCostEstimate}
-            recommendation={teamCostRecommendations[0]}
-            decisions={decisions}
-            riskCards={teamCostRiskCards.length > 0 ? teamCostRiskCards : riskCards}
-            onExport={handleExportOnePageReport}
-            operatingAssetHealth={operatingAssetHealth}
-            trustInspection={importedUsage?.trustInspection}
-            formulaVersion={COST_FORMULA_VERSION}
-            providerRegistryVersion={PROVIDER_REGISTRY_VERSION}
-            snapshotVersion={agentSnapshot.snapshotVersion}
-            rateCardDraft={primaryRateCardDraft}
-            pricingFreshness={pricingFreshnessSnapshot}
-            decisionHeader={decisionHeader}
-            showInternal={showInternal}
-          />
-        </>
+        renderWorkspacePanels([
+          {
+            key: 'decision_log',
+            node: (
+              <DecisionLogWorkspace
+                decisions={decisions}
+                onDelete={handleDeleteDecision}
+                onExport={handleExportDecisions}
+                showInternal={showInternal}
+              />
+            ),
+          },
+          {
+            key: 'operating_ledger',
+            node: <WedgeADecisionLogPanel decisions={decisions} onDelete={handleDeleteDecision} showInternal={showInternal} />,
+          },
+          {
+            key: 'one_page_report',
+            node: (
+              <OnePageReportPanel
+                agentRun={agentRun}
+                teamEstimate={teamCostEstimate}
+                recommendation={teamCostRecommendations[0]}
+                decisions={decisions}
+                riskCards={teamCostRiskCards.length > 0 ? teamCostRiskCards : riskCards}
+                onExport={handleExportOnePageReport}
+                operatingAssetHealth={operatingAssetHealth}
+                trustInspection={importedUsage?.trustInspection}
+                formulaVersion={COST_FORMULA_VERSION}
+                providerRegistryVersion={PROVIDER_REGISTRY_VERSION}
+                snapshotVersion={agentSnapshot.snapshotVersion}
+                rateCardDraft={primaryRateCardDraft}
+                pricingFreshness={pricingFreshnessSnapshot}
+                decisionHeader={decisionHeader}
+                showInternal={showInternal}
+              />
+            ),
+          },
+        ])
       )}
     </div>
   )

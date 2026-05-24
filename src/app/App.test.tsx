@@ -66,6 +66,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.queryByText(/Provider & API Intelligence Agent/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Trust \/ Security \/ Compliance Agent/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Knowledge & Release Ops Agent/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/workspace ID|snapshot ref|agent route/i)).not.toBeInTheDocument()
     expect(screen.queryByTestId('operating-asset-health')).not.toBeInTheDocument()
     expect(screen.queryByTestId('official-updates-panel')).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Supervisor synthesis/i))
@@ -269,14 +270,33 @@ describe('App AI team operations workspace', () => {
 
     await user.click(lifecycleButton(/Decision Log/i))
 
-    expect(screen.getByRole('heading', { name: /Rate card draft/i })).toBeInTheDocument()
+    const rateCard = screen.getByRole('region', { name: /Rate card draft/i })
+    expect(within(rateCard).getByRole('heading', { name: /Rate card draft/i })).toBeInTheDocument()
     expect(screen.getByText(/Draft only/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/검토용 가격표 초안/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/실제 청구 실행 아님/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/고객에게 자동 적용 아님/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/Export readiness/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/초안 생성됨/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/결정 기록 필요/i)).toBeInTheDocument()
     expect(screen.getByText(/Policy type/i)).toBeInTheDocument()
     expect(screen.getByText(/Included credits/i)).toBeInTheDocument()
     expect(screen.getByText(/Overage/i)).toBeInTheDocument()
     expect(screen.getByText(/Customer cap/i)).toBeInTheDocument()
     expect(screen.getByText(/Affected customers/i)).toBeInTheDocument()
-    expect(screen.queryByText(/Margin basis ref/i)).not.toBeInTheDocument()
+    expect(within(rateCard).queryByText(/tool:margin\.plan\.pro/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\btool:/i)).not.toBeInTheDocument()
+  })
+
+  it('shows rate card draft refs only in admin mode', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    await user.click(lifecycleButton(/Decision Log/i))
+
+    const rateCard = screen.getByRole('region', { name: /Rate card draft/i })
+    expect(within(rateCard).getByText(/tool:margin\.plan\.pro/i)).toBeInTheDocument()
   })
 
   it('lets a user hold an optimization and then export the one-page report', async () => {
@@ -308,6 +328,35 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/CEO projection/i)
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Margin, loss customers, and operating decision/i)
+  })
+
+  it('reorders real cost workspace cards by role without dropping cards', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(lifecycleButton(/Cost/i))
+
+    const workspace = screen.getByTestId('decision-workspace-panel')
+    const costPanel = () => within(workspace).getByTestId('workspace-panel-cost_attribution')
+    const marginPanel = () => within(workspace).getByTestId('workspace-panel-margin_risk')
+    const signalPanel = () => within(workspace).getByTestId('workspace-panel-operational_signals')
+    const appearsBefore = (left: HTMLElement, right: HTMLElement) => Boolean(
+      left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+
+    expect(within(workspace).getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
+    expect(within(workspace).getByRole('heading', { name: /2\. Cost Attribution/i })).toBeInTheDocument()
+    expect(within(workspace).getByRole('heading', { name: /3\. Margin Risk/i })).toBeInTheDocument()
+    expect(appearsBefore(costPanel(), marginPanel())).toBe(true)
+
+    await user.click(screen.getByRole('tab', { name: /CEO view/i }))
+    expect(appearsBefore(marginPanel(), costPanel())).toBe(true)
+    expect(within(workspace).getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
+    expect(within(workspace).getByRole('heading', { name: /2\. Cost Attribution/i })).toBeInTheDocument()
+    expect(within(workspace).getByRole('heading', { name: /3\. Margin Risk/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /Developer view/i }))
+    expect(appearsBefore(signalPanel(), marginPanel())).toBe(true)
   })
 
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {
