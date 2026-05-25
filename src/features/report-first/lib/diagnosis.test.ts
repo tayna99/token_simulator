@@ -62,6 +62,38 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.decisionCandidates.length).toBeGreaterThanOrEqual(3)
   })
 
+  it('builds buyer-facing ROI proof for monthly leak, heavy-user subsidy, and policy delta', () => {
+    const summary = parseUsageCsv([
+      'timestamp,request_id,customer_id,plan_id,feature,model,input_tokens,output_tokens,total_cost',
+      '2026-05-01,req_1,cus_loss,pro,rag_chat,claude-sonnet-4.6,1000,500,120',
+      '2026-05-01,req_2,cus_healthy,pro,summary,claude-sonnet-4.6,1000,500,10',
+    ].join('\n'), MODELS)
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: {
+        cus_loss: 50,
+        cus_healthy: 200,
+      },
+      planRevenueUsd: {
+        pro: 250,
+      },
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(snapshot.roiProof).toMatchObject({
+      monthlyLossUsd: 70,
+      topDecileSubsidyUsd: 55,
+      bestPolicyMarginDeltaUsd: expect.any(Number),
+    })
+    expect(snapshot.roiProof.bestPolicyMarginDeltaUsd).toBeGreaterThanOrEqual(0)
+    expect(snapshot.roiProof.paybackHint).toContain('이번 달 추정 누수')
+    expect(snapshot.metrics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'monthly_loss', label: '이번 달 추정 누수', value: '$70' }),
+      expect.objectContaining({ id: 'policy_margin_delta', label: '정책 변경 개선 여지' }),
+    ]))
+  })
+
   it('does not preselect Adopt Reject or Hold on decision candidates', () => {
     const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
@@ -120,6 +152,56 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.reportGate.canPreview).toBe(true)
     expect(snapshot.reportGate.canCreateArtifact).toBe(false)
     expect(snapshot.reportGate.reason).toContain('customer_profitability')
+  })
+
+  it('does not let external revenue override missing usage customer or plan mapping', () => {
+    const summary = parseUsageCsv([
+      'timestamp,feature,model,input_tokens,output_tokens,total_cost,customer_id,plan_id',
+      '2026-05-01,rag_chat,claude-sonnet-4.6,1000,500,120,,pro',
+      '2026-05-01,summary,claude-sonnet-4.6,1000,500,10,cus_healthy,',
+    ].join('\n'), MODELS)
+
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: {
+        cus_loss: 50,
+        cus_healthy: 200,
+      },
+      planRevenueUsd: {
+        pro: 250,
+      },
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(snapshot.reportGate.status).toBe('needs_mapping')
+    expect(snapshot.reportGate.canPreview).toBe(true)
+    expect(snapshot.reportGate.canCreateArtifact).toBe(false)
+    expect(snapshot.reportGate.reason).toContain('mapping_gap')
+  })
+
+  it('does not let unrelated external revenue unlock persisted report creation', () => {
+    const summary = parseUsageCsv([
+      'timestamp,feature,model,input_tokens,output_tokens,total_cost,customer_id,plan_id',
+      '2026-05-01,rag_chat,claude-sonnet-4.6,1000,500,120,cus_loss,pro',
+    ].join('\n'), MODELS)
+
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: {
+        unrelated_customer: 500,
+      },
+      planRevenueUsd: {
+        enterprise: 500,
+      },
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(snapshot.reportGate.status).toBe('needs_mapping')
+    expect(snapshot.reportGate.canPreview).toBe(true)
+    expect(snapshot.reportGate.canCreateArtifact).toBe(false)
+    expect(snapshot.reportGate.reason).toContain('external_revenue_mapping_gap')
   })
 
   it('blocks raw prompt or API key CSVs before diagnosis preview', () => {

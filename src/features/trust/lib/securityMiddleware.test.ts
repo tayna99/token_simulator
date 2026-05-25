@@ -17,6 +17,42 @@ describe('inspectUsageImportSecurity', () => {
     expect(result.retentionAction).toBe('raw_upload_delete_or_reconfirm_after_30_days')
   })
 
+  it('blocks message and authorization headers case-insensitively from snapshot proof', () => {
+    const result = inspectUsageImportSecurity({
+      filename: 'usage.csv',
+      rawCsv: 'timestamp,Message,Authorization,X-API-Key,input_tokens\n2026-05-01,"hello","Bearer sk-test","sk-live",100',
+    })
+
+    expect(result.status).toBe('blocked')
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      'raw_prompt_detected',
+      'api_key_candidate_detected',
+    ]))
+    expect(result.blockedColumns).toEqual(['Message', 'Authorization', 'X-API-Key'])
+    expect(result.snapshotColumns).toEqual(['timestamp', 'input_tokens'])
+  })
+
+  it('blocks common prompt and API key aliases from snapshot proof', () => {
+    const result = inspectUsageImportSecurity({
+      filename: 'usage.csv',
+      rawCsv: 'timestamp,user_prompt,system_prompt,messages_json,conversation_history,openai_key,prompt_tokens\n2026-05-01,"hello","rules","[]","chat","sk-live",100',
+    })
+
+    expect(result.status).toBe('blocked')
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      'raw_prompt_detected',
+      'api_key_candidate_detected',
+    ]))
+    expect(result.blockedColumns).toEqual([
+      'user_prompt',
+      'system_prompt',
+      'messages_json',
+      'conversation_history',
+      'openai_key',
+    ])
+    expect(result.snapshotColumns).toEqual(['timestamp', 'prompt_tokens'])
+  })
+
   it('marks plan margin analysis as blocked when plan_id is missing', () => {
     const result = inspectUsageImportSecurity({
       filename: 'usage.csv',
@@ -64,6 +100,15 @@ describe('inspectUsageImportSecurity', () => {
     expect(result.status).toBe('needs_mapping')
     expect(result.anonymizationStatus).toBe('required')
     expect(result.allowedForSnapshot).toBe(true)
+  })
+
+  it('does not treat ISO timestamps as phone-number PII candidates', () => {
+    const result = inspectUsageImportSecurity({
+      filename: 'usage.csv',
+      rawCsv: 'timestamp,feature,model,input_tokens,output_tokens,plan_id,customer_id,revenue\n2026-05-01T10:00:00Z,chat,gpt-5,100,20,10,customer-1,99',
+    })
+
+    expect(result.warnings).not.toContain('pii_candidate_detected')
   })
 
   it('validates CSV ingress with file metadata and retention job intent', () => {

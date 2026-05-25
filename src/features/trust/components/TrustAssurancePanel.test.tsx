@@ -9,6 +9,7 @@ describe('TrustAssurancePanel', () => {
     expect(screen.getByText('raw prompt는 수집하지 않았습니다.')).toBeInTheDocument()
     expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
     expect(screen.getByText('이 데이터는 원가/마진 분석에 필요한 범위로만 사용됩니다.')).toBeInTheDocument()
+    expect(screen.queryByText(/waiting_for_upload|raw_upload_delete/i)).not.toBeInTheDocument()
   })
 
   it('turns PII findings into a mapping next action instead of fake success', () => {
@@ -48,10 +49,10 @@ describe('TrustAssurancePanel', () => {
     }} />)
 
     expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
-    expect(screen.getByText(/차단된 데이터는 snapshot\/report\/decision history로 넘어가지 않습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/차단된 데이터는 분석, 리포트, 결정 기록으로 넘어가지 않습니다/)).toBeInTheDocument()
   })
-  it('renders buyer-facing proof for snapshot fields, blocked fields, and retention action', () => {
-    render(<TrustAssurancePanel result={{
+  it('renders expert proof for snapshot fields, blocked fields, and retention action', () => {
+    render(<TrustAssurancePanel audience="expert" result={{
       status: 'blocked',
       warnings: ['raw_prompt_detected', 'api_key_candidate_detected'],
       allowedForSnapshot: false,
@@ -72,5 +73,26 @@ describe('TrustAssurancePanel', () => {
     expect(screen.getByText('prompt, api_key')).toBeInTheDocument()
     expect(screen.getByText('retention/delete 예정')).toBeInTheDocument()
     expect(screen.getByText('raw_upload_delete_or_reconfirm_after_30_days')).toBeInTheDocument()
+  })
+
+  it('keeps customer trust proof free of raw status and retention action codes', () => {
+    render(<TrustAssurancePanel result={{
+      status: 'blocked',
+      warnings: ['raw_prompt_detected', 'api_key_candidate_detected'],
+      allowedForSnapshot: false,
+      anonymizationStatus: 'blocked',
+      retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionAction: 'raw_upload_delete_or_reconfirm_after_30_days',
+      blockedColumns: ['prompt', 'api_key'],
+      snapshotColumns: ['timestamp', 'input_tokens'],
+      analysisScope: {
+        available: [],
+        blocked: ['all_analysis'],
+      },
+    }} />)
+
+    expect(screen.getByText('prompt, api_key')).toBeInTheDocument()
+    expect(screen.getByText(/원본 업로드 삭제 또는 재확인이 필요합니다/)).toBeInTheDocument()
+    expect(screen.queryByText(/blocked|raw_upload_delete_or_reconfirm_after_30_days/)).not.toBeInTheDocument()
   })
 })

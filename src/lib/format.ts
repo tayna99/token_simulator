@@ -60,6 +60,17 @@ export function fmtNumber(n: number, decimals = 0): string {
   })
 }
 
+export function fmtKrw(n: number): string {
+  if (!isValid(n)) return INVALID
+  return `${fmtNumber(n)}원`
+}
+
+export function fmtKrwRange(min: number, max: number): string {
+  if (!isValid(min) || !isValid(max)) return INVALID
+  if (min === max) return fmtKrw(min)
+  return `${fmtKrw(min)} - ${fmtKrw(max)}`
+}
+
 export function fmtPricePerMillion(input: number, output: number): string {
   if (!isValid(input) || !isValid(output)) return INVALID
   const fmt = (p: number) => `$${p.toFixed(2)}`

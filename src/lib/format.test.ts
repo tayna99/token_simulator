@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtCurrency, fmtPercent, fmtTokens, fmtPricePerMillion, fmtDelta, fmtNumber } from './format'
+import { fmtCurrency, fmtPercent, fmtTokens, fmtPricePerMillion, fmtDelta, fmtNumber, fmtKrw, fmtKrwRange } from './format'
 
 describe('fmtCurrency', () => {
   it('formats integer dollars with $ prefix', () => {
@@ -104,5 +104,30 @@ describe('fmtNumber', () => {
 
   it('returns "?? for NaN', () => {
     expect(fmtNumber(NaN)).toBe('—')
+  })
+})
+
+describe('fmtKrw', () => {
+  it('formats Korean won with grouping separators', () => {
+    expect(fmtKrw(300_000)).toBe('300,000원')
+  })
+
+  it('returns invalid marker without appending won for NaN', () => {
+    expect(fmtKrw(NaN)).toBe('—')
+  })
+})
+
+describe('fmtKrwRange', () => {
+  it('formats Korean won ranges', () => {
+    expect(fmtKrwRange(300_000, 1_000_000)).toBe('300,000원 - 1,000,000원')
+  })
+
+  it('formats equal endpoints as a single amount', () => {
+    expect(fmtKrwRange(300_000, 300_000)).toBe('300,000원')
+  })
+
+  it('returns invalid marker if either endpoint is invalid', () => {
+    expect(fmtKrwRange(NaN, 1_000_000)).toBe('—')
+    expect(fmtKrwRange(300_000, Infinity)).toBe('—')
   })
 })

@@ -25,9 +25,9 @@ export interface TrustInspectionResult {
   allowedForSnapshot: boolean
   anonymizationStatus: AnonymizationStatus
   retentionNote: string
-  retentionAction: string
-  blockedColumns: string[]
-  snapshotColumns: string[]
+  retentionAction?: string
+  blockedColumns?: string[]
+  snapshotColumns?: string[]
   analysisScope: TrustAnalysisScope
 }
 
@@ -58,22 +58,70 @@ function headerColumns(rawCsv: string): string[] {
   return firstLine.split(',').map(item => item.trim()).filter(Boolean)
 }
 
-function hasAny(headers: Set<string>, names: string[]): boolean {
-  return names.some(name => headers.has(name))
+function normalizeColumn(column: string): string {
+  return column.trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
+function isRawPromptColumn(column: string): boolean {
+  const header = normalizeColumn(column)
+  return [
+    'prompt',
+    'raw_prompt',
+    'message',
+    'messages',
+    'conversation',
+    'transcript',
+    'prompt_text',
+    'prompt_body',
+    'prompt_content',
+    'user_prompt',
+    'system_prompt',
+    'assistant_prompt',
+    'messages_json',
+    'conversation_history',
+    'conversation_json',
+    'chat_history',
+    'transcript_text',
+  ].includes(header)
+}
+
+function isApiKeyColumn(column: string): boolean {
+  const header = normalizeColumn(column)
+  return [
+    'api_key',
+    'apikey',
+    'openai_api_key',
+    'provider_api_key',
+    'provider_key',
+    'openai_key',
+    'anthropic_key',
+    'gemini_key',
+    'google_key',
+    'llm_key',
+    'model_key',
+    'authorization',
+    'auth_header',
+    'x_api_key',
+    'bearer_token',
+    'access_token',
+    'secret_key',
+  ].includes(header)
+    || /(^|_)api_key$/.test(header)
 }
 
 function containsRawPrompt(headers: Set<string>): boolean {
-  return hasAny(headers, ['prompt', 'raw_prompt', 'messages', 'conversation', 'transcript'])
+  return [...headers].some(isRawPromptColumn)
 }
 
 function containsApiKey(rawCsv: string, headers: Set<string>): boolean {
-  return hasAny(headers, ['api_key', 'apikey', 'openai_api_key', 'provider_api_key'])
+  return [...headers].some(isApiKeyColumn)
     || /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{4,}\b/.test(rawCsv)
 }
 
 function containsPii(rawCsv: string): boolean {
+  const withoutTimestamps = rawCsv.replace(/\b\d{4}-\d{2}-\d{2}(?:[T ][0-9:.Z+-]+)?\b/g, ' ')
   return /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(rawCsv)
-    || /\b(?:\+?\d[\d\s().-]{7,}\d)\b/.test(rawCsv)
+    || /\b(?:\+?\d[\d\s().-]{7,}\d)\b/.test(withoutTimestamps)
 }
 
 function availableScopes(headers: Set<string>): string[] {
@@ -93,21 +141,9 @@ function blockedScopes(headers: Set<string>, blocked: boolean): string[] {
   ]
 }
 
-const BLOCKED_SNAPSHOT_COLUMNS = [
-  'prompt',
-  'raw_prompt',
-  'messages',
-  'conversation',
-  'transcript',
-  'api_key',
-  'apikey',
-  'openai_api_key',
-  'provider_api_key',
-]
-
 export function inspectUsageImportSecurity(input: TrustInspectionInput): TrustInspectionResult {
   const columns = headerColumns(input.rawCsv)
-  const headers = new Set(columns)
+  const headers = new Set(columns.map(normalizeColumn))
   const warnings: TrustWarning[] = []
   const blockedColumns: string[] = []
   const extension = fileExtension(input.filename)
@@ -122,7 +158,7 @@ export function inspectUsageImportSecurity(input: TrustInspectionInput): TrustIn
     blockedColumns.push(`file_size:${input.fileSizeBytes}`)
   }
 
-  const blockedDataColumns = columns.filter(column => BLOCKED_SNAPSHOT_COLUMNS.includes(column))
+  const blockedDataColumns = columns.filter(column => isRawPromptColumn(column) || isApiKeyColumn(column))
 
   if (containsRawPrompt(headers)) warnings.push('raw_prompt_detected')
   if (containsApiKey(input.rawCsv, headers)) warnings.push('api_key_candidate_detected')
@@ -166,9 +202,6 @@ function isTrustInspectionResult(value: unknown): value is TrustInspectionResult
     && typeof candidate.allowedForSnapshot === 'boolean'
     && (candidate.anonymizationStatus === 'not_needed' || candidate.anonymizationStatus === 'required' || candidate.anonymizationStatus === 'blocked')
     && typeof candidate.retentionNote === 'string'
-    && typeof candidate.retentionAction === 'string'
-    && Array.isArray(candidate.blockedColumns)
-    && Array.isArray(candidate.snapshotColumns)
     && Array.isArray(candidate.warnings)
     && !!candidate.analysisScope
     && Array.isArray(candidate.analysisScope.available)

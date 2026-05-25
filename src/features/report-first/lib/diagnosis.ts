@@ -43,10 +43,18 @@ export interface ReportGate {
   warnings: string[]
 }
 
+export interface DiagnosisRoiProof {
+  monthlyLossUsd: number
+  topDecileSubsidyUsd: number
+  bestPolicyMarginDeltaUsd: number
+  paybackHint: string
+}
+
 export interface DiagnosisSnapshot {
   workspaceId: string
   snapshotRef: string | null
   reportGate: ReportGate
+  roiProof: DiagnosisRoiProof
   metrics: DiagnosisMetric[]
   insights: DiagnosisInsight[]
   decisionCandidates: DiagnosisDecisionCandidate[]
@@ -89,7 +97,33 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)))
 }
 
-function reportGateFrom(summary: UsageImportSummary, options: { hasExternalRevenue: boolean }): ReportGate {
+function hasUsageIdentityMappingGap(summary: UsageImportSummary): boolean {
+  const missing = summary.importHealthReport?.missingDimensionCounts
+  return Boolean(missing && (missing.customer > 0 || missing.plan > 0))
+}
+
+function mapHasKey(map: Record<string, number> | undefined, key: string): boolean {
+  return Boolean(map && Object.prototype.hasOwnProperty.call(map, key))
+}
+
+function externalRevenueCoversUsage(
+  summary: UsageImportSummary,
+  customerRevenueUsd: Record<string, number> | undefined,
+  planRevenueUsd: Record<string, number> | undefined,
+): boolean {
+  const customerIds = unique(summary.rows.map(row => row.customerId ?? ''))
+  const planIds = unique(summary.rows.map(row => row.planId ?? ''))
+
+  return customerIds.length > 0
+    && planIds.length > 0
+    && customerIds.every(customerId => mapHasKey(customerRevenueUsd, customerId))
+    && planIds.every(planId => mapHasKey(planRevenueUsd, planId))
+}
+
+function reportGateFrom(
+  summary: UsageImportSummary,
+  options: { hasExternalRevenue: boolean; externalRevenueMappingGap: boolean },
+): ReportGate {
   const inspection = summary.trustInspection
   if (!inspection) {
     return {
@@ -111,15 +145,18 @@ function reportGateFrom(summary: UsageImportSummary, options: { hasExternalReven
     }
   }
 
+  const keepUsageMappingGap = hasUsageIdentityMappingGap(summary)
   const mappingWarnings = unique([
     ...inspection.analysisScope.blocked,
     ...(summary.importHealthReport?.status === 'needs_mapping' ? ['mapping_gap'] : []),
     ...(inspection.status === 'needs_mapping' ? inspection.warnings : []),
+    ...(options.externalRevenueMappingGap ? ['external_revenue_mapping_gap'] : []),
   ]).filter(warning => (
     options.hasExternalRevenue
       ? warning !== 'revenue_missing'
         && warning !== 'loss_customer'
         && warning !== 'customer_profitability'
+        && (warning !== 'mapping_gap' || keepUsageMappingGap)
       : true
   ))
 
@@ -160,6 +197,44 @@ function bestScenario(scenarios: ScenarioResult[]): ScenarioResult | null {
   return [...scenarios].sort((left, right) => right.grossMarginPct - left.grossMarginPct)[0] ?? null
 }
 
+function bestGrossMarginScenario(scenarios: ScenarioResult[]): ScenarioResult | null {
+  return [...scenarios].sort((left, right) => right.grossMarginUsd - left.grossMarginUsd)[0] ?? null
+}
+
+function roiProofFrom(input: {
+  lossCustomers: ReturnType<typeof customerProfitability>
+  heavyUsers: ReturnType<typeof heavyUserDetection>
+  scenarios: ScenarioResult[]
+}): DiagnosisRoiProof {
+  const monthlyLossUsd = input.lossCustomers.reduce((sum, customer) => (
+    sum + Math.max(0, -customer.grossMarginUsd)
+  ), 0)
+  const topDecileCount = input.heavyUsers.customers.length > 0
+    ? Math.max(1, Math.ceil(input.heavyUsers.customers.length * 0.1))
+    : 0
+  const topDecileSubsidyUsd = Math.max(
+    0,
+    input.heavyUsers.topDecileCostUsd - (input.heavyUsers.medianCustomerCostUsd * topDecileCount),
+  )
+  const currentScenario = input.scenarios.find(scenario => scenario.policy === 'flat')
+  const bestScenarioByMargin = bestGrossMarginScenario(input.scenarios)
+  const bestPolicyMarginDeltaUsd = Math.max(
+    0,
+    (bestScenarioByMargin?.grossMarginUsd ?? 0) - (currentScenario?.grossMarginUsd ?? 0),
+  )
+
+  return {
+    monthlyLossUsd,
+    topDecileSubsidyUsd,
+    bestPolicyMarginDeltaUsd,
+    paybackHint: monthlyLossUsd > 0
+      ? `이번 달 추정 누수 ${fmtCurrency(monthlyLossUsd)}부터 회수할 수 있는지 확인하세요.`
+      : bestPolicyMarginDeltaUsd > 0
+        ? `정책 변경 시 ${fmtCurrency(bestPolicyMarginDeltaUsd)} 개선 여지가 있습니다.`
+        : '현재 입력에서는 큰 누수가 보이지 않습니다.',
+  }
+}
+
 function roleViewsFor(input: {
   monthlyCostUsd: number
   grossMarginPct: number
@@ -183,8 +258,14 @@ function roleViewsFor(input: {
 }
 
 export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): DiagnosisSnapshot {
+  const hasExternalRevenueCoverage = externalRevenueCoversUsage(
+    input.summary,
+    input.customerRevenueUsd,
+    input.planRevenueUsd,
+  )
   const gate = reportGateFrom(input.summary, {
-    hasExternalRevenue: Boolean(input.customerRevenueUsd) && Boolean(input.planRevenueUsd),
+    hasExternalRevenue: hasExternalRevenueCoverage,
+    externalRevenueMappingGap: Boolean(input.customerRevenueUsd || input.planRevenueUsd) && !hasExternalRevenueCoverage,
   })
   const refs = unique([
     'tool:usage.import',
@@ -199,6 +280,12 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       workspaceId: input.workspaceId,
       snapshotRef: input.snapshotRef ?? null,
       reportGate: gate,
+      roiProof: {
+        monthlyLossUsd: 0,
+        topDecileSubsidyUsd: 0,
+        bestPolicyMarginDeltaUsd: 0,
+        paybackHint: '분석 가능한 snapshot이 필요합니다.',
+      },
       metrics: [],
       insights: [],
       decisionCandidates: [],
@@ -227,6 +314,7 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const weakestPlan = planMargins[0]
   const lossCustomers = customers.filter(row => row.marginRisk === 'loss')
   const grossMarginPct = weakestPlan?.grossMarginPct ?? selectedScenario?.grossMarginPct ?? 0
+  const roiProof = roiProofFrom({ lossCustomers, heavyUsers, scenarios })
 
   const insights: DiagnosisInsight[] = [
     {
@@ -287,19 +375,22 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   ]
 
   const metrics: DiagnosisMetric[] = [
+    { id: 'monthly_loss', label: '이번 달 추정 누수', value: fmtCurrency(roiProof.monthlyLossUsd), help: '매출 대비 원가 초과분' },
     { id: 'ai_cogs', label: 'AI 원가', value: fmtCurrency(input.summary.totalCostUsd) },
     { id: 'loss_customers', label: '손해 고객', value: fmtTokens(lossCustomers.length) },
+    { id: 'policy_margin_delta', label: '정책 변경 개선 여지', value: fmtCurrency(roiProof.bestPolicyMarginDeltaUsd) },
     { id: 'top_feature_cost', label: '최고 비용 기능', value: topFeature ? fmtCurrency(topFeature.totalCostUsd) : fmtCurrency(0), help: topFeature?.label },
     { id: 'weakest_margin', label: '최저 플랜 마진', value: fmtPercent(grossMarginPct), help: weakestPlan?.planId },
   ]
 
   return {
-    workspaceId: input.workspaceId,
-    snapshotRef: input.snapshotRef ?? null,
-    reportGate: gate,
-    metrics,
-    insights,
-    decisionCandidates,
+      workspaceId: input.workspaceId,
+      snapshotRef: input.snapshotRef ?? null,
+      reportGate: gate,
+      roiProof,
+      metrics,
+      insights,
+      decisionCandidates,
     roleViews: roleViewsFor({
       monthlyCostUsd: input.summary.totalCostUsd,
       grossMarginPct,
@@ -325,7 +416,7 @@ export function reportFirstPayloadFromDiagnosis(
     title: 'AgentPayroll AI SaaS 마진 진단 리포트',
     executiveSummary: snapshot.insights.map(insight => `${insight.title}: ${insight.body}`).join(' '),
     metrics: snapshot.metrics.map(metric => ({ label: metric.label, value: metric.value })),
-    recommendations: [candidate.body],
+    recommendations: [candidate.body, snapshot.roiProof.paybackHint],
     risks: snapshot.reportGate.warnings.length > 0 ? snapshot.reportGate.warnings : ['저장된 artifact 생성 전에는 PDF 공유를 완료로 표시하지 않습니다.'],
     refs: snapshot.refs,
     trust: {

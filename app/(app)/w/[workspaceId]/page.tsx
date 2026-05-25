@@ -13,7 +13,13 @@ import {
   buildRoleWorkspaceLayout,
   type RoleWorkspaceLayout,
 } from '../../../../src/features/role-projection/lib/stageCards'
-import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../../../../src/features/front-operating/lib/frontOperatingContext'
+import {
+  getFrontOperatingAssetsForSurface,
+} from '../../../../src/features/front-operating/lib/frontOperatingContext'
+import {
+  canShowWorkspaceExpertMode,
+  reportAudienceForWorkspace,
+} from '../../../../src/features/front-operating/lib/workspaceExpertMode'
 import type {
   RoleProjectionAudience,
   RoleProjectionRole,
@@ -73,7 +79,10 @@ function RoleLayoutPreview({ layout }: { layout: RoleWorkspaceLayout }) {
 }
 
 function ServiceValidationKitPreview() {
-  const assets = AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(asset => asset.documentPath)
+  const assets = [
+    ...getFrontOperatingAssetsForSurface('expert'),
+    ...getFrontOperatingAssetsForSurface('internal'),
+  ].filter(asset => asset.documentPath)
 
   return (
     <div className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
@@ -105,10 +114,12 @@ export default async function WorkspacePage({
   const query = await searchParams
   const { user, error } = await getServerSupabaseUser()
   const client = getSupabaseAdminRestClient()
+  const audience = workspaceAudience(query)
+  const showExpertMode = canShowWorkspaceExpertMode({ audience, hasUser: Boolean(user) })
   const roleLayout = buildRoleWorkspaceLayout({
     stage: 'cost',
     role: workspaceRole(query.role),
-    audience: workspaceAudience(query),
+    audience,
     cards: COST_STAGE_CARDS,
   })
   const status = await checkProductionDemoStatus({
@@ -148,33 +159,39 @@ export default async function WorkspacePage({
         </div>
 
         <div className="mt-6">
-          <ReportFirstDiagnosisWorkspace workspaceId={workspaceId} productionStatus={status.status} />
+          <ReportFirstDiagnosisWorkspace
+            workspaceId={workspaceId}
+            productionStatus={status.status}
+            audience={reportAudienceForWorkspace({ audience, hasUser: Boolean(user) })}
+          />
         </div>
 
-        {!user && (
+        {audience === 'internal' && !user && (
           <div className="mt-6 rounded-wds border border-status-cautionary bg-fill-alternative p-4">
             <p className="font-semibold">Supabase user session required</p>
             <p className="mt-1 text-sm text-label-neutral">{error ?? 'unauthenticated'}</p>
           </div>
         )}
 
-        <details className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
-          <summary className="cursor-pointer text-sm font-semibold text-label-normal">
-            전문가 모드: production readiness / dashboard layout
-          </summary>
-          <div className="mt-5">
-            <p className="text-sm font-semibold uppercase text-primary-normal">Production demo status</p>
-            <h2 className="mt-2 text-2xl font-semibold">{status.status}</h2>
-            {status.missing.length > 0 && (
-              <p className="mt-2 text-sm text-label-neutral">
-                Missing env: <span translate="no">{status.missing.join(', ')}</span>
-              </p>
-            )}
-            <StatusList checks={status.checks} />
-            <RoleLayoutPreview layout={roleLayout} />
-            <ServiceValidationKitPreview />
-          </div>
-        </details>
+        {showExpertMode && (
+          <details className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
+            <summary className="cursor-pointer text-sm font-semibold text-label-normal">
+              전문가 모드: production readiness / dashboard layout
+            </summary>
+            <div className="mt-5">
+              <p className="text-sm font-semibold uppercase text-primary-normal">Production demo status</p>
+              <h2 className="mt-2 text-2xl font-semibold">{status.status}</h2>
+              {status.missing.length > 0 && (
+                <p className="mt-2 text-sm text-label-neutral">
+                  Missing env: <span translate="no">{status.missing.join(', ')}</span>
+                </p>
+              )}
+              <StatusList checks={status.checks} />
+              <RoleLayoutPreview layout={roleLayout} />
+              <ServiceValidationKitPreview />
+            </div>
+          </details>
+        )}
       </section>
     </main>
   )

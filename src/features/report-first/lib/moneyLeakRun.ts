@@ -23,7 +23,7 @@ export const MONEY_LEAK_STEPS: MoneyLeakStep[] = [
   { id: 'money_leak', label: 'Money Leak', description: '손해 고객과 마진 깨는 기능을 찾습니다.' },
   { id: 'candidate', label: 'Decision Candidate', description: '가격, 제한, 모델/라우팅 후보를 고릅니다.' },
   { id: 'decision_choice', label: 'Adopt/Reject/Hold', description: '사람의 결정을 기록합니다.' },
-  { id: 'pdf', label: 'PDF Report', description: '저장된 공유 artifact를 만듭니다.' },
+  { id: 'pdf', label: 'PDF Report', description: '저장된 공유 PDF를 만듭니다.' },
 ]
 
 export function deriveMoneyLeakStepStates(input: MoneyLeakStepStateInput): Record<MoneyLeakStepId, MoneyLeakStepState> {
