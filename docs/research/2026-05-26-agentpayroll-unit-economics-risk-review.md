@@ -126,7 +126,7 @@ CAC(고객획득비용)의 가장 큰 항목은 광고비가 아니라 신뢰 �
 
 Trust Gate는 보안 기능이 아니라 conversion UX(구매 전환을 돕는 사용자 경험)다. 업로드 직후 raw prompt(사용자가 AI에게 입력한 원문), API key(외부 API를 호출할 수 있는 비밀 키), PII(개인식별정보), retention(데이터 보관/삭제 기간), allowed scope(분석에 쓰는 데이터 범위)를 보여주는 것은 마찰이 아니라 구매 불안을 낮추는 핵심 장치다.
 
-CAC risk model:
+CAC 리스크 모델:
 
 ```text
 CAC

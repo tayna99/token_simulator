@@ -54,11 +54,11 @@ P1 후속 베팅:
 
 | Workstream(작업 흐름) | Owner(담당자) | Output(산출물) |
 | --- | --- | --- |
-| ROI proof | subagent | `DiagnosisSnapshot` exposes leak/payback proof |
-| Trust proof | subagent | Trust inspection and panel show proof details |
-| Revenue mapping | subagent | Pure revenue CSV parser and tests |
-| UI integration | parent session | First-run workspace wires revenue mapping and ROI proof into visible flow |
-| Research loop | parent session | Interview guide and PDCA doc updated |
+| ROI proof(투자 대비 효과 근거) | subagent | `DiagnosisSnapshot`이 leak/payback proof(누수액/회수 기간 근거)를 노출 |
+| Trust proof(신뢰 근거) | subagent | Trust inspection(신뢰 점검)과 패널이 proof details(근거 세부 정보)를 표시 |
+| Revenue mapping(매출 매핑) | subagent | 순수 revenue CSV parser(매출 CSV 파서)와 테스트 |
+| UI integration(UI 연결) | parent session | 첫 실행 workspace(작업 공간)에 revenue mapping과 ROI proof를 보이는 흐름으로 연결 |
+| Research loop(리서치 루프) | parent session | 인터뷰 가이드와 PDCA 문서 업데이트 |
 
 ## Check(점검)
 

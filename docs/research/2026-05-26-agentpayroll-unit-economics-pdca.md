@@ -144,8 +144,8 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 
 ### 제품/UI backlog 전환
 
-- P0 backlog: Trust Gate self-serve, ICP scoring form, Data Readiness timer, schema coverage meter, decision-before-report gate.
-- P1 backlog: Monthly outcome review, decision history diff, trigger-based 재접촉 memo, pricing scenario/rate card draft, report recipient tracking.
+- P0 backlog(가장 먼저 쌓아둘 구현 후보): Trust Gate self-serve(고객이 직접 확인하는 신뢰 안내), ICP scoring form(이상적 고객군 점수표), Data Readiness timer(데이터 준비도 소요 시간 측정), schema coverage meter(데이터 구조 충족도 표시), decision-before-report gate(결정 기록 후 리포트 export 잠금).
+- P1 backlog(다음 단계 구현 후보): Monthly outcome review(월간 결정 결과 검산), decision history diff(이전 결정과 현재 상태 차이), trigger-based 재접촉 memo(변화 신호 기반 재접촉 메모), pricing scenario/rate card draft(가격 시나리오/요금표 초안), report recipient tracking(리포트 수신자 추적).
 - UI는 비용 절감 단독이 아니라 cost + margin + quality/risk + decision outcome을 같이 보여준다.
 - 계산/포맷 로직은 기존 원칙대로 pure TS numeric core에 두고, Agent/PDCA layer는 판정과 추천만 담당한다.
 

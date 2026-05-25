@@ -1,23 +1,23 @@
-# AI SaaS LLM Cost Attribution Evidence - 2026-05-07
+# AI SaaS LLM 비용 Attribution Evidence - 2026-05-07
 
-## Purpose
+## 목적
 
-이 문서는 AI SaaS에서 LLM 비용을 customer, feature, model, plan, session, workflow, agent run 단위로 attribution해야 한다는 Core Engine 근거를 정리한다.
+이 문서는 AI SaaS(AI 기능을 제공하는 구독형 소프트웨어)에서 LLM(대규모 언어 모델) 비용을 customer, feature, model, plan, session, workflow, agent run 단위로 attribution(비용을 고객·기능·플랜 같은 기준에 배정하는 것)해야 한다는 Core Engine(비용 귀속과 의사결정 계산을 맡는 핵심 엔진) 근거를 정리한다.
 
-## Result
+## 결과
 
-Grok이 제시한 6개 attribution 사례 중 4개를 새 공식 evidence로 승격했다. Spendline과 Reddit 사례는 이미 공식 원장에 있었으므로 중복 row를 만들지 않았다.
+Grok이 제시한 6개 attribution 사례 중 4개를 새 공식 evidence(검증 근거 사례)로 승격했다. Spendline과 Reddit 사례는 이미 공식 원장에 있었으므로 중복 row를 만들지 않았다.
 
 | Source | Official row | Attribution axis | Product meaning |
 | --- | --- | --- | --- |
-| Spendline | `GR-027` | customer, request, feature | 이미 공식 원장에 반영된 customer-level cost model 근거 |
-| CloudZero inference cost | `GR-030` | conversation, customer, feature | unit cost mapping과 feature/customer gross margin 근거 |
-| Tian Pan pricing page | `GR-031` | customer, feature, model, context length | request-level tagging과 finance-readable cost model 근거 |
-| Revenium Tool Registry | `GR-032` | trace, workflow, agent, customer, product | agent run/workflow 단위 cost ceiling과 attribution 근거 |
-| Reddit customer profitability | `GR-002` | customer | 이미 공식 원장에 반영된 customer profitability pain |
+| Spendline | `GR-027` | customer, request, feature | 이미 공식 원장에 반영된 customer-level cost model(고객 단위 원가 모델) 근거 |
+| CloudZero inference cost | `GR-030` | conversation, customer, feature | unit cost mapping(단위 원가 매핑)과 feature/customer gross margin 근거 |
+| Tian Pan pricing page | `GR-031` | customer, feature, model, context length | request-level tagging(요청 단위 태깅)과 finance-readable cost model(재무팀이 읽을 수 있는 원가 모델) 근거 |
+| Revenium Tool Registry | `GR-032` | trace, workflow, agent, customer, product | agent run/workflow 단위 cost ceiling(원가 상한)과 attribution 근거 |
+| Reddit customer profitability | `GR-002` | customer | 이미 공식 원장에 반영된 customer profitability(고객별 수익성) pain |
 | Particula per-tenant attribution | `GR-033` | tenant, feature, plan, p99 cost | plan margin과 tenant-level cost attribution 근거 |
 
-## Core Engine Implication
+## Core Engine 시사점
 
 이 evidence들은 공통적으로 같은 구조를 말한다.
 
@@ -31,14 +31,14 @@ usage event
 
 따라서 MVP에서 Core Engine은 단순 집계가 아니라 비용을 비즈니스 단위로 재분류하는 해석 레이어로 정의해야 한다.
 
-## Official Evidence Added
+## 추가된 공식 Evidence
 
 - `GR-030`: CloudZero inference cost
 - `GR-031`: Tian Pan pricing page/token economics
 - `GR-032`: Revenium Tool Registry
 - `GR-033`: Particula per-tenant LLM cost attribution
 
-## Current Official State
+## 현재 공식 상태
 
 - Official Evidence Board: `GR-001`부터 `GR-038`까지 38 rows.
 - Next official evidence id: `GR-039`.

@@ -1,4 +1,4 @@
-# PRODUCT_UX: AI Team Cost Simulator Workspace
+# PRODUCT_UX: AI Team Cost Simulator Workspace(AI 팀 비용 시뮬레이터 작업공간)
 
 작성일: 2026-05-23
 
@@ -8,9 +8,9 @@ P1 웹앱은 “최신 모델을 알고 있다”와 “그 모델로 비용을 
 
 - 고객 기본 화면에는 다음 네 가지 상태만 노출한다: `최신 Google Gemini 3.5 Flash 단가 반영`, `가격 출처 확인일: 2026-05-24`, `Gemini Omni / 비디오 비용은 공식 API 단가 확인 필요`, `사용자 단가 입력 시 시나리오 계산 가능`.
 - 모델 선택 UI는 Gemini 3.5 Pro, Gemini Omni, Gemini Omni Flash를 숨기지 않는다. 다만 공식 API 가격이 없으면 비활성화하고 “API pricing not published / 사용자 단가 필요”로 표시한다.
-- 모델 레이더, 시장 업데이트, 멀티모달 확장 카드에서는 가격 미공개 모델도 활성 노출한다. 이는 제품이 시장 변화를 따라가고 있음을 보여주기 위한 surface다.
+- 모델 레이더, 시장 업데이트, 멀티모달 확장 카드에서는 가격 미공개 모델도 활성 노출한다. 이는 제품이 시장 변화를 따라가고 있음을 보여주기 위한 surface(사용자에게 보이는 제품 표면)다.
 - 비용 계산 surface에서는 `isCostCalculableModel(model)`이 `false`인 모델을 공식 계산 모델로 쓰지 않는다. “공식 발표됨”은 정보이고, “계산 가능함”은 별도 상태다.
-- `tool:*`, `asset:*`, `snapshot:*`, source URL, agent route, stale warning 같은 내부 근거는 admin/debug 모드에서만 표시한다. 고객 화면은 비용, 마진, 리스크, 결정 요약 중심으로 유지한다.
+- `tool:*`, `asset:*`, `snapshot:*`(그 시점의 분석 데이터 묶음), source URL, agent route(에이전트 실행 경로), stale warning(오래된 정보 경고) 같은 내부 근거는 admin/debug 모드에서만 표시한다. 고객 화면은 비용, 마진, 리스크, 결정 요약 중심으로 유지한다.
 - AI Agent는 미공개 단가를 추정하지 않는다. 미공개 modality는 `unsupported_pricing` 또는 “공식 API 단가 확인 필요”로만 설명한다.
 
 ## 1. 문서 역할
@@ -21,7 +21,7 @@ P1 웹앱은 “최신 모델을 알고 있다”와 “그 모델로 비용을 
 
 ## 2. 제품 척추
 
-앱은 화면 묶음이 아니라 결정 흐름이다.
+앱은 화면 묶음이 아니라 decision flow(결정 흐름)다.
 
 ```txt
 Design -> Cost -> Bottleneck -> Optimize + Risk -> Decision Log
@@ -35,7 +35,7 @@ Design -> Cost -> Bottleneck -> Optimize + Risk -> Decision Log
 | Cost | 현재 구성의 월 비용을 받아들일지 판단한다. | 월 비용, 요청 수, 토큰 수, Agent별 비용 출처가 보인다. |
 | Bottleneck | 어디가 비용/운영 병목인지 고른다. | 상위 Agent, 재로드 입력, 고객 수 선형 증가 같은 병목이 표와 설명으로 분리된다. |
 | Optimize + Risk | 절감안을 채택하거나 보류한다. | 절감액, 리스크 카드, 사람 승인 게이트가 함께 보인다. |
-| Decision Log | 결정을 기록하고 다음 보정 루프로 넘긴다. | 결정, 이유, 가정, tool ref, risk card, Plan vs Actual 스냅샷이 남는다. |
+| Decision Log | 결정을 기록하고 다음 보정 루프로 넘긴다. | 결정, 이유, 가정, tool ref(근거 참조), risk card(위험 카드), Plan vs Actual(예상 대비 실제) 스냅샷이 남는다. |
 
 PRD의 9단계 데모는 이 척추의 세부 네비게이션이다. 9단계는 좌측 네비게이션에 유지하고, 중앙 작업영역은 현재 단계의 입력/표/차트를 보여주며, 우측 패널은 AI 해석과 결정 버튼을 제공한다.
 
@@ -53,14 +53,14 @@ PRD의 9단계 데모는 이 척추의 세부 네비게이션이다. 9단계는 
 
 ## 4. 숫자와 해석의 분리
 
-숫자는 deterministic engine의 산출물이다. 해석은 AI layer의 산출물이다. 두 영역은 시각적으로도 분리한다.
+숫자는 deterministic engine(결정론 계산 엔진)의 산출물이다. 해석은 AI layer(AI 해석 레이어)의 산출물이다. 두 영역은 시각적으로도 분리한다.
 
 | 종류 | 스타일 | 규칙 |
 | --- | --- | --- |
 | deterministic 숫자 | 단단한 table, metric tile, 고정폭 정렬, `translate="no"` | 모든 표시 숫자는 `src/lib/format.ts` 포맷 함수만 사용한다. |
 | AI 해석 | 주석/말풍선형 callout, 연한 배경, 짧은 문장 | 모든 문장 옆에 `tool:*` 또는 `risk:*` chip을 붙인다. |
 | Risk Card | caution/negative tone, 근거 ID 노출 | 절감안 채택 버튼은 risk card가 없으면 비활성화한다. |
-| Decision Log | 감사 가능한 ledger row | 결정, 이유, 가정, tool ref, risk card를 함께 저장한다. |
+| Decision Log | 감사 가능한 ledger row(장부 행) | 결정, 이유, 가정, tool ref, risk card를 함께 저장한다. |
 
 AI 문장은 숫자를 만들지 않는다. 숫자가 필요하면 tool ref chip으로 기존 deterministic 값을 인용한다.
 
@@ -105,20 +105,20 @@ Trust Intake -> Work Ledger -> Cost & Margin -> Bottleneck -> Optimize + Risk ->
 
 ### Customer-facing SaaS Dashboard
 
-P1 고객용 화면은 운영자 콘솔보다 결과와 근거를 먼저 보여준다. 필수 surface는 `workspace home`, `upload history`, `monthly review history`, `current cost/margin snapshot`, `agent review history`, `decision ledger`, `report export`, `alert settings`다. 내부 운영자용 세부 정보(schema mapping, adapter 상태, raw issue)는 advanced/admin 영역에 둔다.
+P1 고객용 화면은 운영자 콘솔보다 결과와 근거를 먼저 보여준다. 필수 surface는 `workspace home`, `upload history`, `monthly review history`, `current cost/margin snapshot`, `agent review history`, `decision ledger`, `report export`, `alert settings`다. 내부 운영자용 세부 정보(schema mapping(스키마 매핑), adapter 상태, raw issue(원본 이슈)는 advanced/admin 영역에 둔다.
 
 ### Supervisor Agent-as-Tool
 
-11개 Operating Agent는 제품의 주체다. Python/LangChain runtime은 `Supervisor Agent-as-Tool` 구조로 stage별 primary/reviewer Agent를 호출하고, 각 Agent는 read-only capability tool(snapshot, risk, benchmark, decision, provider registry, model perf matrix, operating ledger)을 사용한다. 비용, 마진, 절감액, budget delta는 계속 TypeScript deterministic engine이 만든 `tool:*` snapshot만 인용한다.
+11개 Operating Agent(운영 분석 에이전트)는 제품의 주체다. Python/LangChain runtime(실행 환경)은 `Supervisor Agent-as-Tool` 구조로 stage별 primary/reviewer Agent를 호출하고, 각 Agent는 read-only capability tool(읽기 전용 기능 도구: snapshot, risk, benchmark, decision, provider registry, model perf matrix, operating ledger)을 사용한다. 비용, 마진, 절감액, budget delta(예산 차이)는 계속 TypeScript deterministic engine이 만든 `tool:*` snapshot만 인용한다.
 
 ### Full RAG
 
-P1 `Full RAG`는 세 갈래로 분리한다.
+P1 `Full RAG`(전체 검색-근거 응답 체계)는 세 갈래로 분리한다.
 
 | RAG | 역할 | 숫자 권위 |
 | --- | --- | --- |
-| 공식 문서 RAG | 가격/스펙 설명 보조 | structured fact ledger가 권위 |
-| benchmark RAG | peer/evidence 비교 | corpus 부족 시 `baseline unavailable` |
+| 공식 문서 RAG | 가격/스펙 설명 보조 | structured fact ledger(구조화된 사실 장부)가 권위 |
+| benchmark RAG | peer/evidence(비슷한 팀/근거) 비교 | corpus 부족 시 `baseline unavailable` |
 | decision RAG | 과거 결정 검색 | decision id + snapshot version을 반환 |
 
 RAG 결과는 반드시 `evidence:*`, `asset:*`, `decision:*`, `source:*` ref를 반환한다. RAG는 fact table 숫자를 덮어쓰지 않는다.
