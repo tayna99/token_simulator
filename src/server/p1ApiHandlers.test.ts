@@ -537,6 +537,7 @@ describe('P1 API handlers', () => {
 
     expect(response.status).toBe(202)
     expect(pdf?.body).toContain('AgentPayroll AI 비용 진단 리포트')
+    expect(markdown?.body).toContain('Selected Decision')
     expect(markdown?.body).toContain('Decision choice: hold')
     expect(markdown?.body).toContain('Trust and data handling')
     expect(json?.body).toContain('usage:p1:workspace-demo:2026-05')

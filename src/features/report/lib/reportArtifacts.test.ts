@@ -48,7 +48,7 @@ describe('buildReportArtifact', () => {
     ))).toBe(true)
   })
 
-  it('includes trust, formula, provider source, and snapshot metadata in the one-page report', () => {
+  it('formats the one-page report as a Money Leak Run artifact with trust and provenance', () => {
     const report = buildOnePageReportArtifact({
       title: 'SparkClaw AI Cost Snapshot',
       executiveSummary: 'AI COGS is concentrated in summarization.',
@@ -63,8 +63,14 @@ describe('buildReportArtifact', () => {
       },
       formulaVersion: 'cost_formula_v0.3',
       providerRegistryVersion: 'provider_registry_v0.4',
+      decisionRefs: ['decision:route-short-summaries'],
+      decisionChoice: 'adopt',
     })
 
+    expect(report.markdown).toContain('Money Leak Diagnosis')
+    expect(report.markdown).toContain('Selected Decision')
+    expect(report.markdown).toContain('Decision choice: adopt')
+    expect(report.markdown).toContain('Decision ref: decision:route-short-summaries')
     expect(report.markdown).toContain('Trust and data handling')
     expect(report.markdown).toContain('cost_formula_v0.3')
     expect(report.markdown).toContain('provider_registry_v0.4')
@@ -115,5 +121,28 @@ describe('buildReportArtifact', () => {
     expect(report.markdown).toContain('Rate-card draft')
     expect(report.markdown).toContain('draft')
     expect(report.markdown).toContain('Source Changed')
+  })
+
+  it('keeps empty selected-decision content in Money Leak Run language', () => {
+    const report = buildOnePageReportArtifact({
+      title: 'AgentPayroll AI 비용 진단 리포트',
+      executiveSummary: '요약을 생성했습니다.',
+      metrics: [],
+      recommendations: [],
+      risks: [],
+      refs: [],
+      trust: {
+        status: 'needs_mapping',
+        dataLimitations: ['revenue mapping required'],
+        retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      },
+      formulaVersion: 'cost_formula_v0.3',
+      providerRegistryVersion: 'provider_registry_v0.4',
+    })
+
+    expect(report.markdown).toContain('## Selected Decision')
+    expect(report.markdown).toContain('- No decision candidate selected.')
+    expect(report.markdown).toContain('- Decision choice: not recorded')
+    expect(report.markdown).toContain('- Decision ref: none')
   })
 })
