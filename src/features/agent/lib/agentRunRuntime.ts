@@ -140,7 +140,7 @@ export interface AgentRunRuntimeOptions {
 }
 
 function runtimeFromEnv(): AgentRunRuntimeMode {
-  return import.meta.env.VITE_AGENT_RUNTIME === 'server' ? 'server' : 'local'
+  return import.meta.env.VITE_AGENT_RUNTIME === 'local' ? 'local' : 'server'
 }
 
 function apiUrl(path: string): string {

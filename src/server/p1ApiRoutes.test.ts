@@ -178,6 +178,27 @@ describe('P1 Vercel API routes', () => {
     })
   })
 
+  it('routes watchtower runs and review through Supabase-backed official update handlers', async () => {
+    const { default: runsHandler } = await import('../../api/watchtower/runs')
+    const { default: reviewHandler } = await import('../../api/watchtower/review')
+    const runs = responseCollector()
+    const review = responseCollector()
+
+    await runsHandler({ method: 'GET', body: undefined, query: { workspaceId: 'workspace-demo' } }, runs.response)
+    await reviewHandler({ method: 'GET', body: undefined, query: { workspaceId: 'workspace-demo' } }, review.response)
+
+    expect(runs.result.statusCode).toBe(503)
+    expect(runs.result.body).toMatchObject({
+      inbox: { reviewCandidates: [] },
+      error: 'storage_not_configured',
+    })
+    expect(review.result.statusCode).toBe(503)
+    expect(review.result.body).toMatchObject({
+      inbox: { reviewCandidates: [] },
+      error: 'storage_not_configured',
+    })
+  })
+
   it('routes retention runner through /api/retention/run', async () => {
     vi.doMock('./storage/kvStore', () => ({
       createKvStoreFromEnv: () => ({

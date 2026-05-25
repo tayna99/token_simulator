@@ -19,8 +19,13 @@ import {
 } from './storage/kvStore'
 import { createOpenAiEmbeddingProviderFromEnv } from './ai/openAiEmbeddingProvider'
 import {
+  SupabaseCheckpointStore,
   SupabasePersistentVectorStore,
+  SupabaseReportArtifactStore,
+  SupabaseWatchtowerStore,
   createSupabaseClientFromEnv,
+  type SupabaseAcceptedFactRecord,
+  type SupabaseWatchtowerRunRecord,
 } from './storage/supabaseProductionStore'
 import {
   normalizeSdkLiteUsageEvent,
@@ -59,8 +64,8 @@ import {
 } from '../features/rag/lib/apiDocRag'
 import {
   buildOfficialUpdatesReviewInbox,
-  DEMO_MODEL_RELEASE_CANDIDATES,
-  DEMO_OFFICIAL_SOURCE_SNIPPETS,
+  type ModelReleaseCandidate,
+  type OfficialSourceSnippet,
   type OfficialUpdatesReviewInbox,
 } from '../features/research/lib/officialWatchtower'
 import {
@@ -71,6 +76,7 @@ import {
   type CorpusEvidenceResult,
 } from '../features/rag/lib/corpusRag'
 import { CORPUS_IDS, type CorpusId } from '../features/rag/lib/corpusTypes'
+import { EXTERNAL_CONNECTORS } from './externalConnectors'
 
 export interface ApiResult<T> {
   status: number
@@ -264,6 +270,8 @@ export interface TeamCostCalibrationApiResponse {
 export interface OfficialUpdatesApiResponse {
   persistence: PersistenceState
   inbox: OfficialUpdatesReviewInbox
+  latestRun?: SupabaseWatchtowerRunRecord | null
+  acceptedFacts?: SupabaseAcceptedFactRecord[]
   error?: string
 }
 
@@ -318,6 +326,10 @@ function contextEnv(context?: P1ApiContext): Record<string, string | undefined> 
   return context?.env ?? (globalThis as {
     process?: { env?: Record<string, string | undefined> }
   }).process?.env ?? {}
+}
+
+function contextSupabaseClient(context: P1ApiContext) {
+  return createSupabaseClientFromEnv(contextEnv(context), context.fetcher)
 }
 
 function capabilityFromEnv(
@@ -452,9 +464,11 @@ function checkpointFor(input: TeamCostRuntimeInput, persistence: CheckpointPersi
     threadId,
     workspaceId: input.workspaceId,
     status,
-    message: persistence === 'kv'
-      ? 'Checkpoint persisted in Vercel KV for P1 interrupt/resume flow.'
-      : 'Checkpoint persistence is not configured yet; P0 still uses browser events and local Decision Log export.',
+    message: persistence === 'supabase'
+      ? 'Checkpoint persisted in Supabase for P1 interrupt/resume flow.'
+      : persistence === 'kv'
+        ? 'Checkpoint persisted in Vercel KV for P1 interrupt/resume flow.'
+        : 'Checkpoint persistence is not configured yet; P0 still uses browser events and local Decision Log export.',
   }
 }
 
@@ -529,6 +543,50 @@ function buildReportArtifacts(input: {
   }))
 }
 
+function reportRunFromArtifacts(artifacts: ReportArtifactRecord[]): ReportRunShell | null {
+  const first = artifacts[0]
+  if (!first) return null
+  const jsonArtifact = artifacts.find(artifact => artifact.format === 'json')
+  const parsed = (() => {
+    if (!jsonArtifact) return null
+    try {
+      return JSON.parse(jsonArtifact.body) as Partial<{
+        period: string
+        decisionIds: string[]
+        snapshotRefs: ReportRunShell['snapshotRefs']
+        createdAt: string
+      }>
+    } catch {
+      return null
+    }
+  })()
+  const period = parsed?.period ?? first.reportRunId.replace(/^report-run-/, '')
+  const decisionIds = Array.isArray(parsed?.decisionIds) ? parsed.decisionIds.filter(item => typeof item === 'string') : []
+  const snapshotRefs = parsed?.snapshotRefs && Array.isArray(parsed.snapshotRefs.decisionIds)
+    ? parsed.snapshotRefs
+    : { decisionIds, configSnapshotRef: null, usageSnapshotRef: null }
+  return {
+    id: first.reportRunId,
+    period,
+    decisionIds,
+    persistence: 'supabase',
+    createdAt: parsed?.createdAt ?? first.createdAt,
+    snapshotRefs,
+    artifacts,
+  }
+}
+
+function groupReportRuns(artifacts: ReportArtifactRecord[]): ReportRunShell[] {
+  const groups = artifacts.reduce<Map<string, ReportArtifactRecord[]>>((map, artifact) => {
+    map.set(artifact.reportRunId, [...(map.get(artifact.reportRunId) ?? []), artifact])
+    return map
+  }, new Map())
+  return Array.from(groups.values())
+    .map(reportRunFromArtifacts)
+    .filter((run): run is ReportRunShell => Boolean(run))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+}
+
 function coerceDecisions(value: unknown): Decision[] {
   return Array.isArray(value)
     ? value.map(normalizeDecisionRecord).filter((decision): decision is Decision => Boolean(decision))
@@ -582,13 +640,34 @@ export async function handleTeamCostAgentApi(
   }
 
   const store = contextStore(context)
+  const supabaseClient = input.workspaceId ? contextSupabaseClient(context) : null
+  const supabaseCheckpointStore = supabaseClient ? new SupabaseCheckpointStore(supabaseClient) : null
+  const checkpointPersistence: CheckpointPersistence = supabaseCheckpointStore
+    ? 'supabase'
+    : store.persistence
+  if (supabaseCheckpointStore && input.workspaceId && input.threadId && input.resumeApproval) {
+    await supabaseCheckpointStore.load({ workspaceId: input.workspaceId, threadId: input.threadId })
+  }
   const { events, llmMode } = await runTeamCostAgentWithLlm(input, {
     env: contextEnv(context),
     fetcher: context.fetcher,
   })
-  const checkpoint = checkpointFor(input, store.persistence)
+  const checkpoint = checkpointFor(input, checkpointPersistence)
 
-  if (store.persistence === 'kv' && input.workspaceId) {
+  if (supabaseCheckpointStore && input.workspaceId && input.approvalMode === 'interrupt') {
+    await supabaseCheckpointStore.save({
+      workspaceId: input.workspaceId,
+      threadId: checkpoint.threadId,
+      checkpointId: `checkpoint:${checkpoint.threadId}`,
+      status: checkpoint.status === 'resumed' ? 'resumed' : 'interrupt_requested',
+      graphState: {
+        workflowMode: input.workflowMode,
+        resumeApproval: input.resumeApproval ?? null,
+        events,
+        llmMode,
+      },
+    })
+  } else if (store.persistence === 'kv' && input.workspaceId) {
     await store.setJson(workspaceKey(input.workspaceId, `checkpoint:${checkpoint.threadId}`), checkpoint)
   }
 
@@ -846,7 +925,7 @@ function uniqueApiDocChunks(chunks: ApiDocChunk[]): ApiDocChunk[] {
 
 function officialDocsProductionVectorStore(context: P1ApiContext, workspaceId: string): VectorStore | null {
   const env = contextEnv(context)
-  const client = createSupabaseClientFromEnv(env, context.fetcher)
+  const client = contextSupabaseClient(context)
   const embeddingProvider = createOpenAiEmbeddingProviderFromEnv(env, context.fetcher)
   if (!client || !embeddingProvider) return null
   return new SupabasePersistentVectorStore({
@@ -1047,6 +1126,7 @@ export async function handleP1RagEvidenceApi(
   const structuredFactRefs = stringArray(body.structuredFactRefs)
   const store = contextStore(context)
   const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
+  const previewRagFallback = isObject(body) && body.runtimeMode === 'preview'
   const evidence = retrieveP1VectorRagEvidence({
     query: body.query,
     collections: ragCollections(body.collections),
@@ -1080,9 +1160,13 @@ export async function handleP1RagEvidenceApi(
     evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
     contextBlocks = officialDocs.contextBlocks
   } else {
+    const requestOfficialDocChunks = apiDocChunks(body.officialDocChunks)
+    if (store.persistence !== 'kv' && !previewRagFallback && requestOfficialDocChunks.length > 0) {
+      return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+    }
     const officialDocChunks = storedOfficialDocChunks.length > 0
       ? storedOfficialDocChunks
-      : apiDocChunks(body.officialDocChunks)
+      : requestOfficialDocChunks
     if (officialDocChunks.length > 0) {
       const officialDocs = await retrieveOfficialDocsVectorEvidence({
         query: body.query,
@@ -1219,18 +1303,52 @@ export async function handleOfficialUpdatesApi(
   context: P1ApiContext = {},
 ): Promise<ApiResult<OfficialUpdatesApiResponse>> {
   const workspaceId = normalizedWorkspaceId(_body, context.query)
-  const inbox = buildOfficialUpdatesReviewInbox({
-    candidates: DEMO_MODEL_RELEASE_CANDIDATES,
-    snippets: DEMO_OFFICIAL_SOURCE_SNIPPETS,
-    sourceChangedCount: DEMO_OFFICIAL_SOURCE_SNIPPETS.length,
+  const emptyInbox = buildOfficialUpdatesReviewInbox({
+    candidates: [],
+    snippets: [],
+    sourceChangedCount: 0,
   })
   const base: OfficialUpdatesApiResponse = {
-    persistence: contextStore(context).persistence,
-    inbox,
+    persistence: 'not_configured',
+    inbox: emptyInbox,
+    latestRun: null,
+    acceptedFacts: [],
   }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
   if (method !== 'GET') return { status: 405, body: { ...base, error: 'Method not allowed' } }
-  return { status: 200, body: base }
+
+  const client = contextSupabaseClient(context)
+  if (!client) return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+
+  try {
+    const store = new SupabaseWatchtowerStore(client)
+    const [latestRun, acceptedFacts] = await Promise.all([
+      store.latestRun(workspaceId),
+      store.acceptedFacts(workspaceId),
+    ])
+    const parserSummary = latestRun?.parserSummary ?? {}
+    const snippets = Array.isArray(parserSummary.snippets)
+      ? parserSummary.snippets as OfficialSourceSnippet[]
+      : []
+    const sourceChangedCount = typeof parserSummary.sourceChangedCount === 'number'
+      ? parserSummary.sourceChangedCount
+      : snippets.length
+    return {
+      status: 200,
+      body: {
+        persistence: 'supabase',
+        latestRun,
+        acceptedFacts,
+        inbox: buildOfficialUpdatesReviewInbox({
+          candidates: latestRun?.candidates as ModelReleaseCandidate[] ?? [],
+          snippets,
+          sourceChangedCount,
+        }),
+      },
+    }
+  } catch {
+    return { status: 500, body: { ...base, error: 'official_updates_failed' } }
+  }
 }
 
 export async function handleP1ExternalActionsApi(
@@ -1319,7 +1437,7 @@ export async function handleP1ExternalActionsApi(
       const connectorConfigured = typeof body.connectorConfigured === 'boolean'
         ? body.connectorConfigured
         : configuredFromEnv
-      const execution = executeExternalAction({
+      let execution = executeExternalAction({
         action: existing,
         connectorMode: externalConnectorMode(body.connectorMode),
         connectorConfig: connectorId ? { id: connectorId, configured: connectorConfigured } : undefined,
@@ -1328,6 +1446,50 @@ export async function handleP1ExternalActionsApi(
       })
       if (execution.status === 'blocked') {
         return { status: 409, body: externalActionResponse({ persistence: store.persistence, actions, ledger, action: existing, execution }) }
+      }
+      if (execution.connectorMode === 'live' && execution.connectorId && execution.idempotencyKey) {
+        const connector = EXTERNAL_CONNECTORS[execution.connectorId]
+        if (!connector || !connector.validateConfig(env)) {
+          return {
+            status: 409,
+            body: externalActionResponse({
+              persistence: store.persistence,
+              actions,
+              ledger,
+              action: existing,
+              execution: { ...execution, status: 'blocked', error: 'connector_not_configured', ledgerEntry: null },
+            }),
+          }
+        }
+        try {
+          const prepared = connector.prepare(existing, env)
+          const connectorExecution = await connector.execute(prepared, {
+            env,
+            fetcher: context.fetcher ?? fetch,
+            idempotencyKey: execution.idempotencyKey,
+            mode: execution.connectorMode,
+          })
+          const rollbackMetadata = {
+            ...(execution.rollbackMetadata ?? {}),
+            ...connectorExecution.rollbackMetadata,
+            rollbackPreview: connector.rollbackPreview(connectorExecution),
+          }
+          const ledgerEntry = execution.ledgerEntry
+            ? {
+                ...execution.ledgerEntry,
+                externalRef: connectorExecution.externalRef,
+                rollbackMetadata,
+              }
+            : null
+          execution = {
+            ...execution,
+            externalRef: connectorExecution.externalRef,
+            rollbackMetadata,
+            ledgerEntry,
+          }
+        } catch {
+          return { status: 502, body: externalActionResponse({ persistence: store.persistence, actions, ledger, action: existing, execution, error: 'connector_execution_failed' }) }
+        }
       }
       const executed: P1ExternalAction = { ...existing, status: 'executed' }
       const nextActions = actions.map(action => action.id === executed.id ? executed : action)
@@ -1354,9 +1516,66 @@ export async function handleRetentionRunApi(
   const base: RetentionRunApiResponse = { persistence: 'not_configured', jobs: [], result: emptyResult }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
   const store = contextStore(context)
+  const supabaseClient = contextSupabaseClient(context)
   const jobsKey = workspaceKey(workspaceId, 'retention-jobs')
 
   try {
+    if (supabaseClient) {
+      const rowsToJobs = (rows: Array<Record<string, unknown>>): RetentionJob[] => rows.map(row => ({
+        id: String(row.id),
+        workspaceId: String(row.workspace_id),
+        kind: row.kind === 'export_audit' ? 'export_audit' : 'delete_artifact',
+        status: ['scheduled', 'not_needed', 'completed', 'blocked'].includes(String(row.status))
+          ? row.status as RetentionJob['status']
+          : 'blocked',
+        artifactId: typeof row.artifact_id === 'string' ? row.artifact_id : undefined,
+        scheduledFor: String(row.scheduled_for ?? new Date().toISOString()),
+        completedAt: typeof row.completed_at === 'string' ? row.completed_at : undefined,
+        auditExportRef: typeof row.audit_export_ref === 'string' ? row.audit_export_ref : undefined,
+      }))
+      if (method === 'GET') {
+        const rows = await supabaseClient.select<Record<string, unknown>>('retention_jobs', {
+          workspace_id: `eq.${workspaceId}`,
+          select: '*',
+          order: 'scheduled_for.desc',
+        })
+        return { status: 200, body: { persistence: 'supabase', jobs: rowsToJobs(rows), result: emptyResult } }
+      }
+      if (method !== 'POST') {
+        return { status: 405, body: { ...base, persistence: 'supabase', error: 'Method not allowed' } }
+      }
+      const plan = buildRetentionAutomationPlan({
+        workspaceId,
+        hasRawUpload: isObject(body) && body.hasRawUpload === true,
+        hasRawPrompt: isObject(body) && body.hasRawPrompt === true,
+        hasApiKey: isObject(body) && body.hasApiKey === true,
+        hasPii: isObject(body) && body.hasPii === true,
+      })
+      const result = runRetentionJobs({
+        jobs: plan.jobs,
+        storedArtifactIds: plan.storedArtifacts,
+        executedAt: (context.now?.() ?? new Date()).toISOString(),
+      })
+      const jobs = [...result.completedJobs, ...result.blockedJobs, ...plan.jobs.filter(job => job.status !== 'scheduled')]
+      await supabaseClient.upsert('retention_jobs', jobs.map(job => ({
+        id: job.id,
+        workspace_id: job.workspaceId,
+        kind: job.kind,
+        status: job.status,
+        artifact_id: job.artifactId,
+        scheduled_for: job.scheduledFor,
+        completed_at: job.completedAt,
+        audit_export_ref: job.auditExportRef,
+        result_payload: {
+          deletedArtifactIds: result.deletedArtifactIds,
+          auditExportRefs: result.auditExportRefs,
+        },
+      })), 'id')
+      const artifactStore = new SupabaseReportArtifactStore(supabaseClient)
+      await Promise.all(result.deletedArtifactIds.map(artifactId => artifactStore.delete({ workspaceId, artifactId })))
+      return { status: 202, body: { persistence: 'supabase', jobs, result } }
+    }
+
     if (method === 'GET') {
       const jobs = await store.getJson<RetentionJob[]>(jobsKey) ?? []
       return { status: 200, body: { persistence: store.persistence, jobs, result: emptyResult } }
@@ -1464,9 +1683,32 @@ export async function handleReportsApi(
     return { status: 400, body: { persistence: 'not_configured', reportRun: fallbackRun, reportRuns: [], error: 'workspaceId_required' } }
   }
   const store = contextStore(context)
+  const supabaseClient = contextSupabaseClient(context)
+  const reportArtifactStore = supabaseClient ? new SupabaseReportArtifactStore(supabaseClient) : null
   const key = workspaceKey(workspaceId, 'reports')
 
   try {
+    if (reportArtifactStore) {
+      if (method === 'GET') {
+        const artifacts = await reportArtifactStore.list({ workspaceId })
+        const reportRuns = groupReportRuns(artifacts)
+        return { status: 200, body: { persistence: 'supabase', reportRun: reportRuns[0] ?? emptyReportRun(undefined, [], 'supabase', null, null, workspaceId), reportRuns } }
+      }
+
+      if (method !== 'POST') {
+        return { status: 405, body: { persistence: 'supabase', reportRun: fallbackRun, reportRuns: [], error: 'Method not allowed' } }
+      }
+
+      const period = isObject(body) && typeof body.period === 'string' ? body.period : fallbackRun.period
+      const decisionIds = isObject(body) ? stringArray(body.decisionIds) : []
+      const configSnapshotRef = isObject(body) && typeof body.configSnapshotRef === 'string' ? body.configSnapshotRef : null
+      const usageSnapshotRef = isObject(body) && typeof body.usageSnapshotRef === 'string' ? body.usageSnapshotRef : null
+      const reportRun = emptyReportRun(period, decisionIds, 'supabase', configSnapshotRef, usageSnapshotRef, workspaceId)
+      await reportArtifactStore.saveMany(reportRun.artifacts)
+      const reportRuns = [reportRun, ...groupReportRuns(await reportArtifactStore.list({ workspaceId })).filter(run => run.id !== reportRun.id)]
+      return { status: 202, body: { persistence: 'supabase', reportRun, reportRuns } }
+    }
+
     if (method === 'GET') {
       const reportRuns = await store.getJson<ReportRunShell[]>(key) ?? []
       return { status: 200, body: { persistence: store.persistence, reportRun: reportRuns[0] ?? fallbackRun, reportRuns } }
@@ -1507,8 +1749,17 @@ export async function handleReportDownloadApi(
   const reportId = queryValue(context.query ?? {}, 'reportId') ?? (isObject(body) && typeof body.reportId === 'string' ? body.reportId : '')
   const artifactId = queryValue(context.query ?? {}, 'artifactId') ?? (isObject(body) && typeof body.artifactId === 'string' ? body.artifactId : '')
   const store = contextStore(context)
+  const supabaseClient = contextSupabaseClient(context)
 
   try {
+    if (supabaseClient) {
+      const artifact = await new SupabaseReportArtifactStore(supabaseClient).find({ workspaceId, artifactId })
+      if (!artifact || (reportId && artifact.reportRunId !== reportId)) {
+        return { status: 404, body: { ...base, persistence: 'supabase', error: 'report_artifact_not_found' } }
+      }
+      return { status: 200, body: { persistence: 'supabase', artifact, content: artifact.body } }
+    }
+
     const reportRuns = await store.getJson<ReportRunShell[]>(workspaceKey(workspaceId, 'reports')) ?? []
     const reportRun = reportRuns.find(item => item.id === reportId)
     const artifact = reportRun?.artifacts.find(item => item.id === artifactId) ?? null

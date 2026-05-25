@@ -183,14 +183,16 @@ function isStringArray(value: unknown): value is string[] {
 
 function isRateCardDraft(value: unknown): value is RateCardDraft {
   if (!isRecord(value)) return false
+  const status = String(value.status ?? value.executionMode)
   return typeof value.policyType === 'string'
     && typeof value.includedCredits === 'number'
     && typeof value.overagePricePerRequest === 'number'
     && typeof value.capUsdPerCustomer === 'number'
     && typeof value.affectedCustomerCount === 'number'
     && isStringArray(value.marginBasisRefs)
-    && value.executionMode === 'draft_only'
-    && value.stripeExecutable === false
+    && ['draft', 'approved', 'pushed_to_billing', 'failed'].includes(status)
+    && typeof value.billingExecutable === 'boolean'
+    && typeof value.stripeExecutable === 'boolean'
     && value.requiresHumanApproval === true
 }
 

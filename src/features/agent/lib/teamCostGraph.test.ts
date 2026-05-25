@@ -25,6 +25,33 @@ describe('createTeamCostGraph', () => {
     expect(result.events[0].type).toBe('tool_snapshot')
     expect(result.events.map(event => event.type)).toContain('cost_analysis')
     expect(result.events.map(event => event.type)).toContain('risk_audit')
+    expect(result.events.map(event => event.type)).not.toContain('report_draft')
+    expect(result.events.map(event => event.type)).not.toContain('calibration')
+  })
+
+  it('marks estimate-only narratives as legacy deterministic output instead of active agent reasoning', async () => {
+    const graph = createTeamCostGraph()
+    const result = await graph.invoke({
+      workflowMode: 'estimate_only',
+      companyProfile: { companyType: '1-person B2B SaaS', stage: 'MVP', monthlyBudgetUsd: 300, locale: 'ko' },
+      agentSpecs: [],
+      estimates: [],
+      teamEstimate: null,
+      toolRefs: [],
+      toolValues: {},
+      bottlenecks: [],
+      benchmarks: [],
+      candidates: [],
+      recommendations: [],
+      riskCardsByRecommendation: {},
+      approval: { status: 'not_required', recommendationId: null },
+      decisionDraft: null,
+      events: [],
+    })
+
+    expect(result.events.map(event => event.type)).toContain('legacy_deterministic_narrative')
+    expect(result.events.map(event => event.type)).not.toContain('cost_analysis')
+    expect(result.events.find(event => event.type === 'legacy_deterministic_narrative')?.message).toMatch(/legacy deterministic/i)
   })
 
   it('audits each optimization recommendation through dynamic fanout', async () => {

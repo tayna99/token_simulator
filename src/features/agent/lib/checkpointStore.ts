@@ -1,4 +1,4 @@
-export type CheckpointPersistence = 'memory' | 'kv' | 'not_configured'
+export type CheckpointPersistence = 'memory' | 'kv' | 'supabase' | 'not_configured'
 export type CheckpointStatus = 'not_required' | 'interrupt_requested' | 'resumed'
 
 export interface TeamCostCheckpoint {

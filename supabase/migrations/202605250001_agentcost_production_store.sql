@@ -106,6 +106,7 @@ create table if not exists public.report_artifacts (
   content_type text not null,
   body text not null,
   download_path text not null,
+  size_bytes int not null default 0,
   created_at timestamptz not null default now()
 );
 

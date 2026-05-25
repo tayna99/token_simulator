@@ -137,8 +137,8 @@ function toolSnapshotNode(state: GraphState): Partial<TeamCostGraphState> {
 function costNarratorNode(state: GraphState): Partial<TeamCostGraphState> {
   return {
     events: event({
-      type: 'cost_analysis',
-      message: 'Cost Analyst reviewed deterministic AI team cost and bottleneck refs.',
+      type: 'legacy_deterministic_narrative',
+      message: 'Legacy deterministic narrative only; no operating agent reasoning was invoked.',
       toolResultRefs: state.toolRefs,
       riskCardIds: [],
       recommendationIds: [],
@@ -292,8 +292,8 @@ function decisionLogDrafterNode(state: GraphState): Partial<TeamCostGraphState> 
 function reportDrafterNode(state: GraphState): Partial<TeamCostGraphState> {
   return {
     events: event({
-      type: 'report_draft',
-      message: 'Founder/CFO Reporter drafted a grounded AI team cost report.',
+      type: 'legacy_deterministic_narrative',
+      message: 'Legacy deterministic report narrative only; no persisted report artifact was created in this graph.',
       toolResultRefs: state.toolRefs,
       riskCardIds: [...new Set(Object.values(state.riskCardsByRecommendation).flatMap(cards => cards.map(card => card.id)))],
       recommendationIds: state.recommendations.map(recommendation => recommendation.id),
@@ -304,8 +304,8 @@ function reportDrafterNode(state: GraphState): Partial<TeamCostGraphState> {
 function planVsActualCalibratorNode(): Partial<TeamCostGraphState> {
   return {
     events: event({
-      type: 'calibration',
-      message: 'Plan vs Actual calibration uses Actual Usage & Performance Logs to update next week AgentSpec.',
+      type: 'legacy_deterministic_narrative',
+      message: 'Legacy deterministic calibration narrative only; persisted plan-vs-actual proposal is handled by the calibration API.',
       toolResultRefs: [],
       riskCardIds: [],
       recommendationIds: [],
@@ -343,7 +343,7 @@ export function createTeamCostGraph(_options: TeamCostGraphOptions = {}) {
     .addConditionalEdges('optimizationReducer', sendRiskAudits)
     .addEdge('riskAuditor', 'approvalGate')
     .addEdge('approvalGate', 'decisionLogDrafter')
-    .addEdge('decisionLogDrafter', 'reportDrafter')
+    .addEdge('decisionLogDrafter', END)
     .addEdge('reportDrafter', END)
     .addEdge('planVsActualCalibrator', END)
     .compile()

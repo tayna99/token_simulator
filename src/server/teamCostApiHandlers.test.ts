@@ -50,6 +50,63 @@ describe('handleTeamCostAgentApi', () => {
     expect(resumed.body.checkpoint.status).toBe('resumed')
   })
 
+  it('persists interrupt and resume checkpoints through Supabase when production env is configured', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({ url, init: init ?? {} })
+      if (url.includes('/rest/v1/checkpoints?')) {
+        return new Response(JSON.stringify([{
+          workspace_id: 'workspace-demo',
+          thread_id: 'thread-supa-1',
+          checkpoint_id: 'checkpoint:thread-supa-1',
+          status: 'interrupt_requested',
+          graph_state: { workflowMode: 'optimize', events: [] },
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    })
+    const env = {
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }
+
+    const interrupted = await handleTeamCostAgentApi('POST', {
+      workflowMode: 'optimize',
+      approvalMode: 'interrupt',
+      threadId: 'thread-supa-1',
+      workspaceId: 'workspace-demo',
+      companyProfile: { companyType: '1-person B2B SaaS', stage: 'MVP', monthlyBudgetUsd: 300, locale: 'ko' },
+      agentSpecs: [],
+    }, { env, fetcher })
+    const resumed = await handleTeamCostAgentApi('POST', {
+      workflowMode: 'optimize',
+      approvalMode: 'interrupt',
+      threadId: 'thread-supa-1',
+      workspaceId: 'workspace-demo',
+      resumeApproval: { recommendationId: 'rec-1', approved: true, reason: 'Approved by operator' },
+      companyProfile: { companyType: '1-person B2B SaaS', stage: 'MVP', monthlyBudgetUsd: 300, locale: 'ko' },
+      agentSpecs: [],
+    }, { env, fetcher })
+
+    expect(interrupted.body.checkpoint).toMatchObject({
+      persistence: 'supabase',
+      threadId: 'thread-supa-1',
+      workspaceId: 'workspace-demo',
+      status: 'interrupt_requested',
+    })
+    expect(resumed.body.checkpoint.status).toBe('resumed')
+    expect(calls.some(call => call.url.includes('/rest/v1/checkpoints') && call.init.method === 'POST')).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/checkpoints?') && call.init.method === 'GET')).toBe(true)
+    const checkpointWrite = calls.find(call => call.url.includes('/rest/v1/checkpoints') && call.init.method === 'POST')
+    expect(JSON.parse(String(checkpointWrite?.init.body))[0]).toMatchObject({
+      workspace_id: 'workspace-demo',
+      thread_id: 'thread-supa-1',
+      status: 'interrupt_requested',
+      graph_state: expect.objectContaining({ workflowMode: 'optimize' }),
+    })
+  })
+
   it('keeps deterministic fallback when the real LLM runtime is not enabled', async () => {
     const fetcher = vi.fn()
     const response = await handleTeamCostAgentApi('POST', {

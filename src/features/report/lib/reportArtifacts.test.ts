@@ -94,7 +94,9 @@ describe('buildReportArtifact', () => {
         capUsdPerCustomer: 149,
         affectedCustomerCount: 7,
         marginBasisRefs: ['tool:margin.plan.pro'],
-        executionMode: 'draft_only',
+        status: 'draft',
+        executionMode: 'draft',
+        billingExecutable: false,
         stripeExecutable: false,
         requiresHumanApproval: true,
       },
@@ -111,7 +113,7 @@ describe('buildReportArtifact', () => {
 
     expect(report.markdown).toContain('Decision choice: hold')
     expect(report.markdown).toContain('Rate-card draft')
-    expect(report.markdown).toContain('draft_only')
+    expect(report.markdown).toContain('draft')
     expect(report.markdown).toContain('Source Changed')
   })
 })

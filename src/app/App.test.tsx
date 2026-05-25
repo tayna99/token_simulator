@@ -106,6 +106,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('operating-asset-health')).toHaveTextContent(/Official docs change monitor: automation_ready/i)
     expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Official Research Watchtower/i)
     expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/China provider groups/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/production fact ledger required/i)
     expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/FX review required/i)
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Called agents/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Usage Data Ingestion Agent/i)
@@ -265,14 +266,8 @@ describe('App AI team operations workspace', () => {
     expect(ragPanel).toHaveTextContent(/RAG route metadata/i)
     const ragRequest = fetchMock.mock.calls.find(([input]) => String(input) === '/api/rag/p1-evidence')
     const ragPayload = JSON.parse(String(ragRequest?.[1]?.body ?? '{}'))
-    expect(ragPayload.officialDocChunks[0]).toMatchObject({
-      collection: 'official_docs',
-      metadata: {
-        sourceId: expect.any(String),
-        sectionType: expect.any(String),
-        officialSourceTrust: expect.any(String),
-      },
-    })
+    expect(ragPayload.officialDocChunks).toBeUndefined()
+    expect(ragPayload.runtimeMode).toBeUndefined()
     expect(ragPayload.corpusCollections.model_benchmark[0]).toMatchObject({
       corpusId: 'model_benchmark',
       refs: expect.arrayContaining([expect.stringMatching(/^evidence:/)]),

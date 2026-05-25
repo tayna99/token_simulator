@@ -25,6 +25,7 @@ export interface TeamCostGraphEvent {
     | 'decision_draft'
     | 'report_draft'
     | 'calibration'
+    | 'legacy_deterministic_narrative'
   message: string
   toolResultRefs: ToolResultRef[]
   riskCardIds: string[]

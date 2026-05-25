@@ -253,7 +253,9 @@ describe('decisionLog', () => {
         capUsdPerCustomer: 149,
         affectedCustomerCount: 7,
         marginBasisRefs: ['tool:margin.plan.pro'],
-        executionMode: 'draft_only',
+        status: 'draft',
+        executionMode: 'draft',
+        billingExecutable: false,
         stripeExecutable: false,
         requiresHumanApproval: true,
       },
@@ -269,7 +271,8 @@ describe('decisionLog', () => {
     })
 
     expect(decision.decisionChoice).toBe('hold')
-    expect(decision.rateCardDraft?.executionMode).toBe('draft_only')
+    expect(decision.rateCardDraft?.status).toBe('draft')
+    expect(decision.rateCardDraft?.executionMode).toBe('draft')
     expect(decision.pricingFreshnessSnapshot[0].state).toBe('source_changed')
     expect(serializeDecisionLog([decision])).toContain('"decisionChoice": "hold"')
   })

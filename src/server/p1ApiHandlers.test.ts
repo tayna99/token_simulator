@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   handleAgentApi,
   handleConfigurationApi,
@@ -265,6 +265,55 @@ describe('P1 API handlers', () => {
     expect(downloaded.body.artifact?.downloadPath).toContain('/api/reports/report-run-2026-05/download')
   })
 
+  it('persists report artifacts to Supabase and downloads from the artifact table', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({ url, init: init ?? {} })
+      if (url.includes('/rest/v1/report_artifacts?')) {
+        return new Response(JSON.stringify([{
+          id: 'report-artifact:report-run-2026-05:markdown',
+          workspace_id: 'workspace-demo',
+          report_run_id: 'report-run-2026-05',
+          format: 'markdown',
+          content_type: 'text/markdown',
+          body: '# report-run-2026-05',
+          download_path: '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:markdown',
+          size_bytes: 21,
+          created_at: '2026-05-25T00:00:00.000Z',
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    })
+    const env = {
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }
+
+    const created = await handleReportsApi('POST', {
+      workspaceId: 'workspace-demo',
+      period: '2026-05',
+      decisionIds: ['decision-1'],
+    }, { env, fetcher })
+    const downloaded = await handleReportDownloadApi('GET', undefined, {
+      env,
+      fetcher,
+      query: {
+        workspaceId: 'workspace-demo',
+        reportId: 'report-run-2026-05',
+        artifactId: 'report-artifact:report-run-2026-05:markdown',
+      },
+    })
+
+    expect(created.status).toBe(202)
+    expect(created.body.persistence).toBe('supabase')
+    expect(downloaded.status).toBe(200)
+    expect(downloaded.body.persistence).toBe('supabase')
+    expect(downloaded.body.content).toContain('report-run-2026-05')
+    expect(calls.some(call => call.url.includes('/rest/v1/report_artifacts') && call.init.method === 'POST')).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/report_artifacts?') && call.init.method === 'GET')).toBe(true)
+  })
+
   it('runs and persists retention jobs for a workspace', async () => {
     const store = createMemoryKvStore()
     const response = await handleRetentionRunApi('POST', {
@@ -280,6 +329,36 @@ describe('P1 API handlers', () => {
     expect(response.body.result.deletedArtifactIds).toEqual(['raw_upload'])
     expect(response.body.result.auditExportRefs).toEqual(['audit-export:workspace-demo:2026-05-25'])
     expect(listed.body.jobs.map(job => job.status)).toContain('completed')
+  })
+
+  it('runs retention jobs against Supabase retention rows and artifact deletion', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init: init ?? {} })
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 })
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    })
+
+    const response = await handleRetentionRunApi('POST', {
+      workspaceId: 'workspace-demo',
+      hasRawUpload: true,
+      hasRawPrompt: false,
+      hasApiKey: false,
+      hasPii: false,
+    }, {
+      env: {
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+      },
+      fetcher,
+      now: () => new Date('2026-05-25T00:00:00.000Z'),
+    })
+
+    expect(response.status).toBe(202)
+    expect(response.body.persistence).toBe('supabase')
+    expect(response.body.result.deletedArtifactIds).toEqual(['raw_upload'])
+    expect(calls.some(call => call.url.includes('/rest/v1/retention_jobs') && call.init.method === 'POST')).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/report_artifacts?') && call.init.method === 'DELETE')).toBe(true)
   })
 
   it('reports runtime capability status from production env', async () => {
@@ -452,6 +531,38 @@ describe('P1 API handlers', () => {
     expect(response.body.contextBlocks?.[0].text).toContain('Cached input tokens')
   })
 
+  it('blocks request-body officialDocChunks when production storage is not configured', async () => {
+    const response = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cached token pricing',
+      officialDocChunks: [{
+        id: 'source:request-body-only#pricing',
+        collection: 'official_docs',
+        text: 'Request-local pricing should not become production evidence.',
+        sourceUrl: 'https://example.com',
+        refs: ['source:request-body-only'],
+        metadata: {
+          sourceId: 'request-body-only',
+          provider: 'example',
+          servingProvider: 'first_party',
+          modelFamilies: ['example'],
+          sourceKind: 'pricing',
+          sourceLanguage: 'en',
+          pricingRegion: 'global',
+          officialSourceTrust: 'official_pricing',
+          capturedAt: '2026-05-25T00:00:00.000Z',
+          headingPath: ['Example', 'Pricing'],
+          sectionType: 'pricing',
+          contentHash: 'request-body-only',
+        },
+      }],
+    })
+
+    expect(response.status).toBe(503)
+    expect(response.body.error).toBe('storage_not_configured')
+    expect(response.body.evidence.results.official_docs.refs).not.toContain('source:request-body-only')
+  })
+
   it('indexes official RAG chunks once and retrieves evidence from workspace storage', async () => {
     const store = createMemoryKvStore()
     const officialDocChunks = chunkApiDoc(normalizeApiDoc({
@@ -581,13 +692,91 @@ describe('P1 API handlers', () => {
     expect(JSON.stringify(response.body.evidence)).not.toMatch(/average|peerAverage|mean/i)
   })
 
-  it('returns an admin official updates review inbox without auto-accepting candidates', async () => {
+  it('does not use demo Watchtower candidates when production ledger storage is missing', async () => {
     const response = await handleOfficialUpdatesApi('GET', undefined, { query: { workspaceId: 'workspace-demo' } })
 
+    expect(response.status).toBe(503)
+    expect(response.body.error).toBe('storage_not_configured')
+    expect(response.body.inbox.reviewCandidates).toEqual([])
+    expect(response.body.inbox.ragRecordCount).toBe(0)
+  })
+
+  it('returns official updates from Supabase watchtower runs and accepted facts', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/rest/v1/watchtower_runs')) {
+        return new Response(JSON.stringify([{
+          id: 'watchtower-run-1',
+          workspace_id: 'workspace-demo',
+          status: 'review_required',
+          parser_summary: {
+            sourceChangedCount: 1,
+            snippets: [{
+              snippetId: 'source:openai-api-pricing#pricing',
+              sourceId: 'openai-api-pricing',
+              sourceUrl: 'https://openai.com/api/pricing/',
+              sourceKind: 'pricing',
+              provider: 'openai',
+              servingProvider: 'first_party',
+              pricingRegion: 'global',
+              text: 'Official pricing changed.',
+              hash: 'hash-openai',
+              capturedAt: '2026-05-25T00:00:00.000Z',
+              refs: ['source:openai-api-pricing'],
+            }],
+          },
+          candidates: [{
+            candidateId: 'candidate:openai-gpt',
+            detectedAt: '2026-05-25T00:00:00.000Z',
+            sourceId: 'openai-api-pricing',
+            sourceUrl: 'https://openai.com/api/pricing/',
+            title: 'OpenAI official pricing candidate',
+            modelNames: ['GPT test'],
+            modelOwner: 'openai',
+            modelFamily: 'gpt',
+            servingProvider: 'first_party',
+            pricingRegion: 'global',
+            currency: 'USD',
+            sourceLanguage: 'en',
+            pricingStatusSuggestion: 'verified',
+            hostedThirdPartyModel: false,
+            status: 'needs_review',
+            evidenceRefs: ['source:openai-api-pricing'],
+            confidence: 'high',
+            reviewNotes: [],
+          }],
+          started_at: '2026-05-25T00:00:00.000Z',
+          completed_at: '2026-05-25T00:01:00.000Z',
+        }]), { status: 200 })
+      }
+      if (url.includes('/rest/v1/accepted_facts')) {
+        return new Response(JSON.stringify([{
+          id: 'fact:openai:gpt-test',
+          workspace_id: 'workspace-demo',
+          source_ref: 'source:openai-api-pricing',
+          fact_payload: { modelFamily: 'gpt', metric: 'input' },
+          confidence: 'high',
+          accepted_by: 'reviewer@example.com',
+          accepted_at: '2026-05-25T00:02:00.000Z',
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([]), { status: 200 })
+    })
+    const response = await handleOfficialUpdatesApi('GET', undefined, {
+      query: { workspaceId: 'workspace-demo' },
+      env: {
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+      },
+      fetcher,
+    })
+
     expect(response.status).toBe(200)
-    expect(response.body.inbox.reviewCandidates.length).toBeGreaterThan(0)
-    expect(response.body.inbox.needsRegionReview.map(candidate => candidate.status)).toContain('needs_region_review')
-    expect(response.body.inbox.ragRecordCount).toBeGreaterThan(0)
+    expect(response.body.persistence).toBe('supabase')
+    expect(response.body.latestRun?.id).toBe('watchtower-run-1')
+    expect(response.body.acceptedFacts?.[0]).toMatchObject({ id: 'fact:openai:gpt-test', confidence: 'high' })
+    expect(response.body.inbox.reviewCandidates.map(candidate => candidate.candidateId)).toEqual(['candidate:openai-gpt'])
+    expect(response.body.inbox.ragRecordCount).toBe(1)
     expect(response.body.inbox.reviewCandidates.map(candidate => candidate.status)).not.toContain('accepted')
   })
 
@@ -692,6 +881,56 @@ describe('P1 API handlers', () => {
     })])
     expect(listed.body.actions).toHaveLength(1)
     expect(listed.body.ledger).toHaveLength(1)
+  })
+
+  it('calls a configured live external connector before ledgering execution', async () => {
+    const store = createMemoryKvStore()
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ id: 'email:test-message' }), { status: 202 }))
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    }, { store })
+    const actionId = draft.body.action?.id
+    await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+    }, { store })
+
+    const executed = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+      connectorMode: 'live',
+      connectorId: 'resend_email',
+      idempotencyKey: 'idem:email:live-follow-up',
+    }, {
+      store,
+      fetcher,
+      env: { RESEND_API_KEY: 're_test' },
+      now: () => new Date('2026-05-25T00:01:00.000Z'),
+    })
+
+    expect(executed.status).toBe(202)
+    expect(fetcher).toHaveBeenCalledWith('https://api.resend.com/emails', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer re_test',
+        'Idempotency-Key': 'idem:email:live-follow-up',
+      }),
+    }))
+    expect(executed.body.execution?.externalRef).toBe('email:test-message')
+    expect(executed.body.ledger[0]).toMatchObject({
+      connectorMode: 'live',
+      connectorId: 'resend_email',
+      externalRef: 'email:test-message',
+    })
   })
 
   it('keeps billing execution blocked until rollback metadata is attached', async () => {

@@ -4,6 +4,7 @@ import type { EmbeddingProvider } from '../../features/rag/lib/apiDocRag'
 import {
   SupabaseCheckpointStore,
   SupabasePersistentVectorStore,
+  SupabaseReportArtifactStore,
   createSupabaseClientFromEnv,
 } from './supabaseProductionStore'
 
@@ -158,5 +159,56 @@ describe('Supabase production store', () => {
       graph_state: { step: 'approval' },
     })
     expect(restored?.graphState).toEqual({ step: 'approval' })
+  })
+
+  it('persists report artifacts and lists them by workspace and report run', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init: init ?? {} })
+      if (String(input).includes('/rest/v1/report_artifacts?')) {
+        return new Response(JSON.stringify([{
+          id: 'report-artifact:report-run-2026-05:markdown',
+          workspace_id: 'workspace-demo',
+          report_run_id: 'report-run-2026-05',
+          format: 'markdown',
+          content_type: 'text/markdown',
+          body: '# report-run-2026-05',
+          download_path: '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:markdown',
+          size_bytes: 21,
+          created_at: '2026-05-25T00:00:00.000Z',
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+    const client = createSupabaseClientFromEnv({
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }, fetcher)
+    const store = new SupabaseReportArtifactStore(client!)
+
+    await store.saveMany([{
+      id: 'report-artifact:report-run-2026-05:markdown',
+      workspaceId: 'workspace-demo',
+      reportRunId: 'report-run-2026-05',
+      format: 'markdown',
+      contentType: 'text/markdown',
+      downloadPath: '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:markdown',
+      sizeBytes: 21,
+      createdAt: '2026-05-25T00:00:00.000Z',
+      body: '# report-run-2026-05',
+    }])
+    const artifacts = await store.list({ workspaceId: 'workspace-demo', reportRunId: 'report-run-2026-05' })
+
+    expect(calls[0].url).toContain('/rest/v1/report_artifacts')
+    expect(JSON.parse(String(calls[0].init.body))[0]).toMatchObject({
+      workspace_id: 'workspace-demo',
+      report_run_id: 'report-run-2026-05',
+      size_bytes: 21,
+    })
+    expect(artifacts[0]).toMatchObject({
+      id: 'report-artifact:report-run-2026-05:markdown',
+      contentType: 'text/markdown',
+      body: '# report-run-2026-05',
+    })
   })
 })

@@ -4,6 +4,33 @@ import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../../front-operating/lib/fron
 import { runAgentRuntime } from './agentRunRuntime'
 
 describe('runAgentRuntime', () => {
+  it('requires the server runtime by default and returns unavailable when it cannot run', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ error: 'down' }), { status: 503 }))
+
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'cost',
+      question: 'What is breaking margin?',
+      executionMode: 'stage_committee',
+      snapshotVersion: 'snapshot:server-required',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+    }, { fetcher })
+
+    expect(fetcher).toHaveBeenCalledWith('/api/agent/run', expect.objectContaining({ method: 'POST' }))
+    expect(result.runtime.status).toBe('unavailable')
+    expect(result.events[0].type).toBe('runtime_unavailable')
+    expect(result.events[0].calledAgentTool).toBeNull()
+    expect(result.calledAgentIds).toEqual([])
+  })
+
   it('posts the active stage snapshot to the canonical agentic endpoint', async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       events: [],

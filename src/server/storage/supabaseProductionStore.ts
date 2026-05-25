@@ -265,3 +265,177 @@ export class SupabaseCheckpointStore {
       : null
   }
 }
+
+export interface SupabaseReportArtifactRecord {
+  id: string
+  workspaceId: string
+  reportRunId: string
+  format: 'markdown' | 'json' | 'pdf'
+  contentType: 'text/markdown' | 'application/json' | 'application/pdf'
+  downloadPath: string
+  sizeBytes: number
+  createdAt: string
+  body: string
+}
+
+interface SupabaseReportArtifactRow {
+  id: string
+  workspace_id: string
+  report_run_id: string
+  format: SupabaseReportArtifactRecord['format']
+  content_type: SupabaseReportArtifactRecord['contentType']
+  download_path: string
+  size_bytes?: number
+  created_at: string
+  body: string
+}
+
+function reportArtifactFromRow(row: SupabaseReportArtifactRow): SupabaseReportArtifactRecord {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    reportRunId: row.report_run_id,
+    format: row.format,
+    contentType: row.content_type,
+    downloadPath: row.download_path,
+    sizeBytes: row.size_bytes ?? new TextEncoder().encode(row.body).length,
+    createdAt: row.created_at,
+    body: row.body,
+  }
+}
+
+export class SupabaseReportArtifactStore {
+  readonly #client: SupabaseClient
+
+  constructor(client: SupabaseClient) {
+    this.#client = client
+  }
+
+  async saveMany(records: SupabaseReportArtifactRecord[]): Promise<void> {
+    if (records.length === 0) return
+    await this.#client.upsert('report_artifacts', records.map(record => ({
+      id: record.id,
+      workspace_id: record.workspaceId,
+      report_run_id: record.reportRunId,
+      format: record.format,
+      content_type: record.contentType,
+      body: record.body,
+      download_path: record.downloadPath,
+      size_bytes: record.sizeBytes,
+      created_at: record.createdAt,
+    })), 'id')
+  }
+
+  async list(input: { workspaceId: string; reportRunId?: string }): Promise<SupabaseReportArtifactRecord[]> {
+    const rows = await this.#client.select<SupabaseReportArtifactRow>('report_artifacts', {
+      workspace_id: `eq.${input.workspaceId}`,
+      ...(input.reportRunId ? { report_run_id: `eq.${input.reportRunId}` } : {}),
+      select: '*',
+      order: 'created_at.desc',
+    })
+    return rows.map(reportArtifactFromRow)
+  }
+
+  async find(input: { workspaceId: string; artifactId: string }): Promise<SupabaseReportArtifactRecord | null> {
+    const rows = await this.#client.select<SupabaseReportArtifactRow>('report_artifacts', {
+      workspace_id: `eq.${input.workspaceId}`,
+      id: `eq.${input.artifactId}`,
+      select: '*',
+      limit: '1',
+    })
+    return rows[0] ? reportArtifactFromRow(rows[0]) : null
+  }
+
+  async delete(input: { workspaceId: string; artifactId: string }): Promise<void> {
+    await this.#client.delete('report_artifacts', {
+      workspace_id: `eq.${input.workspaceId}`,
+      id: `eq.${input.artifactId}`,
+    })
+  }
+}
+
+export interface SupabaseAcceptedFactRecord {
+  id: string
+  workspaceId: string
+  sourceRef: string
+  factPayload: Record<string, unknown>
+  confidence: 'high' | 'medium' | 'low'
+  acceptedBy: string
+  acceptedAt: string
+}
+
+interface SupabaseAcceptedFactRow {
+  id: string
+  workspace_id: string
+  source_ref: string
+  fact_payload: Record<string, unknown>
+  confidence: SupabaseAcceptedFactRecord['confidence']
+  accepted_by: string
+  accepted_at: string
+}
+
+export interface SupabaseWatchtowerRunRecord {
+  id: string
+  workspaceId: string
+  status: string
+  parserSummary: Record<string, unknown>
+  candidates: unknown[]
+  startedAt: string
+  completedAt?: string | null
+}
+
+interface SupabaseWatchtowerRunRow {
+  id: string
+  workspace_id: string
+  status: string
+  parser_summary: Record<string, unknown>
+  candidates: unknown[]
+  started_at: string
+  completed_at?: string | null
+}
+
+export class SupabaseWatchtowerStore {
+  readonly #client: SupabaseClient
+
+  constructor(client: SupabaseClient) {
+    this.#client = client
+  }
+
+  async latestRun(workspaceId: string): Promise<SupabaseWatchtowerRunRecord | null> {
+    const rows = await this.#client.select<SupabaseWatchtowerRunRow>('watchtower_runs', {
+      workspace_id: `eq.${workspaceId}`,
+      select: '*',
+      order: 'started_at.desc',
+      limit: '1',
+    })
+    const row = rows[0]
+    return row
+      ? {
+          id: row.id,
+          workspaceId: row.workspace_id,
+          status: row.status,
+          parserSummary: row.parser_summary,
+          candidates: Array.isArray(row.candidates) ? row.candidates : [],
+          startedAt: row.started_at,
+          completedAt: row.completed_at,
+        }
+      : null
+  }
+
+  async acceptedFacts(workspaceId: string): Promise<SupabaseAcceptedFactRecord[]> {
+    const rows = await this.#client.select<SupabaseAcceptedFactRow>('accepted_facts', {
+      workspace_id: `eq.${workspaceId}`,
+      select: '*',
+      order: 'accepted_at.desc',
+    })
+    return rows.map(row => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      sourceRef: row.source_ref,
+      factPayload: row.fact_payload,
+      confidence: row.confidence,
+      acceptedBy: row.accepted_by,
+      acceptedAt: row.accepted_at,
+    }))
+  }
+}
