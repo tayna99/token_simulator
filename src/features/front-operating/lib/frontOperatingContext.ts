@@ -1,8 +1,13 @@
+import { FRONT_OPERATING_OFFER_LADDER, type FrontOperatingOffer } from './customerServiceOffer'
+
+export type FrontOperatingSurface = 'customer' | 'expert' | 'both' | 'internal'
+
 export interface FrontOperatingAsset {
   id: string
   label: string
   ref: `asset:${string}`
   owner: 'operator' | 'trust_review' | 'finance_ops' | 'knowledge_ops'
+  surface: FrontOperatingSurface
   documentPath?: string
 }
 
@@ -23,13 +28,7 @@ export interface FrontOperatingSystemContext {
     blockedAnalysis: string[]
   }
   sampleReportSections: string[]
-  offerLadder: Array<{
-    id: string
-    label: string
-    minPriceKrw: number
-    maxPriceKrw: number
-    purpose: string
-  }>
+  offerLadder: FrontOperatingOffer[]
   approvalGates: Array<{
     id: string
     label: string
@@ -40,19 +39,19 @@ export interface FrontOperatingSystemContext {
 
 export const AGENTCOST_FRONT_OPERATING_SYSTEM: FrontOperatingSystemContext = {
   assets: [
-    { id: 'icp_scorecard', label: 'ICP Scorecard', ref: 'asset:icp_scorecard', owner: 'operator', documentPath: 'docs/service-validation/icp-scorecard.md' },
-    { id: 'lead_intake_log', label: 'Lead Intake Log', ref: 'asset:lead_intake_log', owner: 'operator' },
-    { id: 'self_assessment_rules', label: 'Self-Assessment Rules', ref: 'asset:self_assessment_rules', owner: 'operator' },
-    { id: 'data_readiness_checklist', label: 'Data Readiness Checklist', ref: 'asset:data_readiness_checklist', owner: 'trust_review', documentPath: 'docs/service-validation/data-readiness-checklist.md' },
-    { id: 'data_request_template', label: 'Trust-safe Data Request Template', ref: 'asset:data_request_template', owner: 'trust_review', documentPath: 'docs/templates/agentcost-data-request.md' },
-    { id: 'sample_report_template', label: 'Sample Report Template', ref: 'asset:sample_report_template', owner: 'knowledge_ops' },
-    { id: 'offer_ladder', label: 'Offer Ladder', ref: 'asset:offer_ladder', owner: 'finance_ops' },
-    { id: 'ai_cost_snapshot_offer', label: 'AI Cost Snapshot Offer One-Pager', ref: 'asset:ai_cost_snapshot_offer', owner: 'finance_ops', documentPath: 'docs/service-validation/ai-cost-snapshot-offer-one-pager.md' },
-    { id: 'approval_matrix', label: 'Human Approval Matrix', ref: 'asset:approval_matrix', owner: 'trust_review' },
-    { id: 'review_call_script', label: 'Review Call Script', ref: 'asset:review_call_script', owner: 'operator', documentPath: 'docs/service-validation/review-call-script.md' },
-    { id: 'learning_loop_review', label: 'Learning Loop Review', ref: 'asset:learning_loop_review', owner: 'knowledge_ops', documentPath: 'docs/service-validation/learning-loop-template.md' },
-    { id: 'service_validation_ledger', label: 'Service MVP Validation Ledger', ref: 'asset:service_validation_ledger', owner: 'knowledge_ops', documentPath: 'docs/service-validation/service-mvp-validation-ledger.md' },
-    { id: 'productization_backlog', label: 'Productization Backlog', ref: 'asset:productization_backlog', owner: 'knowledge_ops' },
+    { id: 'icp_scorecard', label: 'ICP Scorecard', ref: 'asset:icp_scorecard', owner: 'operator', surface: 'expert', documentPath: 'docs/service-validation/icp-scorecard.md' },
+    { id: 'lead_intake_log', label: 'Lead Intake Log', ref: 'asset:lead_intake_log', owner: 'operator', surface: 'internal' },
+    { id: 'self_assessment_rules', label: 'Self-Assessment Rules', ref: 'asset:self_assessment_rules', owner: 'operator', surface: 'both' },
+    { id: 'data_readiness_checklist', label: 'Data Readiness Checklist', ref: 'asset:data_readiness_checklist', owner: 'trust_review', surface: 'both', documentPath: 'docs/service-validation/data-readiness-checklist.md' },
+    { id: 'data_request_template', label: 'Trust-safe Data Request Template', ref: 'asset:data_request_template', owner: 'trust_review', surface: 'both', documentPath: 'docs/templates/agentcost-data-request.md' },
+    { id: 'sample_report_template', label: 'Sample Report Template', ref: 'asset:sample_report_template', owner: 'knowledge_ops', surface: 'customer' },
+    { id: 'offer_ladder', label: 'Offer Ladder', ref: 'asset:offer_ladder', owner: 'finance_ops', surface: 'internal' },
+    { id: 'ai_cost_snapshot_offer', label: 'AI Cost Snapshot Offer One-Pager', ref: 'asset:ai_cost_snapshot_offer', owner: 'finance_ops', surface: 'both', documentPath: 'docs/service-validation/ai-cost-snapshot-offer-one-pager.md' },
+    { id: 'approval_matrix', label: 'Human Approval Matrix', ref: 'asset:approval_matrix', owner: 'trust_review', surface: 'internal' },
+    { id: 'review_call_script', label: 'Review Call Script', ref: 'asset:review_call_script', owner: 'operator', surface: 'expert', documentPath: 'docs/service-validation/review-call-script.md' },
+    { id: 'learning_loop_review', label: 'Learning Loop Review', ref: 'asset:learning_loop_review', owner: 'knowledge_ops', surface: 'internal', documentPath: 'docs/service-validation/learning-loop-template.md' },
+    { id: 'service_validation_ledger', label: 'Service MVP Validation Ledger', ref: 'asset:service_validation_ledger', owner: 'knowledge_ops', surface: 'internal', documentPath: 'docs/service-validation/service-mvp-validation-ledger.md' },
+    { id: 'productization_backlog', label: 'Productization Backlog', ref: 'asset:productization_backlog', owner: 'knowledge_ops', surface: 'internal' },
   ],
   leadFitRules: {
     grades: ['A', 'B', 'C'],
@@ -98,12 +97,7 @@ export const AGENTCOST_FRONT_OPERATING_SYSTEM: FrontOperatingSystemContext = {
     'Decision Log example',
     'Data limitations',
   ],
-  offerLadder: [
-    { id: 'free_fit_check', label: 'Free Fit Check', minPriceKrw: 0, maxPriceKrw: 0, purpose: 'diagnostic fit' },
-    { id: 'data_readiness_check', label: 'Data Readiness Check', minPriceKrw: 50_000, maxPriceKrw: 150_000, purpose: 'analysis scope' },
-    { id: 'ai_cost_snapshot', label: 'AI Cost Snapshot', minPriceKrw: 300_000, maxPriceKrw: 1_000_000, purpose: 'one-page report and review call' },
-    { id: 'monthly_ai_cost_review', label: 'Monthly AI Cost Review', minPriceKrw: 300_000, maxPriceKrw: 1_500_000, purpose: 'recurring decision log' },
-  ],
+  offerLadder: FRONT_OPERATING_OFFER_LADDER,
   approvalGates: [
     { id: 'customer_acceptance', label: 'Customer acceptance', required: true },
     { id: 'analysis_scope', label: 'Analysis scope', required: true },
@@ -115,3 +109,25 @@ export const AGENTCOST_FRONT_OPERATING_SYSTEM: FrontOperatingSystemContext = {
   ],
   learningLoopRecords: [],
 }
+
+export function isCustomerFacingFrontOperatingAsset(asset: FrontOperatingAsset): boolean {
+  return asset.surface === 'customer' || asset.surface === 'both'
+}
+
+export function getFrontOperatingAssetsForSurface(surface: Exclude<FrontOperatingSurface, 'both'>): FrontOperatingAsset[] {
+  if (surface === 'customer') {
+    return AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(isCustomerFacingFrontOperatingAsset)
+  }
+
+  if (surface === 'expert') {
+    return AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(asset => asset.surface === 'expert' || asset.surface === 'both')
+  }
+
+  return AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(asset => asset.surface === 'internal')
+}
+
+export const CUSTOMER_FRONT_OPERATING_ASSETS = getFrontOperatingAssetsForSurface('customer')
+
+export const EXPERT_INTERNAL_FRONT_OPERATING_ASSETS = AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(
+  asset => asset.surface === 'expert' || asset.surface === 'internal',
+)

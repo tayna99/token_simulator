@@ -33,7 +33,12 @@ function RequiredAssetRow({
     <div className="rounded-wds border border-line-neutral bg-fill-alternative px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-label-neutral">{asset.label}</p>
-        <Badge>{asset.owner}</Badge>
+        <div className="flex flex-wrap justify-end gap-1">
+          <Badge>{asset.owner}</Badge>
+          <Badge tone={asset.surface === 'internal' ? 'caution' : asset.surface === 'customer' ? 'positive' : 'neutral'}>
+            {asset.surface}
+          </Badge>
+        </div>
       </div>
       <p className="mt-1 text-[11px] text-label-alternative" translate="no">
         {asset.ref}

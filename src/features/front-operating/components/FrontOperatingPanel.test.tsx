@@ -29,6 +29,9 @@ describe('FrontOperatingPanel', () => {
     expect(panel).toHaveTextContent(/asset:approval_matrix/i)
     expect(panel).toHaveTextContent(/Learning Loop Review/i)
     expect(panel).toHaveTextContent(/asset:learning_loop_review/i)
+    expect(panel).toHaveTextContent(/expert/i)
+    expect(panel).toHaveTextContent(/internal/i)
+    expect(panel).toHaveTextContent(/both/i)
   })
 
   it('shows attached service validation document paths for required operating assets', () => {
