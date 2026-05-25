@@ -30,7 +30,7 @@ export const SERVING_ECONOMICS_SOURCES: ServingEconomicsSource[] = [
       corpusTrust: 'standard_reference',
       ownerAgentIds: ['model_inference_research', 'finance_ops'],
       consumerAgentIds: ['model_inference_research', 'optimization_routing', 'finance_ops'],
-      evidenceRefPrefix: 'evidence:',
+      evidenceRefPrefix: 'serving:',
     }),
     engine: 'vllm',
     metricKinds: ['ttft', 'tpot', 'throughput', 'gpu_utilization', 'kv_cache', 'prefix_cache', 'batching'],
@@ -60,6 +60,8 @@ export function servingEconomicsSourcesAsCorpusChunks(
       cadence: source.cadence,
       sourceId: source.id,
       taskTags: ['serving-economics', 'latency', 'self-hosted'],
+      costAuthority: source.costAuthority,
+      providerApiCostExcluded: source.providerApiCostExcluded,
     },
   }))
 }

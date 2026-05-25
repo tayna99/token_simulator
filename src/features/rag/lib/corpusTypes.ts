@@ -26,7 +26,7 @@ export const CORPUS_TRUSTS = [
 
 export type CorpusTrust = typeof CORPUS_TRUSTS[number]
 export type CorpusCadence = 'realtime' | 'daily' | 'weekly' | 'on_write' | 'manual'
-export type EvidenceRefPrefix = 'source:' | 'asset:' | 'evidence:' | 'risk:' | 'decision:' | 'snapshot:'
+export type EvidenceRefPrefix = 'source:' | 'asset:' | 'evidence:' | 'serving:' | 'risk:' | 'decision:' | 'snapshot:'
 
 export interface CorpusSourceInput {
   id: string
@@ -59,6 +59,8 @@ export interface CorpusChunkMetadata {
   qualityBasis?: string
   taskTags?: readonly string[]
   modelIds?: readonly string[]
+  costAuthority?: 'self_hosted_serving_economics_only'
+  providerApiCostExcluded?: true
 }
 
 export interface CorpusChunk {

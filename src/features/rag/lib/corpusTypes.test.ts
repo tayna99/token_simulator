@@ -6,6 +6,7 @@ import {
   isCorpusId,
   isCorpusTrust,
   normalizeCorpusSource,
+  refFor,
   sourceHasKnownAgents,
 } from './corpusTypes'
 
@@ -59,5 +60,10 @@ describe('corpusTypes', () => {
     expect(source.mayOverrideFacts).toBe(false)
     expect(source.refs).toEqual(['evidence:lmarena-leaderboard'])
     expect(sourceHasKnownAgents(source, OPERATING_AGENTS.map(agent => agent.id))).toBe(true)
+  })
+
+  it('keeps self-hosted serving economics on a dedicated serving ref prefix', () => {
+    expect(refFor('serving:', 'vllm-benchmark-docs')).toBe('serving:vllm-benchmark-docs')
+    expect(refFor('serving:', 'serving:vllm-benchmark-docs')).toBe('serving:vllm-benchmark-docs')
   })
 })
