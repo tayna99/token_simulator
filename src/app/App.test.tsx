@@ -20,6 +20,28 @@ function lifecycleButton(pattern: RegExp): HTMLButtonElement {
   return within(screen.getByTestId('decision-stage-nav')).getByRole('button', { name: pattern }) as HTMLButtonElement
 }
 
+function expectCustomerSafe(container: HTMLElement) {
+  const text = container.textContent ?? ''
+  for (const forbidden of [
+    /source:/i,
+    /evidence:/i,
+    /snapshot:/i,
+    /tool:/i,
+    /parserStrategy/i,
+    /\bmetadata\b/i,
+    /corpusTrust/i,
+    /consumerAgentIds/i,
+    /ownerAgentIds/i,
+    /workspace-demo/i,
+    /google-pricing/i,
+    /lmarena-leaderboard/i,
+    /artificial-analysis-models/i,
+    /parseArtificialAnalysis/i,
+  ]) {
+    expect(text).not.toMatch(forbidden)
+  }
+}
+
 describe('App AI team operations workspace', () => {
   beforeEach(async () => {
     window.localStorage.clear()
@@ -51,6 +73,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.queryByText('Developer Diagnostics')).not.toBeInTheDocument()
     expect(screen.queryByText('Budget & Quota Guardrails')).not.toBeInTheDocument()
     expect(screen.queryByText('Deferred / Business Planning')).not.toBeInTheDocument()
+    expectCustomerSafe(screen.getByTestId('app-shell'))
   }, 120000)
 
   it('renders the PRODUCT_UX decision console shell with 3-pane navigation and assistant panel', async () => {
@@ -234,6 +257,7 @@ describe('App AI team operations workspace', () => {
     expect(panel).not.toHaveTextContent(/sdk:p1:/i)
     expect(panel).not.toHaveTextContent(/normalizedEvent/i)
     expect(panel).not.toHaveTextContent(/persistence/i)
+    expectCustomerSafe(panel)
     expect(fetchMock).toHaveBeenCalledWith('/api/sdk-lite/usage', expect.objectContaining({ method: 'POST' }))
   })
 
