@@ -1,5 +1,6 @@
 export type ReportAudience = 'developer' | 'pm' | 'ceo_cfo' | 'board'
 
+import { fmtCurrency, fmtTokens } from '../../../lib/format'
 import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
 import type { PricingFreshnessBadge } from '../../facts/lib/pricingFreshness'
 import type { RateCardDraft } from '../../pricing/lib/rateCardDraft'
@@ -132,10 +133,10 @@ export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): O
     ...(input.rateCardDraft ? [
       '- Rate-card draft/readiness context only; not billing execution.',
       `  - Policy type: ${input.rateCardDraft.policyType}`,
-      `  - Included credits: ${input.rateCardDraft.includedCredits}`,
-      `  - Overage price per request: ${input.rateCardDraft.overagePricePerRequest}`,
-      `  - Customer cap: ${input.rateCardDraft.capUsdPerCustomer}`,
-      `  - Affected customers: ${input.rateCardDraft.affectedCustomerCount}`,
+      `  - Included credits: ${fmtTokens(input.rateCardDraft.includedCredits)}`,
+      `  - Overage price per request: ${fmtCurrency(input.rateCardDraft.overagePricePerRequest, 2)}`,
+      `  - Customer cap: ${fmtCurrency(input.rateCardDraft.capUsdPerCustomer)}`,
+      `  - Affected customers: ${fmtTokens(input.rateCardDraft.affectedCustomerCount)}`,
       `  - Status: ${input.rateCardDraft.status}`,
       `  - Execution mode: ${input.rateCardDraft.executionMode}`,
       `  - Billing executable: ${input.rateCardDraft.billingExecutable}`,
