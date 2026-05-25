@@ -132,19 +132,29 @@ export function markRateCardBillingFailed(input: RateCardDraft, result: {
 export function buildRateCardExecutionReadiness(input: {
   draft: RateCardDraft
   hasApproval?: boolean
+  hasConnectorEvidence?: boolean
+  hasSandboxEvidence?: boolean
   hasIdempotencyKey?: boolean
   hasRollbackMetadata?: boolean
   hasLedgerRow?: boolean
 }): RateCardExecutionReadiness {
   const draft = input.draft
+  const missingProof = [
+    input.hasConnectorEvidence ? '' : 'connector_evidence',
+    input.hasSandboxEvidence ? '' : 'sandbox_evidence',
+    input.hasIdempotencyKey ? '' : 'idempotency_key',
+    input.hasRollbackMetadata ? '' : 'rollback_metadata',
+    input.hasLedgerRow ? '' : 'ledger_row',
+  ].filter(Boolean)
+
   if (draft.status === 'pushed_to_billing') {
-    if (!input.hasLedgerRow) {
+    if (missingProof.length > 0) {
       return readiness({
         status: 'blocked',
         billingExecutable: false,
         billingConnectorId: draft.billingConnectorId,
         billingExternalRef: draft.billingExternalRef,
-        missing: ['ledger_row'],
+        missing: missingProof,
       })
     }
     return readiness({
@@ -181,9 +191,7 @@ export function buildRateCardExecutionReadiness(input: {
 
   const missing = [
     input.hasApproval ? '' : 'approval',
-    input.hasIdempotencyKey ? '' : 'idempotency_key',
-    input.hasRollbackMetadata ? '' : 'rollback_metadata',
-    input.hasLedgerRow ? '' : 'ledger_row',
+    ...missingProof,
   ].filter(Boolean)
 
   return readiness({

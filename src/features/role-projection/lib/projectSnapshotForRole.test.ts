@@ -11,6 +11,19 @@ const snapshot = {
 }
 
 describe('projectSnapshotForRole', () => {
+  it('keeps shared KPI values identical across role lenses from one snapshot', () => {
+    const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
+    const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')
+    const ceo = projectSnapshotForRole(snapshot, 'ceo', 'internal')
+
+    const valueFor = (projection: typeof developer, id: string) =>
+      projection.primaryKpis.find(item => item.id === id)?.value
+
+    expect(valueFor(developer, 'monthly_cost')).toBe(valueFor(ceo, 'monthly_cost'))
+    expect(valueFor(pm, 'margin')).toBe(valueFor(ceo, 'margin'))
+    expect(valueFor(pm, 'customer')).toBe(valueFor(ceo, 'customer'))
+  })
+
   it('formats numeric snapshot values through the shared formatters', () => {
     const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
     const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')

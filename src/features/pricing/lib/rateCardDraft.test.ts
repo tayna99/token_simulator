@@ -105,6 +105,8 @@ describe('buildRateCardDraft', () => {
     expect(buildRateCardExecutionReadiness({
       draft: approvedWithConnector,
       hasApproval: true,
+      hasConnectorEvidence: true,
+      hasSandboxEvidence: true,
       hasIdempotencyKey: false,
       hasRollbackMetadata: true,
       hasLedgerRow: true,
@@ -112,6 +114,8 @@ describe('buildRateCardDraft', () => {
     expect(buildRateCardExecutionReadiness({
       draft: approvedWithConnector,
       hasApproval: true,
+      hasConnectorEvidence: true,
+      hasSandboxEvidence: true,
       hasIdempotencyKey: true,
       hasRollbackMetadata: true,
       hasLedgerRow: true,
@@ -141,12 +145,16 @@ describe('buildRateCardDraft', () => {
     expect(buildRateCardExecutionReadiness({
       draft: pushed,
       hasLedgerRow: false,
+      hasConnectorEvidence: true,
+      hasSandboxEvidence: true,
       hasIdempotencyKey: true,
       hasRollbackMetadata: true,
     })).toMatchObject({ status: 'blocked', missing: ['ledger_row'] })
     expect(buildRateCardExecutionReadiness({
       draft: pushed,
       hasLedgerRow: true,
+      hasConnectorEvidence: true,
+      hasSandboxEvidence: true,
       hasIdempotencyKey: true,
       hasRollbackMetadata: true,
     })).toMatchObject({ status: 'pushed_to_billing', billingExternalRef: 'stripe:price_123' })
@@ -157,5 +165,57 @@ describe('buildRateCardDraft', () => {
       'pushed_to_billing',
       'failed',
     ])
+  })
+
+  it('blocks pushed billing state until connector, sandbox, idempotency, rollback, and ledger proof are present', () => {
+    const draft = buildRateCardDraft({
+      policyType: 'usage_cap',
+      includedCredits: 2500,
+      overagePricePerRequest: 0.08,
+      capUsdPerCustomer: 149,
+      affectedCustomerCount: 7,
+      marginBasisRefs: ['tool:margin.plan.pro'],
+    })
+    const approved = approveRateCardDraft(draft, {
+      approvedBy: 'owner@example.com',
+      billingConnectorConfigured: true,
+      billingConnectorId: 'stripe_billing',
+    })
+    const pushed = markRateCardPushedToBilling(approved, {
+      connectorId: 'stripe_billing',
+      externalRef: 'stripe:price_123',
+      pushedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(buildRateCardExecutionReadiness({
+      draft: pushed,
+      hasLedgerRow: true,
+      hasIdempotencyKey: false,
+      hasRollbackMetadata: false,
+      hasConnectorEvidence: false,
+      hasSandboxEvidence: false,
+    })).toMatchObject({
+      status: 'blocked',
+      billingExecutable: false,
+      missing: [
+        'connector_evidence',
+        'sandbox_evidence',
+        'idempotency_key',
+        'rollback_metadata',
+      ],
+    })
+
+    expect(buildRateCardExecutionReadiness({
+      draft: pushed,
+      hasLedgerRow: true,
+      hasIdempotencyKey: true,
+      hasRollbackMetadata: true,
+      hasConnectorEvidence: true,
+      hasSandboxEvidence: true,
+    })).toMatchObject({
+      status: 'pushed_to_billing',
+      billingExternalRef: 'stripe:price_123',
+      missing: [],
+    })
   })
 })
