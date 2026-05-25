@@ -122,7 +122,7 @@ npm run research:github -- "AI SaaS usage based billing margin" 20
 
 ## 2026-05-07
 
-### Grok: Group B cost/margin/pricing candidates CAND-037~058
+### Grok: Group B 비용/마진/가격 후보 CAND-037~058
 
 프롬프트 초점:
 
@@ -156,7 +156,7 @@ npm run research:github -- "AI SaaS usage based billing margin" 20
 - AI/LLM 직접 맥락이 약한 후보는 off-domain supporting candidate로 유지한다.
 - 검증 통과 후보만 `GR-023` 이후로 승격한다.
 
-### CAND-037~044 partial verification
+### CAND-037~044 부분 검증
 
 검증 후 승격:
 
@@ -178,12 +178,12 @@ Core Engine attribution(비용 귀속) 확장 전 historical snapshot(그 시점
 - Validator top pain: `pain_margin_unknown:188`, `pain_usage_pricing_mismatch:152`, `pain_heavy_user_loss:140`.
 - Next official evidence id: `GR-030`.
 
-### Grok: initial 10-candidate quote verification
+### Grok: 초기 10개 후보 quote 검증
 
 입력:
 
 - 10 previously collected AI SaaS cost/margin candidates.
-- Verification fields: URL access, published date, exact quote, AI/LLM/SaaS context, duplicate risk, promotion decision.
+- Verification fields(검증 필드): URL access, published date, exact quote, AI/LLM/SaaS context, duplicate risk, promotion decision.
 
 결과 매핑:
 
@@ -210,8 +210,8 @@ Core Engine attribution(비용 귀속) 확장 전 historical snapshot(그 시점
 
 입력:
 
-- Six attribution-focused examples for customer, feature, model, plan, session, and agent-run cost.
-- Verification fields: URL, published date, exact quote, AI SaaS context, Core Engine relevance.
+- customer, feature, model, plan, session, agent-run cost에 초점을 둔 attribution(비용 귀속) 사례 6개.
+- Verification fields(검증 필드): URL, published date, exact quote, AI SaaS context, Core Engine relevance.
 
 결과 매핑:
 
@@ -230,12 +230,12 @@ Core Engine attribution(비용 귀속) 확장 전 historical snapshot(그 시점
 - This strengthens the middle layer: usage logs must be tagged and rolled up by customer, feature, model, plan, session, trace, workflow, and agent run.
 - Next official evidence id: `GR-034`.
 
-### Grok: plan-level LLM cost and gross margin evidence
+### Grok: plan-level LLM cost와 gross margin evidence
 
 입력:
 
-- Seven plan-level examples for Free, Pro, Team, and Enterprise AI usage cost.
-- Verification fields: URL, published date, exact quote, plan/pricing issue, WTP signal, possible feature.
+- Free, Pro, Team, Enterprise AI usage cost의 plan-level(요금제별) 사례 7개.
+- Verification fields(검증 필드): URL, published date, exact quote, plan/pricing issue, WTP signal(지불 의향 신호), possible feature.
 
 결과 매핑:
 
@@ -255,12 +255,12 @@ Core Engine attribution(비용 귀속) 확장 전 historical snapshot(그 시점
 - This strengthens the `plan_id` axis: customer-level profitability must be paired with plan-level COGS, cap, overage, credit bundle, and AI add-on decisions.
 - Next official evidence id: `GR-038`.
 
-### Grok: CFO / CEO / Board reporting expressions
+### Grok: CFO / CEO / Board reporting 표현
 
 입력:
 
-- Seven reporting-language examples for AI COGS, gross margin compression, cost per customer, customer profitability, margin erosion, pricing alignment, and Board reporting.
-- Verification fields: URL, published date, exact short quote, report phrase, dashboard/deck usage.
+- AI COGS(매출원가), gross margin compression(매출총이익률 압박), cost per customer(고객당 원가), customer profitability(고객별 수익성), margin erosion(마진 침식), pricing alignment(가격정책과 비용 구조의 정렬), Board reporting(이사회 보고)에 관한 reporting-language(보고서 표현) 사례 7개.
+- Verification fields(검증 필드): URL, published date, exact short quote, report phrase, dashboard/deck usage.
 
 결과 매핑:
 
@@ -277,15 +277,15 @@ Core Engine attribution(비용 귀속) 확장 전 historical snapshot(그 시점
 결론:
 
 - One new Board/investor benchmark row was added.
-- The main product implication is report language: CEO/CFO/Board outputs should translate usage data into AI COGS, margin erosion, cost per customer, customer profitability, pricing alignment, and AI unit economics narrative.
+- 주요 제품 시사점은 report language다. CEO/CFO/Board output은 usage data(사용량 데이터)를 AI COGS, margin erosion, cost per customer, customer profitability, pricing alignment, AI unit economics narrative(단위 경제성 설명)로 번역해야 한다.
 - Next official evidence id: `GR-039`.
 
-### Grok: competitor / adjacent product comparison
+### Grok: 경쟁/인접 제품 비교
 
 입력:
 
-- Product comparison for Helicone, LangSmith, Langfuse, Portkey, CloudZero, Vantage, OpenMeter, Metronome, and Stripe usage-based billing.
-- Comparison axes: LLM trace, token/cost tracking, customer/feature cost, pricing simulation, gross margin / AI COGS, CEO/CFO report, usage-based billing, gateway/proxy.
+- Helicone, LangSmith, Langfuse, Portkey, CloudZero, Vantage, OpenMeter, Metronome, Stripe usage-based billing 제품 비교.
+- Comparison axes(비교 축): LLM trace(요청 흐름 추적), token/cost tracking, customer/feature cost, pricing simulation, gross margin / AI COGS, CEO/CFO report, usage-based billing, gateway/proxy.
 
 조치:
 
