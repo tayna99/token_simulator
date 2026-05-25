@@ -23,6 +23,7 @@
     "research:benchmark-corpus": "node scripts/research/benchmark-corpus.mjs",
     "memory:capture": "node scripts/company-memory/capture-update.mjs",
     "memory:check-commit": "node scripts/company-memory/check-commit-message.mjs",
+    "memory:install-hooks": "git config core.hooksPath .githooks",
     "memory:weekly": "node scripts/company-memory/weekly-summary.mjs",
     "production:demo:seed:dry-run": "node scripts/supabase/seed-production-demo.mjs --dry-run",
     "production:demo:smoke": "node scripts/supabase/smoke-production-demo.mjs"
