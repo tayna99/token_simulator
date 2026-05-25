@@ -1,63 +1,63 @@
-# Front Operating UI Panel TDD Implementation Plan
+# Front Operating UI Panel TDD 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **agentic worker(에이전트형 작업자)용:** REQUIRED SUB-SKILL(필수 하위 스킬): 이 계획을 task-by-task(작업 단위)로 구현하려면 superpowers:subagent-driven-development(권장) 또는 superpowers:executing-plans를 사용한다. 단계 추적은 checkbox(`- [ ]`) 문법을 사용한다.
 
-**Goal:** Show the AgentCost front operating assets in the app shell and verify that the same visible context is sent to the existing LangChain `create_agent` runtime payload.
+**목표:** AgentCost front operating asset(고객 획득/검증 앞단 운영 자산)을 app shell(앱의 기본 화면 껍데기)에 보여주고, 같은 visible context(화면에 보이는 맥락)가 기존 LangChain `create_agent` runtime payload(실행 요청 본문)로 전달되는지 검증한다.
 
-**Architecture:** Add a small read-only `FrontOperatingPanel` beside the existing internal `OperatingTeamPanel` in the left lifecycle navigation. Keep the panel display-only: no new calculators, no mutable local state, and no new backend endpoint. The existing `AGENTCOST_FRONT_OPERATING_SYSTEM -> buildAgentSnapshot() -> runAgentRuntime()` path remains the source of truth for agent payloads.
+**아키텍처:** 왼쪽 lifecycle navigation(업무 흐름 내비게이션)의 기존 internal(내부용) `OperatingTeamPanel` 옆에 작은 read-only(읽기 전용) `FrontOperatingPanel`을 추가한다. 이 panel은 display-only(표시 전용)로 유지한다. 새 calculator(계산기), mutable local state(변경 가능한 로컬 상태), 새 backend endpoint(서버 API 경로)는 만들지 않는다. 기존 `AGENTCOST_FRONT_OPERATING_SYSTEM -> buildAgentSnapshot() -> runAgentRuntime()` 경로가 agent payload의 source of truth(공식 출처)로 남는다.
 
-**Tech Stack:** Vite 6, React 18, TypeScript 5, Tailwind 3, Vitest 4, Testing Library, existing `src/shared/ui/primitives`.
-
----
-
-## Scope
-
-Build only the visible UI surface and its App integration tests.
-
-In scope:
-- Render front operating asset groups for `icp_scorecard`, `data_readiness`, `offer_ladder`, `approval_matrix`, and `learning_loop`.
-- Add CTAs that route into existing app stages instead of creating new pages.
-- Verify that clicking agent run controls still posts the same `frontOperatingSystem` context to `/api/agent/run`.
-- Keep this panel internal/debug-gated initially, matching `OperatingTeamPanel`.
-
-Out of scope:
-- Editing or persisting learning-loop records.
-- Creating a customer-facing intake workflow.
-- Adding new LangChain tools. The backend tools already exist.
-- New calculation or formatting logic beyond rendering static counts and labels.
+**기술 스택:** Vite 6, React 18, TypeScript 5, Tailwind 3, Vitest 4, Testing Library, 기존 `src/shared/ui/primitives`.
 
 ---
 
-## File Structure
+## 범위
+
+visible UI surface(사용자에게 보이는 화면 표면)와 App integration test(앱 통합 테스트)만 만든다.
+
+범위 안:
+- `icp_scorecard`, `data_readiness`, `offer_ladder`, `approval_matrix`, `learning_loop`의 front operating asset group(앞단 운영 자산 묶음)을 렌더한다.
+- 새 page(페이지)를 만들지 않고 기존 app stage(앱 단계)로 이동하는 CTA(행동 버튼)를 추가한다.
+- agent run control(에이전트 실행 버튼)을 눌러도 같은 `frontOperatingSystem` context가 `/api/agent/run`으로 POST되는지 검증한다.
+- 초기에는 `OperatingTeamPanel`과 맞춰 internal/debug-gated(내부/디버그 모드에서만 보임)로 유지한다.
+
+범위 밖:
+- learning-loop record(학습 루프 기록) 편집 또는 저장.
+- customer-facing intake workflow(고객용 데이터 접수 흐름) 생성.
+- 새 LangChain tool 추가. backend tool은 이미 존재한다.
+- static count(고정 개수)와 label 렌더링을 넘어서는 새 계산 또는 포맷 로직.
+
+---
+
+## 파일 구조
 
 - Create: `src/features/front-operating/components/FrontOperatingPanel.tsx`
-  - Read-only display component for front operating assets, data readiness gate, offer ladder, approval matrix, and learning-loop status.
+  - front operating asset, data readiness gate(데이터 준비도 관문), offer ladder(상품 제안 사다리), approval matrix(승인 매트릭스), learning-loop status(학습 루프 상태)를 보여주는 read-only display component.
 - Create: `src/features/front-operating/components/FrontOperatingPanel.test.tsx`
-  - Component-level tests for required labels, asset refs, gate content, and CTA callbacks.
+  - 필수 label, asset ref, gate content, CTA callback을 검증하는 component-level test(컴포넌트 단위 테스트).
 - Modify: `src/app/App.tsx`
-  - Import `FrontOperatingPanel`.
-  - Pass `AGENTCOST_FRONT_OPERATING_SYSTEM`.
-  - Wire CTA callbacks to existing `DecisionStageId` transitions.
-  - Render panel only in `showInternal` block below `OperatingTeamPanel`.
+  - `FrontOperatingPanel` import.
+  - `AGENTCOST_FRONT_OPERATING_SYSTEM` 전달.
+  - CTA callback을 기존 `DecisionStageId` transition(단계 전환)에 연결.
+  - `OperatingTeamPanel` 아래 `showInternal` block에서만 panel 렌더.
 - Modify: `src/app/App.test.tsx`
-  - Verify panel is hidden outside debug mode.
-  - Verify panel appears in debug mode and shows the required assets.
-  - Verify CTAs route to existing stages.
-  - Verify agent payload still includes `frontOperatingSystem` when running all-hands.
+  - debug mode 밖에서는 panel이 숨겨지는지 검증.
+  - debug mode에서 panel이 나타나고 필수 asset을 보여주는지 검증.
+  - CTA가 기존 stage로 route되는지 검증.
+  - all-hands 실행 시 agent payload에 `frontOperatingSystem`이 계속 포함되는지 검증.
 - Optional docs update: `docs/PRD-v2.md`, `docs/PRD-v3.md`
-  - Only if implementation changes visibility from internal-only to customer-facing.
+  - 구현이 internal-only에서 customer-facing(고객 노출)으로 바뀔 때만 수정.
 
 ---
 
-## Task 1: Add FrontOperatingPanel Component
+## Task 1: `FrontOperatingPanel` Component 추가
 
-**Files:**
-- Create: `src/features/front-operating/components/FrontOperatingPanel.test.tsx`
-- Create: `src/features/front-operating/components/FrontOperatingPanel.tsx`
+**파일:**
+- 생성: `src/features/front-operating/components/FrontOperatingPanel.test.tsx`
+- 생성: `src/features/front-operating/components/FrontOperatingPanel.tsx`
 
-- [ ] **Step 1: Write the failing component test**
+- [ ] **Step 1: 실패하는 component test 작성**
 
-Create `src/features/front-operating/components/FrontOperatingPanel.test.tsx`.
+`src/features/front-operating/components/FrontOperatingPanel.test.tsx`를 만든다.
 
 ```tsx
 import { render, screen, within } from '@testing-library/react'
@@ -137,19 +137,19 @@ describe('FrontOperatingPanel', () => {
 })
 ```
 
-- [ ] **Step 2: Run the component test to verify RED**
+- [ ] **Step 2: component test를 실행해 RED 확인**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/features/front-operating/components/FrontOperatingPanel.test.tsx
 ```
 
-Expected: FAIL because `FrontOperatingPanel.tsx` does not exist.
+기대 결과: `FrontOperatingPanel.tsx`가 없기 때문에 FAIL.
 
-- [ ] **Step 3: Implement the minimal component**
+- [ ] **Step 3: 최소 component 구현**
 
-Create `src/features/front-operating/components/FrontOperatingPanel.tsx`.
+`src/features/front-operating/components/FrontOperatingPanel.tsx`를 만든다.
 
 ```tsx
 import { Badge, Button } from '../../../shared/ui/primitives'
@@ -237,17 +237,17 @@ export function FrontOperatingPanel({
 }
 ```
 
-- [ ] **Step 4: Run the component test to verify GREEN**
+- [ ] **Step 4: component test를 실행해 GREEN 확인**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/features/front-operating/components/FrontOperatingPanel.test.tsx
 ```
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit Task 1**
+- [ ] **Step 5: Task 1 commit**
 
 ```powershell
 git add src/features/front-operating/components/FrontOperatingPanel.tsx src/features/front-operating/components/FrontOperatingPanel.test.tsx
@@ -256,15 +256,15 @@ git commit -m "feat: add front operating panel"
 
 ---
 
-## Task 2: Wire FrontOperatingPanel Into App Shell
+## Task 2: `FrontOperatingPanel`을 App Shell에 연결
 
-**Files:**
-- Modify: `src/app/App.test.tsx`
-- Modify: `src/app/App.tsx`
+**파일:**
+- 수정: `src/app/App.test.tsx`
+- 수정: `src/app/App.tsx`
 
-- [ ] **Step 1: Write failing App shell tests**
+- [ ] **Step 1: 실패하는 App shell test 작성**
 
-Add the following tests inside `describe('App AI team operations workspace', () => { ... })` in `src/app/App.test.tsx`, near the existing internal/debug surface tests.
+`src/app/App.test.tsx`의 `describe('App AI team operations workspace', () => { ... })` 안, 기존 internal/debug surface test 근처에 아래 test를 추가한다.
 
 ```tsx
   it('shows the front operating panel only in admin mode', () => {
@@ -301,25 +301,25 @@ Add the following tests inside `describe('App AI team operations workspace', () 
   })
 ```
 
-- [ ] **Step 2: Run App tests to verify RED**
+- [ ] **Step 2: App test를 실행해 RED 확인**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/app/App.test.tsx
 ```
 
-Expected: FAIL because `front-operating-panel` is not rendered.
+기대 결과: `front-operating-panel`이 렌더되지 않기 때문에 FAIL.
 
-- [ ] **Step 3: Wire the panel into `App.tsx`**
+- [ ] **Step 3: panel을 `App.tsx`에 연결**
 
-Modify imports in `src/app/App.tsx`.
+`src/app/App.tsx`의 import를 수정한다.
 
 ```tsx
 import { FrontOperatingPanel } from '../features/front-operating/components/FrontOperatingPanel'
 ```
 
-Modify the `LifecycleNavigation` props type and function signature.
+`LifecycleNavigation` props type(속성 타입)과 function signature(함수 시그니처)를 수정한다.
 
 ```tsx
 function LifecycleNavigation({
@@ -349,7 +349,7 @@ function LifecycleNavigation({
 }) {
 ```
 
-Render the panel after `OperatingTeamPanel`, inside the same `showInternal` block.
+같은 `showInternal` block 안에서 `OperatingTeamPanel` 뒤에 panel을 렌더한다.
 
 ```tsx
       {showInternal && (
@@ -362,7 +362,7 @@ Render the panel after `OperatingTeamPanel`, inside the same `showInternal` bloc
       )}
 ```
 
-Add callbacks in `App()` near `handleRunAllHands`.
+`App()` 안의 `handleRunAllHands` 근처에 callback을 추가한다.
 
 ```tsx
   const handleOpenFrontFitCheck = () => {
@@ -384,7 +384,7 @@ Add callbacks in `App()` near `handleRunAllHands`.
   }
 ```
 
-Pass callbacks into `LifecycleNavigation`.
+callback을 `LifecycleNavigation`에 전달한다.
 
 ```tsx
           onOpenFrontFitCheck={handleOpenFrontFitCheck}
@@ -392,17 +392,17 @@ Pass callbacks into `LifecycleNavigation`.
           onOpenFrontSampleReport={handleOpenFrontSampleReport}
 ```
 
-- [ ] **Step 4: Run App tests to verify GREEN**
+- [ ] **Step 4: App test를 실행해 GREEN 확인**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/app/App.test.tsx
 ```
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit Task 2**
+- [ ] **Step 5: Task 2 commit**
 
 ```powershell
 git add src/app/App.tsx src/app/App.test.tsx
@@ -411,14 +411,14 @@ git commit -m "feat: wire front operating panel into app"
 
 ---
 
-## Task 3: Verify Visible Panel Context Reaches Agent Payload
+## Task 3: Visible Panel Context가 Agent Payload에 도달하는지 검증
 
-**Files:**
-- Modify: `src/app/App.test.tsx`
+**파일:**
+- 수정: `src/app/App.test.tsx`
 
-- [ ] **Step 1: Write failing payload integration test**
+- [ ] **Step 1: 실패하는 payload integration test 작성**
 
-Add this test near `lets the user call one operating agent or the full operating team`.
+이 test를 `lets the user call one operating agent or the full operating team` 근처에 추가한다.
 
 ```tsx
   it('sends the visible front operating context when running the operating team', async () => {
@@ -468,20 +468,20 @@ Add this test near `lets the user call one operating agent or the full operating
   }, 15000)
 ```
 
-- [ ] **Step 2: Run App tests to verify RED or guard against regression**
+- [ ] **Step 2: App test를 실행해 RED 또는 regression guard(회귀 방지)를 확인**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/app/App.test.tsx
 ```
 
-Expected before Task 2 implementation: FAIL because panel is missing.
-Expected after Task 2 implementation: PASS if the existing `frontOperatingSystem` payload path is still intact.
+Task 2 구현 전 기대 결과: panel이 없기 때문에 FAIL.
+Task 2 구현 후 기대 결과: 기존 `frontOperatingSystem` payload path가 그대로라면 PASS.
 
-- [ ] **Step 3: Make the minimal App fix if needed**
+- [ ] **Step 3: 필요하면 최소 App fix 적용**
 
-If the test fails because `/api/agent/run` is called before the click, preserve the final all-hands call by filtering for the request body:
+`/api/agent/run`이 click 전에 호출되어 test가 실패하면 request body로 filtering(필터링)해서 최종 all-hands call을 보존한다.
 
 ```tsx
 const agentRunCall = fetchMock.mock.calls.find(([, init]) => {
@@ -491,23 +491,23 @@ const agentRunCall = fetchMock.mock.calls.find(([, init]) => {
 })
 ```
 
-If the test fails because the payload lacks `frontOperatingSystem`, ensure the existing call still passes the snapshot field:
+payload에 `frontOperatingSystem`이 없어서 test가 실패하면 기존 call이 snapshot field를 계속 넘기는지 확인한다.
 
 ```tsx
 frontOperatingSystem: agentSnapshot.frontOperatingSystem,
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [ ] **Step 4: focused test 실행**
 
-Run:
+실행:
 
 ```powershell
 npm run test:run -- src/app/App.test.tsx src/features/front-operating/components/FrontOperatingPanel.test.tsx src/features/agent/lib/agentRunRuntime.test.ts src/features/agent/lib/buildAgentSnapshot.test.ts
 ```
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [ ] **Step 5: Task 3 commit**
 
 ```powershell
 git add src/app/App.test.tsx
@@ -516,86 +516,86 @@ git commit -m "test: verify front operating context reaches agent payload"
 
 ---
 
-## Task 4: Final Verification And Documentation Check
+## Task 4: 최종 검증과 문서 확인
 
-**Files:**
-- Modify only if needed: `docs/PRD-v2.md`, `docs/PRD-v3.md`
+**파일:**
+- 필요할 때만 수정: `docs/PRD-v2.md`, `docs/PRD-v3.md`
 
-- [ ] **Step 1: Run frontend suite**
+- [ ] **Step 1: frontend suite(프론트엔드 전체 테스트) 실행**
 
 ```powershell
 npm run test:run
 ```
 
-Expected: all Vitest files pass.
+기대 결과: 모든 Vitest file 통과.
 
-- [ ] **Step 2: Run Python agent tests**
+- [ ] **Step 2: Python agent test 실행**
 
 ```powershell
 uv run pytest agent_service/tests/test_agentic_runtime.py agent_service/tests/test_main.py
 ```
 
-Expected: all Python tests pass.
+기대 결과: 모든 Python test 통과.
 
-- [ ] **Step 3: Run production build**
+- [ ] **Step 3: production build 실행**
 
 ```powershell
 npm run build
 ```
 
-Expected: build succeeds. If sandbox blocks esbuild with `spawn EPERM`, rerun with approved escalation for `npm run build`.
+기대 결과: build 성공. sandbox가 esbuild를 `spawn EPERM`으로 막으면 `npm run build`에 대해 승인된 escalation(권한 상승 실행)으로 재실행한다.
 
-- [ ] **Step 4: Decide whether PRD needs another update**
+- [ ] **Step 4: PRD 추가 업데이트 필요 여부 결정**
 
-No PRD update is required if the panel remains debug/internal-only because `docs/PRD-v2.md` already documents the `frontOperatingSystem` context and `create_agent` payload.
+panel이 debug/internal-only로 남으면 PRD 업데이트는 필요 없다. `docs/PRD-v2.md`가 이미 `frontOperatingSystem` context와 `create_agent` payload를 문서화하고 있기 때문이다.
 
-Update PRD only if the panel becomes customer-facing. Add this bullet under `docs/PRD-v3.md` section 6:
+panel이 customer-facing이 되는 경우에만 PRD를 업데이트한다. `docs/PRD-v3.md` section 6 아래에 이 bullet을 추가한다.
 
 ```markdown
 | Front Operating UI | Internal panel exposes ICP, data readiness, offer ladder, approval matrix, and learning-loop context before agent review |
 ```
 
-- [ ] **Step 5: Commit docs only if changed**
+- [ ] **Step 5: 문서가 바뀐 경우에만 docs commit**
 
 ```powershell
 git add docs/PRD-v2.md docs/PRD-v3.md
 git commit -m "docs: document front operating panel"
 ```
 
-Skip this commit if no docs changed.
+문서 변경이 없으면 이 commit은 건너뛴다.
 
 ---
 
-## Acceptance Criteria
+## Acceptance Criteria(인수 기준)
 
-- `FrontOperatingPanel` renders these visible asset refs:
+- `FrontOperatingPanel`은 아래 visible asset ref를 렌더한다.
   - `asset:icp_scorecard`
   - `asset:data_readiness_checklist`
   - `asset:offer_ladder`
   - `asset:approval_matrix`
   - `asset:learning_loop_review`
-- The panel is hidden in normal mode and visible with `?debug=1`.
-- Panel CTAs route into existing stages:
+- panel은 normal mode(일반 모드)에서 숨겨지고 `?debug=1`에서 보인다.
+- panel CTA는 기존 stage로 route된다.
   - fit check -> `design`
   - data gate -> `design` with `usage_data_ingestion` as requested agent
   - sample report -> `decision-log` with `knowledge_release_ops` as requested agent
-- Running all-hands sends `frontOperatingSystem` in the `/api/agent/run` request body.
-- No component performs cost arithmetic or inline number formatting.
-- `npm run test:run`, Python agent tests, and `npm run build` pass before final commit.
+- all-hands 실행은 `/api/agent/run` request body에 `frontOperatingSystem`을 보낸다.
+- 어떤 component도 cost arithmetic(비용 산술)이나 inline number formatting(컴포넌트 안 숫자 포맷)을 수행하지 않는다.
+- final commit 전에 `npm run test:run`, Python agent test, `npm run build`가 통과한다.
 
 ---
 
-## Self-Review
+## Self-Review(자가 검토)
 
-Spec coverage:
-- Required visible assets are covered by Task 1 component tests and Task 2 App tests.
-- Agent payload continuity is covered by Task 3.
-- Existing `create_agent` backend integration is not reimplemented because it already exists and is covered by `agent_service/tests/test_agentic_runtime.py`.
+Spec coverage(스펙 충족 범위):
+- 필수 visible asset은 Task 1 component test와 Task 2 App test로 다룬다.
+- Agent payload continuity(에이전트 요청 본문 연속성)는 Task 3에서 다룬다.
+- 기존 `create_agent` backend integration은 이미 존재하고 `agent_service/tests/test_agentic_runtime.py`가 다루므로 다시 구현하지 않는다.
 
-Placeholder scan:
-- No open TODO/TBD placeholders are required for implementation.
-- Optional PRD update is explicitly conditional and has the exact text to add.
+Placeholder scan(빈자리 점검):
+- 구현에 필요한 열린 TODO/TBD placeholder는 없다.
+- Optional PRD update는 명시적으로 조건부이며 추가할 정확한 문구가 있다.
 
-Type consistency:
-- The plan uses existing `FrontOperatingSystemContext`, `AGENTCOST_FRONT_OPERATING_SYSTEM`, `DecisionStageId`, `OperatingAgentId`, and `AgentRunExecutionMode` names.
-- All new callbacks are local App callbacks and do not change backend schema.
+Type consistency(타입 일관성):
+- 이 계획은 기존 `FrontOperatingSystemContext`, `AGENTCOST_FRONT_OPERATING_SYSTEM`, `DecisionStageId`, `OperatingAgentId`, `AgentRunExecutionMode` 이름을 사용한다.
+- 모든 새 callback은 local App callback이며 backend schema를 바꾸지 않는다.

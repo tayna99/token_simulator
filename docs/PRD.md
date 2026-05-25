@@ -1,7 +1,7 @@
 # PRD: AgentPayroll
 
-부제: **AI SaaS Cost & Margin Workspace**  
-문서 버전: 1.0 (canonical) · 2026-05-23  
+부제: **AI SaaS Cost & Margin Workspace(AI SaaS 비용·마진 작업공간)**
+문서 버전: 1.0 (canonical) · 2026-05-23
 상태: Draft · 작성: 제품팀
 
 > 이 PRD는 표준 제품 PRD 양식(개요 → 문제 → 목표/비목표 → 성공지표 → 페르소나 → 사용자 흐름 → 기능 요구 → UX → 기술 → 데이터/용어 → 로드맵 → 리스크 → 미해결)을 따른다. 그동안 `docs/research/`에 흩어진 문서(v1.0, v2.0, v0.3, v0.4 아키텍처, Wedge A 시뮬레이터, 고도화)를 하나로 통합한 정본이다. 세부는 §14 부록 링크.
@@ -10,11 +10,11 @@
 
 공식 발표 모델은 가격이 없어도 제품 카탈로그와 모델 레이더에 올라간다. 다만 **공식 발표됨**과 **공식 API 단가로 계산 가능함**은 분리한다.
 
-- **Gemini 3.5 Flash**는 Gemini API pricing 기준으로 계산 가능한 `verified` 모델이다. 2026-05-24 기준 input $1.50 / 1M tokens, output $9.00 / 1M tokens, context caching $0.15 / 1M tokens, batch input/output 50% 할인으로 기록한다.
+- **Gemini 3.5 Flash**는 Gemini API pricing(API 요금표) 기준으로 계산 가능한 `verified` 모델이다. 2026-05-24 기준 input $1.50 / 1M tokens, output $9.00 / 1M tokens, context caching(반복 입력 캐싱) $0.15 / 1M tokens, batch input/output(일괄 입력/출력) 50% 할인으로 기록한다.
 - **Gemini 3.5 Pro, Gemini Omni, Gemini Omni Flash**는 공식 발표 모델로 카탈로그에 노출하되 API 가격이 미공개이므로 `pricingStatus='unavailable'`, `apiPricingAvailable=false`, `requiresCustomPricing=true`로 둔다. 사용자 단가가 없으면 비용, 마진, 절감액 계산에 쓰지 않는다.
 - **Gemini Omni**는 멀티모달/비디오 비용 모델 확장의 근거다. 현재 P0는 text-token 계산을 유지하고, 미공개 modality 단가는 `unsupported_pricing` warning으로 막는다.
-- **AI Ultra 같은 구독 가격**은 API COGS가 아니다. 별도 subscription benchmark로만 쓰며 Cost Engine의 공식 원가 계산에는 넣지 않는다.
-- 고객 화면에는 “최신 단가 반영”, “가격 출처 확인일”, “공식 API 단가 확인 필요”처럼 의사결정에 필요한 상태만 보여준다. `tool:*`, `asset:*`, `snapshot:*`, source URL, agent route 같은 내부 근거는 admin/debug 모드에서만 보여준다.
+- **AI Ultra 같은 구독 가격**은 API COGS(API 매출원가)가 아니다. 별도 subscription benchmark(구독 가격 비교 기준)로만 쓰며 Cost Engine(비용 계산 엔진)의 공식 원가 계산에는 넣지 않는다.
+- 고객 화면에는 “최신 단가 반영”, “가격 출처 확인일”, “공식 API 단가 확인 필요”처럼 의사결정에 필요한 상태만 보여준다. `tool:*`, `asset:*`, `snapshot:*`(그 시점의 분석 데이터 묶음), source URL, agent route(에이전트 실행 경로) 같은 내부 근거는 admin/debug 모드에서만 보여준다.
 - Python/LangChain Agent는 가격 미공개 모델의 숫자를 만들 수 없다. 숫자는 계속 TypeScript deterministic engine과 Fact Ledger가 권위다.
 
 ---
@@ -37,14 +37,14 @@ AI 기능이 들어간 SaaS에서 LLM 비용은 단순 운영비가 아니라 **
 
 지금 팀들은 OpenAI 같은 provider 대시보드나 observability 도구에서 **총액**만 본다. 그 비용이 어떤 고객·기능·요금제의 원가인지, 이익을 얼마나 깎는지, 가격을 바꿔야 하는지는 알기 어렵다.
 
-검증된 Top Pain (공식 evidence 38개 기준):
-1. AI 기능이 남는 비율(gross margin)을 얼마나 깎는지 모른다.
+검증된 Top Pain(검증된 핵심 고통 지점, 공식 evidence 38개 기준):
+1. AI 기능이 남는 비율(gross margin, 매출총이익률)을 얼마나 깎는지 모른다.
 2. 많이 쓰는 고객이 오히려 손해 고객이 된다.
 3. 비용은 쓴 만큼인데 가격은 정액제라 마진이 깨진다.
 
 또 한 부류 — **1인 창업자**는 운영을 시작하기도 전에 "이 AI 팀 구성으로 한 달에 얼마 들지, 어디서 사고 날지, 사람이 어디서 검토해야 할지"를 모른다.
 
-빈 시장: Observability(Helicone/Langfuse), Billing(Stripe/Metronome), FinOps(CloudZero) 사이에서 **"LLM 사용량 → 고객·기능·요금제별 원가 → 이익·수익성 → 가격 결정 → 경영진 설명"** 으로 잇는 레이어가 비어 있다.
+빈 시장: Observability(관측/추적 도구, Helicone/Langfuse), Billing(과금 도구, Stripe/Metronome), FinOps(클라우드 비용 운영, CloudZero) 사이에서 **"LLM 사용량 → 고객·기능·요금제별 원가 → 이익·수익성 → 가격 결정 → 경영진 설명"** 으로 잇는 레이어가 비어 있다.
 
 ---
 
@@ -163,7 +163,7 @@ AI 기능이 들어간 SaaS에서 LLM 비용은 단순 운영비가 아니라 **
 ### 9.2 레이어
 - **L1 프런트(React/Vite, client-only 유지)** — Montage UI, 3-pane.
 - **L2 결정론 계산(TypeScript 순수 함수)** — `calculateCost`, 비용 쪼개기, 이익, 가격 시나리오, 산출물 단위. 브라우저/서버 공용 단일 소스.
-- **L3 AI 에이전트(Python LangChain 1.0 서비스)** — 해석 전용. 프런트가 계산한 결과(snapshot)를 받아 설명/추천/리포트 문장 생성. `POST /api/agent` 계약. structured output(숫자 필드 없음). 숫자 재계산 금지.
+- **L3 AI 에이전트(Python LangChain 1.0 서비스)** — 해석 전용. 프런트가 계산한 결과(snapshot, 그 시점의 분석 데이터 묶음)를 받아 설명/추천/리포트 문장 생성. `POST /api/agent` 계약. structured output(정해진 형식의 출력, 숫자 필드 없음). 숫자 재계산 금지.
 - **L4 RAG / 저장** — 벤치마크·주의 카드 corpus, 운영 일지 영속(P1).
 
 ### 9.3 단계

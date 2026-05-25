@@ -1,11 +1,11 @@
 ﻿# PRD: AgentPayroll (LLM Cost Simulator)
 
-부제: **AI SaaS Cost · Margin · Pricing Decision Workspace**
+부제: **AI SaaS Cost · Margin · Pricing Decision Workspace(AI SaaS 비용·마진·가격 결정 작업공간)**
 문서 버전: 2.5 (복구 + 부트캠프 검증 + 모델 카탈로그 갱신) · 2026-05-24
 상태: Draft · 작성: 제품팀
 독자: 내부(PM/Eng/Design) + 외부(투자자/스폰서)
 
-> 이 PRD는 `C:\token_simulator/` 코드베이스에 실제로 구현된 기능 — `src/lib/calculator.ts` 단일 계산 경로, 45종 모델/레이더 카탈로그, CSV 사용 기록 임포트, 6축 비용 귀속, 마진 엔진, 가격 시나리오 시뮬레이션, AI 팀 설계, 5단계 인입 게이트, 11종 운영 분석 에이전트, Read-only Capability Tools 23종, Front Operating System context, Supervisor Synthesis, 2-ledger 결정 저장소, 역할별 리포트 — 를 기준으로 정리한 정본이다. 기존 `docs/PRD.md`(v1.0)는 product narrative 중심, 본 v2.x는 **구현 사실 ↔ 제품 가치** 매핑 중심. v2.1에서 아키텍처 다이어그램과의 1:1 정합성 보강(§9 전면 재작성).
+> 이 PRD는 `C:\token_simulator/` 코드베이스에 실제로 구현된 기능 — `src/lib/calculator.ts` 단일 계산 경로, 45종 모델/레이더 카탈로그, CSV 사용 기록 임포트, 6축 비용 귀속, 마진 엔진, 가격 시나리오 시뮬레이션, AI 팀 설계, 5단계 인입 게이트, 11종 운영 분석 에이전트, Read-only Capability Tools(읽기 전용 기능 도구) 23종, Front Operating System context(고객 접점 운영체계 맥락), Supervisor Synthesis(감독 에이전트 종합 판단), 2-ledger(두 장부) 결정 저장소, 역할별 리포트 — 를 기준으로 정리한 정본이다. 기존 `docs/PRD.md`(v1.0)는 product narrative(제품 서사) 중심, 본 v2.x는 **구현 사실 ↔ 제품 가치** 매핑 중심. v2.1에서 아키텍처 다이어그램과의 1:1 정합성 보강(§9 전면 재작성).
 
 ---
 
@@ -29,8 +29,8 @@ AI 기능이 들어간 SaaS에서 LLM 비용은 단순 운영비가 아니라 �
 ### 2.2 지금 팀들이 할 수 없는 것
 OpenAI/Anthropic 콘솔이나 Helicone, Langfuse 같은 observability 도구는 **총액과 토큰 수**까지만 보여 준다. 그 비용이 어떤 고객·기능·요금제의 원가인지, 이익을 얼마나 깎는지, 가격을 바꿔야 하는지, 어떤 모델로 바꾸면 라이브 품질이 깨지는지는 잇지 못한다.
 
-검증된 Top Pain:
-1. AI 기능이 gross margin을 얼마나 깎는지 모른다.
+검증된 Top Pain(핵심 고통 지점):
+1. AI 기능이 gross margin(매출총이익률)을 얼마나 깎는지 모른다.
 2. 많이 쓰는 고객이 오히려 손해 고객이 된다.
 3. 비용은 종량인데 가격은 정액제라 마진이 깨진다.
 4. (1인 창업자) 운영 시작도 전에 "이 AI 팀 구성으로 한 달에 얼마 들지, 어디서 사고 날지, 사람이 어디서 확인해야 할지" 모른다.
@@ -42,8 +42,8 @@ Observability(Helicone/Langfuse) — Billing(Stripe/Metronome) — FinOps(CloudZ
 2026-05-19 Google I/O 2026에서 발표된 다음 신호들은 본 제품의 포지셔닝을 *시장이 따라오고 있다*는 방향으로 강화한다:
 
 - **Gemini 3.5 / Gemini Spark / Google Antigravity** — "에이전트가 사용자 대신 일한다"는 메시징의 메인스트림화. 우리 "AI 팀 급여명세서" 비유와 동일 프레임.
-- **Co-Scientist (멀티 에이전트)** — 우리 `stage_committee` / `all_hands` 라우팅과 같은 패러다임이 업계 표준으로 굳어지는 중. PRD §9.4 라우팅 모드 정당화.
-- **AI Ultra ($100/mo)** — 신규 구독 등급. 우리 가격 시나리오(flat/usage/credit/hybrid/cap/overage)에 *competitor benchmark* 축이 없다는 갭이 드러남 → P1 항목으로 끌어올림.
+- **Co-Scientist(멀티 에이전트)** — 우리 `stage_committee` / `all_hands` 라우팅과 같은 패러다임이 업계 표준으로 굳어지는 중. PRD §9.4 라우팅 모드 정당화.
+- **AI Ultra ($100/mo)** — 신규 구독 등급. 우리 가격 시나리오(flat/usage/credit/hybrid/cap/overage)에 *competitor benchmark*(경쟁사 비교 기준) 축이 없다는 갭이 드러남 → P1 항목으로 끌어올림.
 - **Gemini Omni Flash (비디오 생성)** — 멀티모달 비용 모델링이 *언제 옵션이 아니라 필수가 되는지*의 기점. §9.11 신설.
 
 반대로 동일 발표가 드러낸 우리 약점: **신규 발표를 캐치하는 자동 모니터링이 부재했다.** 5/19 발표가 PRD 갱신 직후(5/23)에도 5일간 반영되지 않았던 이유는 모델 카탈로그 신선도를 추적하는 게이트가 없었기 때문이다. v2.2에서 `scripts/research/check-provider-pricing.mjs` 신설로 보강(§9.12).
@@ -88,7 +88,7 @@ Observability(Helicone/Langfuse) — Billing(Stripe/Metronome) — FinOps(CloudZ
 
 ---
 
-## 5. 핵심 가치 (Core Value Proposition)
+## 5. 핵심 가치 (Core Value Proposition, 핵심 가치 제안)
 
 1. **숫자는 정확, 해석은 AI.** 모든 비용은 `src/lib/calculator.ts`의 `calculateCost`/`calculateMigrationDelta` 단일 경로를 통과하고, 모든 표시 숫자는 `src/lib/format.ts`를 통과한다. AI 에이전트(LangGraph)는 그 결과 snapshot을 받아 설명·추천만 한다 — 자체적으로 숫자를 만들지 않는다.
 2. **사용 기록 → 비즈니스 판단의 단일 흐름.** 토큰 단위 raw cost로 끝나지 않고, 고객별 마진, 손해 고객, 가격 시나리오, 역할별 리포트까지 같은 입력으로 같은 값이 나오게 페르소나 간 일관성을 강제한다.
@@ -165,8 +165,8 @@ Design (팀 짜기) → Cost (비용 보기) → Bottleneck (새는 곳) → Opt
 - `OperatingAgentId` 11종 (`operatingAssets.ts`): provider_api_intelligence, model_inference_research, cost_modeling, usage_data_ingestion, cost_engine_qa, optimization_routing, customer_diagnostic_pricing, pricing_revenue_ops, trust_security_compliance, finance_ops, knowledge_release_ops.
 - 각 에이전트는 `AGENT_TOOL_PERMISSION_MATRIX`로 허용된 Read-only Capability Tools만 호출 가능(총 23종, agent별 allow-list).
 - 10종 `OperatingAsset`(provider_registry, model_perf_matrix, cost_formula_registry, usage_schema_mapping, calculation_snapshots, optimization_playbook, pricing_policy_library, customer_cost_review, security_runbook, operating_ledger)을 소유.
-- `AgentRunInput.frontOperatingSystem`을 통해 ICP scorecard, self-assessment, data readiness gate, sample report, offer ladder, approval matrix, learning loop context가 같은 `POST /api/agent/run` payload에 포함된다.
-- Python `build_agent_tools()`는 `retrieve_front_operating_system`, `retrieve_front_operating_assets`, `retrieve_front_operating_gate`, `retrieve_learning_loop_records` 4종 front operating read-only tool을 제공한다. stage committee와 all-hands는 같은 `create_agent` 호출 안에서 이 앞단 운영 자산을 조회한다.
+- `AgentRunInput.frontOperatingSystem`을 통해 ICP scorecard(이상적 고객 점수표), self-assessment(자가 진단), data readiness gate(데이터 준비도 확인문), sample report, offer ladder(유료 상품 사다리), approval matrix(승인 기준표), learning loop context(반복 학습 맥락)가 같은 `POST /api/agent/run` payload에 포함된다.
+- Python `build_agent_tools()`는 `retrieve_front_operating_system`, `retrieve_front_operating_assets`, `retrieve_front_operating_gate`, `retrieve_learning_loop_records` 4종 front operating read-only tool(고객 접점 운영용 읽기 전용 도구)을 제공한다. stage committee(단계별 검토 위원회)와 all-hands(전체 에이전트 검토)는 같은 `create_agent` 호출 안에서 이 앞단 운영 자산을 조회한다.
 
 **병목 탐지 & 최적화 추천** 🟢
 - `bottleneckAnalysis.ts` — 가장 비싼/취약한 agent · task 추출.
@@ -384,7 +384,7 @@ Customer CSV/Export
 - `monthlyCost` = text input + text output + image input + audio input + video input + video output.
 
 **카탈로그 갱신 (2026-05-24)**
-- **Gemini 3.5 Flash** — I/O 2026, agent/coding 특화. Gemini API pricing 기준으로 `verified` 계산 가능 모델이다. 2026-05-24 기준 input $1.50 / 1M tokens, output $9.00 / 1M tokens, context caching $0.15 / 1M tokens, batch 50% 할인으로 기록한다.
+- **Gemini 3.5 Flash** — I/O 2026, agent/coding 특화. Gemini API pricing(API 요금표) 기준으로 `verified` 계산 가능 모델이다. 2026-05-24 기준 input $1.50 / 1M tokens, output $9.00 / 1M tokens, context caching(반복 입력 캐싱) $0.15 / 1M tokens, batch(일괄 처리) 50% 할인으로 기록한다.
 - **Gemini 3.5 Pro** — 공식 발표 모델이므로 카탈로그에는 올리지만 API 가격은 아직 미공개다. `pricingStatus='unavailable'`, `apiPricingAvailable=false`, `requiresCustomPricing=true`로 두고 fake price나 placeholder 가격을 넣지 않는다.
 - **Gemini Omni / Gemini Omni Flash** — 공식 발표된 멀티모달/비디오 모델이므로 카탈로그와 모델 레이더에는 노출한다. 단, 공식 API pricing이 나오기 전까지 비용/절감액 계산에는 쓰지 않고 `pricingStatus='unavailable'` + `requiresCustomPricing=true`로 표시한다.
 

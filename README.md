@@ -12,16 +12,16 @@ AI 기능은 겉으로는 버튼 하나처럼 보이지만, 실제로는 매 호
 
 예를 들어 다음 질문에 답할 수 있어야 합니다.
 
-- RAG 챗봇은 한 달에 얼마를 쓰는가?
+- RAG(검색으로 근거 문서를 붙여 답하는 방식) 챗봇은 한 달에 얼마를 쓰는가?
 - 문서 요약 1건의 원가는 얼마인가?
 - 고객 문의 1건을 AI로 처리하면 얼마가 드는가?
 - 보고서 1개를 $1에 팔 때 마진이 남는가?
 - 어떤 고객이 많이 쓸수록 손해가 되는가?
-- seat, usage-based, credit, hybrid 중 어떤 가격정책이 맞는가?
+- seat(좌석당 과금), usage-based(사용량 기반 과금), credit(크레딧 차감), hybrid(혼합 과금) 중 어떤 가격정책이 맞는가?
 - 저가 모델로 바꾸면 진짜 싸지는가, 아니면 재시도/검수/CS 비용이 늘어나는가?
 - 어떤 기능부터 캐싱, 배치 처리, 출력 제한, 모델 라우팅을 적용해야 하는가?
 
-이 프로젝트의 핵심 관점은 단순한 토큰 계산이 아닙니다. **Group A는 entry point, Core Engine은 비용 귀속 레이어, Group B는 paid value**라는 흐름으로 LLM 비용을 제품 의사결정 언어로 바꾸는 것입니다.
+이 프로젝트의 핵심 관점은 단순한 토큰 계산이 아닙니다. **Group A는 entry point(사용자가 처음 들어오는 진입점), Core Engine은 비용 귀속 레이어(사용량을 고객/기능/모델/플랜별 원가로 다시 묶는 계산층), Group B는 paid value(돈을 낼 만한 의사결정 가치)**라는 흐름으로 LLM 비용을 제품 의사결정 언어로 바꾸는 것입니다.
 
 ## 누구를 위한 도구인가
 
@@ -74,11 +74,11 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 예시는 다음과 같습니다.
 
-- token spike
-- cache miss 가능성
-- quota 소진
-- provider dashboard 지연
-- session 또는 agent loop 비용 폭증
+- token spike(토큰 사용량 급증)
+- cache miss(캐시를 못 써서 비용이 늘어나는 상황) 가능성
+- quota(월/일 사용 한도) 소진
+- provider dashboard(모델 제공사 관리 화면) 지연
+- session 또는 agent loop(한 작업 안에서 AI 호출이 반복되는 흐름) 비용 폭증
 
 이 단계는 실시간 알림이 아니라 "어디서 비용이 튀었는지"를 이해하기 위한 진입점입니다.
 
@@ -91,7 +91,7 @@ Core Engine은 비용을 여러 기준으로 다시 묶습니다.
 - 모델별 비용
 - 플랜별 비용
 - 세션별 비용
-- agent run별 비용
+- agent run(에이전트 실행 1회)별 비용
 
 이 중간 레이어가 있어야 운영 로그가 마진/가격정책 판단으로 이어집니다.
 
@@ -132,10 +132,10 @@ LLM 로그만으로는 월 고객 문의 수, 월 보고서 생성 수, 유료 �
 - 월 고객 문의 수
 - 월 보고서 생성 수
 - 월 유료 고객 수
-- 월 job 실행 수
-- 월 transaction 수
+- 월 job(작업 실행) 실행 수
+- 월 transaction(거래/처리 건수) 수
 - 플랜별 월 매출
-- credit/overage 단가
+- credit/overage(크레딧/초과 사용) 단가
 
 이 기준값을 넣으면 앱은 비용을 비즈니스 단위로 나눠 보여줍니다.
 
@@ -148,7 +148,7 @@ LLM 로그만으로는 월 고객 문의 수, 월 보고서 생성 수, 유료 �
 
 종량제 AI 제품에서는 원가만 보는 것으로 부족합니다. 판매 가격과 비교해 마진을 봐야 합니다.
 
-예를 들어 보고서 1개 생성 원가가 $0.31이고 고객에게 $1을 받는다면, gross margin은 약 69%입니다.
+예를 들어 보고서 1개 생성 원가가 $0.31이고 고객에게 $1을 받는다면, gross margin(총마진)은 약 69%입니다.
 
 이 앱은 다음을 보여주는 방향으로 발전합니다.
 
@@ -168,10 +168,10 @@ LLM 로그만으로는 월 고객 문의 수, 월 보고서 생성 수, 유료 �
 - 배치 처리
 - 출력 토큰 제한
 - 기능별 모델 라우팅
-- usage-based pricing
-- AI credit pricing
-- hybrid pricing
-- cap / overage
+- usage-based pricing(사용량 기반 가격정책)
+- AI credit pricing(AI 크레딧 차감 가격정책)
+- hybrid pricing(혼합 가격정책)
+- cap / overage(기본 한도 / 초과 과금)
 
 중요한 점은 "무조건 싼 모델로 바꾸자"가 아닙니다. 어떤 기능은 저가 모델로 충분하고, 어떤 기능은 고급 모델을 유지해야 합니다. 어떤 플랜은 included usage를 줄이거나 overage를 붙여야 할 수 있습니다. 이 서비스는 비용 효과, 품질 리스크, 가격정책 영향을 함께 보여주는 것을 목표로 합니다.
 
@@ -199,9 +199,9 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 역할별 출력 예시는 다음과 같습니다.
 
 - 개발자용: 입력/출력 토큰, 기능별/모델별/세션별 비용, 모델 교체 후보, 캐싱/배치 적용 포인트
-- PM용: 기능별 원가, 플랜별 가격 정책, rollout 추천
-- CEO/CFO용: 월 AI COGS, 플랜별 gross margin, heavy-user risk, pricing recommendation
-- 운영용 후보: 비용 폭증, output token 증가, 예산 초과 예상 알림
+- PM용: 기능별 원가, 플랜별 가격 정책, rollout(단계적 출시) 추천
+- CEO/CFO용: 월 AI COGS(매출원가), 플랜별 gross margin(총마진), heavy-user risk(많이 쓸수록 손해가 되는 고객 위험), pricing recommendation(가격정책 추천)
+- 운영용 후보: 비용 폭증, output token(모델이 생성한 출력 토큰) 증가, 예산 초과 예상 알림
 
 ## 현재 구현된 기능
 
@@ -209,9 +209,9 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 - 현재 모델과 후보 모델 비용 비교
 - 월 비용, 연 비용, 요청당 비용 계산
 - 입력 비용과 출력 비용 분리
-- CSV 기반 LLM usage import
+- CSV 기반 LLM usage import(LLM 사용량 CSV 가져오기)
 - 고객별/기능별/모델별 비용 분석
-- 플랜별/세션별/agent run별 비용 귀속 방향
+- 플랜별/세션별/agent run(에이전트 실행 1회)별 비용 귀속 방향
 - 기능별 비용과 마진 분석
 - 캐싱, 배치, 출력 제한, 모델 교체, 라우팅 절감 레버 비교
 - 품질 점수, 지연시간 점수, 리스크 점수 가정
@@ -220,7 +220,7 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 - PM/CEO/개발자용 요약 리포트
 - 한국어/영어 UI
 - Montage/Wanted 기반 Pretendard 및 디자인 토큰 적용
-- `docs/research` 기반 evidence board, pain taxonomy, ontology pilot
+- `docs/research` 기반 evidence board(근거 모음판), pain taxonomy(고객 문제 분류표), ontology pilot(개념 관계 실험)
 
 현재 MVP에서는 `개발자 진단`과 `예산/쿼터 가드레일`을 기본 UI에서 제거했습니다. 해당 코드는 복구용으로 `archive/advanced-review/`에 보관하고, 리서치 점수가 충분히 높을 때만 다시 제품 후보로 올립니다.
 
@@ -235,18 +235,18 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 - 플랜별 비용 계산
 - 세션/agent run별 비용 계산
 - 요청당 비용 계산
-- business metric당 원가 계산
+- business metric(업무 지표)당 원가 계산
 - 보고서 생성
 
 ### Phase 2. Pricing / Margin
 
 - 기능별 판매 가격 입력
-- report당 가격 입력
-- ticket당 가격 입력
+- report(리포트)당 가격 입력
+- ticket(문의/처리 건)당 가격 입력
 - 고객당 매출 입력
-- gross margin 계산
-- heavy user profitability 분석
-- usage-based / credit / hybrid / cap / overage pricing 시뮬레이션
+- gross margin(총마진) 계산
+- heavy user profitability(사용량이 많은 고객의 수익성) 분석
+- usage-based / credit / hybrid / cap / overage pricing(사용량 기반/크레딧/혼합/한도/초과 과금) 시뮬레이션
 - 손해 보는 기능과 고객 표시
 - 손해 보는 플랜 표시
 
@@ -255,8 +255,8 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 다음 조건을 만족할 때만 예산/쿼터 가드레일을 다시 도입합니다.
 
 - `pain_team_budget` 또는 `pain_cost_unpredictable`이 50개 evidence 기준 Top 3
-- 평균 `wtp_score`가 4 이상
-- 알림을 받은 뒤 실제 action이 명확함
+- 평균 `wtp_score`(willingness to pay, 지불 의향 점수)가 4 이상
+- 알림을 받은 뒤 실제 action(할 수 있는 조치)이 명확함
 
 후보 기능은 다음입니다.
 
@@ -264,11 +264,11 @@ Effective cost = Raw cost + 재시도 비용 + 검수 비용 + CS 비용
 - output token 급증
 - 특정 고객 비용 폭증
 - 마진 악화 알림
-- 모델 교체 시 raw cost와 effective margin 비교
+- 모델 교체 시 raw cost(순수 API 비용)와 effective margin(추가 운영 부담까지 반영한 실질 마진) 비교
 
 ### Phase 4. SDK 자동 수집
 
-개발자가 LLM 호출 코드에 작은 wrapper를 붙이면 usage가 자동으로 쌓이는 방식입니다.
+개발자가 LLM 호출 코드에 작은 wrapper(기존 호출을 감싸는 얇은 함수)를 붙이면 usage(사용량)가 자동으로 쌓이는 방식입니다.
 
 ```ts
 tracker.track("rag_chat", async () => {
@@ -282,7 +282,7 @@ tracker.track("rag_chat", async () => {
 - 비용
 - 모델
 - 기능
-- latency
+- latency(응답 지연시간)
 - 에러
 - 재시도
 
@@ -298,14 +298,14 @@ tracker.track("rag_chat", async () => {
 
 - 비싼 요청 제한
 - 쉬운 요청은 저가 모델로 라우팅
-- provider 장애 시 fallback
+- provider(모델 제공사) 장애 시 fallback(대체 경로)
 - 고객별 예산 제한
 - 출력 길이 제한
-- 비용/품질/latency 자동 기록
+- 비용/품질/latency(응답 지연시간) 자동 기록
 
 ## 개발 실행
 
-이 프로젝트는 클라이언트 사이드 Vite 앱입니다.
+이 프로젝트의 공식 프런트엔드는 Next.js이며, legacy Vite(전환 전 비교 기준)는 회귀 확인용으로만 유지합니다.
 
 ```bash
 npm install
@@ -360,19 +360,19 @@ archive/advanced-review
 
 각 feature 폴더의 의미는 다음과 같습니다.
 
-- `usage`: 사용량 가져오기, CSV import, workload 입력
+- `usage`: 사용량 가져오기, CSV import(CSV 파일/붙여넣기 데이터 가져오기), workload(작업량 가정) 입력
 - `current-cost`: 현재 비용 계산
 - `alternatives`: 후보 모델 비교
 - `savings`: 캐싱/배치/출력제한/라우팅 추천
 - `unit-economics`: 고객 문의/보고서/사용자당 원가와 마진
 - `report`: PM/CEO/개발자용 요약
-- `docs/research`: evidence board, pain taxonomy, ontology, pilot report
-- `scripts/research`: HN/GitHub 후보 수집, evidence CSV 검증
+- `docs/research`: evidence board(근거 모음판), pain taxonomy(고객 문제 분류표), ontology(개념 관계 정의), pilot report(실험 리포트)
+- `scripts/research`: HN/GitHub 후보 수집, evidence CSV(근거 CSV) 검증
 - `archive/advanced-review`: 개발자 진단, 예산/쿼터 가드레일, 고급 검토 백업
 
 `src/domain`은 화면과 무관한 순수 계산 규칙을 위한 영역입니다. 예를 들어 비용 계산, 품질 부담, 가격/마진 계산처럼 UI가 없어도 테스트 가능한 로직이 여기에 들어갈 수 있습니다.
 
-중요한 안전장치도 있습니다. `src/lib/calculator.ts`와 `src/lib/format.ts`는 프로젝트 헌법상 공식 경로라서 바로 없애지 않습니다. 필요하면 내부 구현만 `src/domain/`으로 옮기고, 기존 경로는 re-export로 유지합니다. 이렇게 해야 테스트와 기존 컴포넌트를 덜 깨고 점진적으로 바꿀 수 있습니다.
+중요한 안전장치도 있습니다. `src/lib/calculator.ts`와 `src/lib/format.ts`는 프로젝트 헌법상 공식 경로라서 바로 없애지 않습니다. 필요하면 내부 구현만 `src/domain/`으로 옮기고, 기존 경로는 re-export(다른 파일에서 다시 내보내는 호환 경로)로 유지합니다. 이렇게 해야 테스트와 기존 컴포넌트를 덜 깨고 점진적으로 바꿀 수 있습니다.
 
 자세한 구조 설명은 [docs/architecture/folder-structure.md](docs/architecture/folder-structure.md)를 참고하세요.
 
@@ -381,8 +381,8 @@ archive/advanced-review
 - 모든 비용 계산은 공통 계산 경로를 통과합니다.
 - 사용자 표시 숫자는 공통 format 함수를 통과합니다.
 - 모델명, 브랜드명, 가격, 토큰 숫자는 자동 번역으로 깨지지 않도록 보호합니다.
-- 비용 절감률만 보여주지 않고 품질/리스크/effective cost를 함께 봅니다.
-- 사용자가 토큰 수를 추측하게 하지 않고, 가능한 한 로그/API usage에서 가져옵니다.
+- 비용 절감률만 보여주지 않고 품질/리스크/effective cost(재시도/검수/CS 비용까지 더한 실제 부담 비용)를 함께 봅니다.
+- 사용자가 토큰 수를 추측하게 하지 않고, 가능한 한 로그/API usage(API 사용량 기록)에서 가져옵니다.
 - 비즈니스 기준값은 앱이 추정하지 않고 사용자가 직접 입력합니다.
 
 ## 제품 포지션

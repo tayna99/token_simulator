@@ -1,4 +1,4 @@
-# PRD v2.0: AI SaaS Cost & Margin Workspace
+# PRD v2.0: AI SaaS Cost & Margin Workspace(비용·마진 의사결정 워크스페이스)
 
 작성일: 2026-05-22  
 이전 버전: `docs/research/ai-saas-cost-margin-prd.md` (v1.0)  
@@ -9,7 +9,7 @@
 
 ## 0. v1.0 → v2.0에서 무엇이 바뀌었나
 
-v1.0은 이 제품을 **"AI SaaS unit economics workspace"** 로 재정의했다. 그 방향은 유지한다. 바뀐 것은 **"AI Native"** 라는 한 겹이다.
+v1.0은 이 제품을 **"AI SaaS unit economics workspace(고객/기능/요금제 단위 수익성을 보는 업무 공간)"** 로 재정의했다. 그 방향은 유지한다. 바뀐 것은 **"AI Native(AI를 제품/운영의 핵심 방식으로 쓰는 구조)"** 라는 한 겹이다.
 
 v1.0이 답한 질문:
 
@@ -17,7 +17,7 @@ v1.0이 답한 질문:
 
 v2.0이 추가로 답하는 질문:
 
-> 이 제품 자체를 **AI Native하게** 만들면 어떤 모습인가? 즉, 단순히 "CSV를 올리면 대시보드를 보여주는 SaaS"가 아니라, 내부에 분석 Agent / Pricing Agent / CFO Report Agent가 돌아가는 **AI Native Company의 CFO/Ops 레이어** 가 되려면 무엇이 필요한가?
+> 이 제품 자체를 **AI Native하게** 만들면 어떤 모습인가? 즉, 단순히 "CSV를 올리면 대시보드를 보여주는 SaaS"가 아니라, 내부에 분석 Agent / Pricing Agent / CFO Report Agent가 돌아가는 **AI Native Company의 CFO/Ops 레이어(재무/운영 판단을 돕는 층)** 가 되려면 무엇이 필요한가?
 
 핵심 정리:
 
@@ -40,7 +40,7 @@ v2.0이 추가로 답하는 질문:
 
 한 문장:
 
-> 개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace.
+> 개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace(고객/기능/요금제 단위 수익성을 보는 업무 공간).
 
 핵심 질문은 "이번 달 LLM 비용이 얼마인가?"가 아니다.
 
@@ -69,7 +69,7 @@ v2.0이 추가로 답하는 질문:
 
 ## 2. 배경: 왜 AI SaaS는 unit economics가 흔들리나
 
-AI 기능이 들어간 SaaS에서는 LLM 비용이 단순 운영비가 아니라 **매출 원가(COGS)** 가 된다.
+AI 기능이 들어간 SaaS에서는 LLM 비용이 단순 운영비가 아니라 **매출 원가(COGS, Cost of Goods Sold)** 가 된다.
 
 전통 SaaS는 고객이 많이 써도 marginal cost가 낮았다. 그러나 AI SaaS에서는 요청 수, 입력 토큰, 출력 토큰, agent loop, cache miss, 모델 선택에 따라 원가가 계속 변한다. 고객이 많이 쓸수록 LLM 비용이 변동 원가로 발생한다.
 
@@ -141,7 +141,7 @@ LLM usage / trace / bill
 
 ---
 
-## 5. 3-Layer Product Model
+## 5. 3-Layer Product Model(3층 제품 모델)
 
 ```txt
 Group A: Entry Point
@@ -168,9 +168,9 @@ Group A의 운영 문제에서 멈추지 않고, Core Engine을 거쳐 Group B�
 
 ### 6.1 가장 중요한 설계 원칙
 
-> **계산은 deterministic, 해석은 AI.**
+> **계산은 deterministic(결정론적), 해석은 AI.**
 
-AI가 숫자를 "계산"하면 안 된다. 비용·마진·시나리오 숫자는 rule-based / 결정론적 엔진에서 나와야 한다. AI는 그 숫자를 **해석하고 설명하고 제안** 한다. 이래야 신뢰성이 생긴다. 숫자는 흔들리면 안 되고, 해석은 AI가 돕는 구조.
+AI가 숫자를 "계산"하면 안 된다. 비용·마진·시나리오 숫자는 rule-based(규칙 기반) / 결정론적 엔진에서 나와야 한다. AI는 그 숫자를 **해석하고 설명하고 제안** 한다. 이래야 신뢰성이 생긴다. 숫자는 흔들리면 안 되고, 해석은 AI가 돕는 구조.
 
 | 구분 | 담당 | 예시 |
 | --- | --- | --- |
@@ -220,10 +220,10 @@ Decision Log
 
 | 구분 | 대상 | 원하는 것 |
 | --- | --- | --- |
-| Primary buyer | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin, 가격정책 판단, Board reporting |
-| Primary user | AI SaaS developer, backend, ML, infra | CSV/log import, feature mapping, cost attribution, 모델/캐싱/라우팅 판단 |
-| Secondary user | PM, RevOps, CS/Ops | 기능별 원가, rollout 판단, 고객별 비용 설명 |
-| Expansion user | 내부 AI 도구 운영팀 | 팀별 비용 추적, bill surprise 방지, 내부 RAG 비용 관리 |
+| Primary buyer(핵심 구매자) | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin(매출총이익률), 가격정책 판단, Board reporting(이사회/투자자 보고) |
+| Primary user(핵심 사용자) | AI SaaS developer, backend, ML, infra | CSV/log import(파일/로그 가져오기), feature mapping(기능 매핑), cost attribution(비용 귀속), 모델/캐싱/라우팅 판단 |
+| Secondary user(보조 사용자) | PM, RevOps, CS/Ops | 기능별 원가, rollout(출시/배포) 판단, 고객별 비용 설명 |
+| Expansion user(확장 사용자) | 내부 AI 도구 운영팀 | 팀별 비용 추적, bill surprise(예상 못 한 청구서 폭증) 방지, 내부 RAG 비용 관리 |
 
 초기 MVP의 핵심 구매자는 개발자가 아니라 **Founder/CEO/CFO/Finance** 다. 다만 실제 데이터 연결과 CSV 준비는 개발자가 담당할 가능성이 높다.
 

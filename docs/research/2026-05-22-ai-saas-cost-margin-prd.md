@@ -1,4 +1,4 @@
-# PRD v1.0: AI SaaS Cost & Margin Workspace
+# PRD v1.0: AI SaaS Cost & Margin Workspace(비용·마진 의사결정 워크스페이스)
 
 작성일: 2026-05-22  
 기준 문서: `docs/research/2026-05-22-token-simulator-work-summary.md`  
@@ -10,7 +10,7 @@
 
 한 문장으로 말하면:
 
-> 개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace.
+> 개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace(고객/기능/요금제 단위 수익성을 보는 업무 공간).
 
 이 제품은 단순히 "이번 달 LLM 비용이 얼마인가?"를 보여주는 비용 계산기가 아니다. 핵심 질문은 다음이다.
 
@@ -18,7 +18,7 @@
 
 ## 2. 배경
 
-AI 기능이 들어간 SaaS에서는 LLM 비용이 단순 운영비가 아니라 매출 원가, 즉 COGS가 된다.
+AI 기능이 들어간 SaaS에서는 LLM 비용이 단순 운영비가 아니라 매출 원가, 즉 COGS(Cost of Goods Sold, 매출원가)가 된다.
 
 전통 SaaS에서는 고객이 많이 써도 marginal cost가 낮았다. 그러나 AI SaaS에서는 요청 수, 입력 토큰, 출력 토큰, agent loop, cache miss, 모델 선택에 따라 원가가 계속 변한다.
 
@@ -53,7 +53,7 @@ npm run research:validate
 | 2 | `pain_heavy_user_loss` | 201 | 많이 쓰는 고객이 오히려 마진을 깨는 고객이 된다. |
 | 3 | `pain_usage_pricing_mismatch` | 193 | 비용은 usage 기반인데 가격은 seat/flat이라 마진이 깨진다. |
 
-이 결과는 MVP를 비용 절감 도구가 아니라 **unit economics와 pricing decision 도구**로 잡아야 한다는 신호다.
+이 결과는 MVP를 비용 절감 도구가 아니라 **unit economics(고객/기능/요금제 단위 수익성)와 pricing decision(가격정책 결정) 도구**로 잡아야 한다는 신호다.
 
 ## 4. 제품 포지션
 
@@ -67,9 +67,9 @@ npm run research:validate
 
 경쟁 제품 대비 포지션:
 
-- Helicone, Langfuse, LangSmith, Portkey는 LLM observability에 강하다.
-- OpenMeter, Metronome, Stripe는 usage-based billing에 강하다.
-- CloudZero, Vantage는 FinOps와 cost allocation에 강하다.
+- Helicone, Langfuse, LangSmith, Portkey는 LLM observability(LLM 요청 로그/성능/비용 관측)에 강하다.
+- OpenMeter, Metronome, Stripe는 usage-based billing(사용량 기반 과금)에 강하다.
+- CloudZero, Vantage는 FinOps(클라우드/기술 비용을 재무적으로 운영하는 방식)와 cost allocation(비용 배부)에 강하다.
 
 이 제품의 빈 공간:
 
@@ -85,7 +85,7 @@ LLM usage / trace / bill
 
 > Observability는 개발자에게 무슨 일이 있었는지 보여주고, billing은 고객에게 사용량을 청구한다. 이 제품은 그 사이에서 그 사용량이 이익인지 손실인지, 가격정책을 어떻게 바꿔야 하는지 설명한다.
 
-## 5. 3-Layer Product Model
+## 5. 3-Layer Product Model(3층 제품 모델)
 
 제품은 Group A와 Group B를 따로 보지 않는다.
 
@@ -108,10 +108,10 @@ pricing simulation, CEO/CFO report
 
 | 구분 | 대상 | 원하는 것 |
 | --- | --- | --- |
-| Primary buyer | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin, 가격정책 판단, Board reporting |
-| Primary user | AI SaaS developer, backend, ML, infra | CSV/log import, feature mapping, cost attribution, 모델/캐싱/라우팅 판단 |
-| Secondary user | PM, RevOps, CS/Ops | 기능별 원가, rollout 판단, 고객별 비용 설명 |
-| Expansion user | 내부 AI 도구 운영팀 | 팀별 비용 추적, bill surprise 방지, 내부 RAG 비용 관리 |
+| Primary buyer(핵심 구매자) | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin(매출총이익률), 가격정책 판단, Board reporting(이사회/투자자 보고) |
+| Primary user(핵심 사용자) | AI SaaS developer, backend, ML, infra | CSV/log import(파일/로그 가져오기), feature mapping(기능 매핑), cost attribution(비용 귀속), 모델/캐싱/라우팅 판단 |
+| Secondary user(보조 사용자) | PM, RevOps, CS/Ops | 기능별 원가, rollout(출시/배포) 판단, 고객별 비용 설명 |
+| Expansion user(확장 사용자) | 내부 AI 도구 운영팀 | 팀별 비용 추적, bill surprise(예상 못 한 청구서 폭증) 방지, 내부 RAG 비용 관리 |
 
 초기 MVP의 핵심 구매자는 개발자가 아니라 Founder, CEO, CFO, Finance다. 다만 실제 데이터 연결과 CSV 준비는 개발자가 담당할 가능성이 높다.
 
