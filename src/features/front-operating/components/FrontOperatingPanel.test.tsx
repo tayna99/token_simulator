@@ -31,6 +31,26 @@ describe('FrontOperatingPanel', () => {
     expect(panel).toHaveTextContent(/asset:learning_loop_review/i)
   })
 
+  it('shows attached service validation document paths for required operating assets', () => {
+    render(
+      <FrontOperatingPanel
+        context={AGENTCOST_FRONT_OPERATING_SYSTEM}
+        onOpenFitCheck={vi.fn()}
+        onOpenDataGate={vi.fn()}
+        onOpenSampleReport={vi.fn()}
+      />,
+    )
+
+    const panel = screen.getByTestId('front-operating-panel')
+    expect(panel).toHaveTextContent(/docs\/service-validation\/icp-scorecard\.md/i)
+    expect(panel).toHaveTextContent(/docs\/service-validation\/data-readiness-checklist\.md/i)
+    expect(panel).toHaveTextContent(/docs\/templates\/agentcost-data-request\.md/i)
+    expect(panel).toHaveTextContent(/docs\/service-validation\/ai-cost-snapshot-offer-one-pager\.md/i)
+    expect(panel).toHaveTextContent(/docs\/service-validation\/review-call-script\.md/i)
+    expect(panel).toHaveTextContent(/docs\/service-validation\/learning-loop-template\.md/i)
+    expect(panel).toHaveTextContent(/docs\/service-validation\/service-mvp-validation-ledger\.md/i)
+  })
+
   it('summarizes the data gate, offer ladder, approvals, and learning loop without mutation', () => {
     const { rerender } = render(
       <FrontOperatingPanel

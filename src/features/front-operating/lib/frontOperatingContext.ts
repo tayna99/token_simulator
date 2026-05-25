@@ -3,6 +3,7 @@ export interface FrontOperatingAsset {
   label: string
   ref: `asset:${string}`
   owner: 'operator' | 'trust_review' | 'finance_ops' | 'knowledge_ops'
+  documentPath?: string
 }
 
 export interface FrontOperatingSystemContext {
@@ -39,14 +40,18 @@ export interface FrontOperatingSystemContext {
 
 export const AGENTCOST_FRONT_OPERATING_SYSTEM: FrontOperatingSystemContext = {
   assets: [
-    { id: 'icp_scorecard', label: 'ICP Scorecard', ref: 'asset:icp_scorecard', owner: 'operator' },
+    { id: 'icp_scorecard', label: 'ICP Scorecard', ref: 'asset:icp_scorecard', owner: 'operator', documentPath: 'docs/service-validation/icp-scorecard.md' },
     { id: 'lead_intake_log', label: 'Lead Intake Log', ref: 'asset:lead_intake_log', owner: 'operator' },
     { id: 'self_assessment_rules', label: 'Self-Assessment Rules', ref: 'asset:self_assessment_rules', owner: 'operator' },
-    { id: 'data_readiness_checklist', label: 'Data Readiness Checklist', ref: 'asset:data_readiness_checklist', owner: 'trust_review' },
+    { id: 'data_readiness_checklist', label: 'Data Readiness Checklist', ref: 'asset:data_readiness_checklist', owner: 'trust_review', documentPath: 'docs/service-validation/data-readiness-checklist.md' },
+    { id: 'data_request_template', label: 'Trust-safe Data Request Template', ref: 'asset:data_request_template', owner: 'trust_review', documentPath: 'docs/templates/agentcost-data-request.md' },
     { id: 'sample_report_template', label: 'Sample Report Template', ref: 'asset:sample_report_template', owner: 'knowledge_ops' },
     { id: 'offer_ladder', label: 'Offer Ladder', ref: 'asset:offer_ladder', owner: 'finance_ops' },
+    { id: 'ai_cost_snapshot_offer', label: 'AI Cost Snapshot Offer One-Pager', ref: 'asset:ai_cost_snapshot_offer', owner: 'finance_ops', documentPath: 'docs/service-validation/ai-cost-snapshot-offer-one-pager.md' },
     { id: 'approval_matrix', label: 'Human Approval Matrix', ref: 'asset:approval_matrix', owner: 'trust_review' },
-    { id: 'learning_loop_review', label: 'Learning Loop Review', ref: 'asset:learning_loop_review', owner: 'knowledge_ops' },
+    { id: 'review_call_script', label: 'Review Call Script', ref: 'asset:review_call_script', owner: 'operator', documentPath: 'docs/service-validation/review-call-script.md' },
+    { id: 'learning_loop_review', label: 'Learning Loop Review', ref: 'asset:learning_loop_review', owner: 'knowledge_ops', documentPath: 'docs/service-validation/learning-loop-template.md' },
+    { id: 'service_validation_ledger', label: 'Service MVP Validation Ledger', ref: 'asset:service_validation_ledger', owner: 'knowledge_ops', documentPath: 'docs/service-validation/service-mvp-validation-ledger.md' },
     { id: 'productization_backlog', label: 'Productization Backlog', ref: 'asset:productization_backlog', owner: 'knowledge_ops' },
   ],
   leadFitRules: {

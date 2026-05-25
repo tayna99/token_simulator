@@ -13,6 +13,7 @@ import {
   buildRoleWorkspaceLayout,
   type RoleWorkspaceLayout,
 } from '../../../../src/features/role-projection/lib/stageCards'
+import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../../../../src/features/front-operating/lib/frontOperatingContext'
 import type {
   RoleProjectionAudience,
   RoleProjectionRole,
@@ -66,6 +67,28 @@ function RoleLayoutPreview({ layout }: { layout: RoleWorkspaceLayout }) {
             {layout.auxiliary.map(card => card.key).join(', ') || 'none'}
           </p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ServiceValidationKitPreview() {
+  const assets = AGENTCOST_FRONT_OPERATING_SYSTEM.assets.filter(asset => asset.documentPath)
+
+  return (
+    <div className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
+      <p className="text-sm font-semibold uppercase text-primary-normal">Service MVP validation kit</p>
+      <p className="mt-2 text-sm text-label-neutral">
+        유료 리포트 검증 문서를 운영 자산 registry에 연결합니다. 고객 첫 화면에는 보이지 않고 전문가 모드에서만 확인합니다.
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {assets.map(asset => (
+          <div key={asset.id} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="text-sm font-semibold">{asset.label}</p>
+            <p className="mt-1 text-xs text-label-alternative" translate="no">{asset.ref}</p>
+            <p className="mt-1 break-words text-xs text-label-alternative" translate="no">{asset.documentPath}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -149,6 +172,7 @@ export default async function WorkspacePage({
             )}
             <StatusList checks={status.checks} />
             <RoleLayoutPreview layout={roleLayout} />
+            <ServiceValidationKitPreview />
           </div>
         </details>
       </section>

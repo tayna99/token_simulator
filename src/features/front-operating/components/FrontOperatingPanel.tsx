@@ -38,6 +38,11 @@ function RequiredAssetRow({
       <p className="mt-1 text-[11px] text-label-alternative" translate="no">
         {asset.ref}
       </p>
+      {asset.documentPath && (
+        <p className="mt-1 break-words text-[11px] text-label-alternative" translate="no">
+          {asset.documentPath}
+        </p>
+      )}
     </div>
   )
 }
@@ -56,9 +61,13 @@ export function FrontOperatingPanel({
   const requiredAssetIds = [
     'icp_scorecard',
     'data_readiness_checklist',
+    'data_request_template',
     'offer_ladder',
+    'ai_cost_snapshot_offer',
     'approval_matrix',
+    'review_call_script',
     'learning_loop_review',
+    'service_validation_ledger',
   ]
 
   return (
