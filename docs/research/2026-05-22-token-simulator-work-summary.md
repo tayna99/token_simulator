@@ -20,9 +20,9 @@
 
 > 개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace.
 
-이 포지션이 강한 이유는 LLM 비용이 단순 운영비가 아니라 AI SaaS의 COGS, gross margin, pricing, customer profitability와 직접 연결되기 때문이다.
+이 포지션이 강한 이유는 LLM 비용이 단순 운영비가 아니라 AI SaaS의 COGS(매출원가), gross margin(매출총이익률), pricing(가격정책), customer profitability(고객별 수익성)와 직접 연결되기 때문이다.
 
-## 3-Layer Product Model
+## 3-Layer Product Model(3층 제품 모델)
 
 제품 구조는 아래 3층으로 정리했다.
 
@@ -41,13 +41,13 @@ Group B: Paid Value
 pricing simulation, CEO/CFO report
 ```
 
-핵심은 Group A의 운영 문제에서 멈추지 않고, Core Engine을 통해 Group B의 유료 가치로 연결하는 것이다.
+핵심은 Group A(진입점 문제)의 운영 문제에서 멈추지 않고, Core Engine(비용을 비즈니스 단위로 바꾸는 핵심 엔진)을 통해 Group B(돈을 낼 만한 의사결정 가치)의 유료 가치로 연결하는 것이다.
 
 ## 지금까지 한 일
 
 ### 1. UI/제품 방향 정리
 
-- `개발자 진단`, `예산/쿼터 가드레일`, `고급 검토` 영역은 MVP 기본 흐름에서 제거하는 방향으로 정리했다.
+- `개발자 진단`, `예산/쿼터 가드레일`, `고급 검토` 영역은 MVP(최소 기능 제품) 기본 흐름에서 제거하는 방향으로 정리했다.
 - 해당 기능은 완전히 버리는 것이 아니라 research-gated 후보로 남겼다.
 - MVP는 비용 절감 도구보다 **비용 귀속 + 마진 판단 + 가격정책 시뮬레이션** 중심으로 재정렬했다.
 
@@ -57,9 +57,9 @@ pricing simulation, CEO/CFO report
 
 현재 상태:
 
-- 공식 evidence: 38개
-- 후보/검증 보류 evidence: 44개
-- 다음 official evidence id: `GR-039`
+- 공식 evidence(검증된 근거): 38개
+- 후보/검증 보류 evidence(아직 제품 주장에 쓰지 않는 근거 후보): 44개
+- 다음 official evidence id(공식 근거 식별자): `GR-039`
 - 검증 기준: URL, published date, exact quote, persona, group, pain tag
 - 후보 자료는 버리지 않고 `docs/research/evidence_candidates_unverified.csv`에 보관
 
@@ -79,7 +79,7 @@ pain_heavy_user_loss:201
 pain_usage_pricing_mismatch:193
 ```
 
-### 3. Pain Taxonomy 재정렬
+### 3. Pain Taxonomy(고객 고통 분류 체계) 재정렬
 
 `docs/research/pain_taxonomy.md`를 3층 구조로 재분류했다.
 
@@ -90,7 +90,7 @@ Entry Point pain:
 - `pain_tracking_wrong`
 - `pain_limit_confusion`
 
-Core Engine pain:
+Core Engine pain(핵심 엔진이 해결할 고통):
 
 - `pain_feature_cost_unknown`
 - `pain_customer_profitability_unknown`
@@ -190,9 +190,9 @@ Grok을 활용해 다음 주제로 리서치했다.
 - quote가 없거나 접근 제한이 있는 것은 후보 시트로 보관
 - 같은 URL/주장이 이미 있으면 중복 row를 만들지 않고 기존 `GR-*`에 연결
 
-### 7. Core Engine 근거 강화
+### 7. Core Engine(비용 귀속 핵심 엔진) 근거 강화
 
-Core Engine attribution evidence를 추가했다.
+Core Engine attribution evidence(핵심 엔진의 비용 귀속 근거)를 추가했다.
 
 핵심 근거:
 
@@ -214,7 +214,7 @@ usage event
 
 이로 인해 Core Engine은 단순 집계가 아니라 **운영 로그를 비즈니스 원가로 번역하는 해석 레이어**로 정의됐다.
 
-### 8. Plan-level margin 근거 추가
+### 8. Plan-level margin(요금제별 마진) 근거 추가
 
 Free / Pro / Team / Enterprise plan별 LLM 비용과 gross margin 차이에 대한 근거를 추가했다.
 

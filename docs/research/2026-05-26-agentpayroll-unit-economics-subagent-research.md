@@ -1,8 +1,8 @@
-# AgentPayroll Unit Economics Subagent Research (2026-05-26)
+# AgentPayroll 유닛 이코노믹스 서브에이전트 리서치 (2026-05-26)
 
 이 문서는 유닛 이코노믹스(고객 1명을 얻고 유지할 때 매출, 비용, 이익, 회수 기간이 맞는지 보는 사업 체력 지표)의 다섯 문제를 각각 별도 서브에이전트가 조사한 1차 결과를 적재한다. 목적은 "좋아 보이는 사업"이 아니라 **어떤 가정이 깨지면 돈을 못 버는지**를 분해하고, 후속 PDCA(Plan-Do-Check-Act, 계획하고 실행하고 측정하고 조정하는 반복 개선 방식) 실행의 성공 기준을 명확히 만드는 것이다.
 
-## Subagent 1. 매출/WTP 위험
+## 서브에이전트 1. 매출/WTP(지불 의향) 위험
 
 ### 조사 질문
 
@@ -51,7 +51,7 @@
 - 예약금: `AI Margin Snapshot 50만 원`에 10만 원 예약금 요청(말뿐인 관심과 실제 지불 의향을 구분).
 - Monthly Review 선판매: Snapshot 끝에 `월 49만 원` follow-up 제안(1회 진단이 반복 리뷰로 이어질 수 있는지 확인).
 
-## Subagent 2. 비용/COGS/서비스 제공 시간 위험
+## 서브에이전트 2. 비용/COGS(매출원가)/서비스 제공 시간 위험
 
 ### 조사 질문
 
@@ -80,14 +80,14 @@ Report COGS
 
 이 모델은 "리포트 하나를 팔 때 실제로 무엇이 원가인가"를 분해한다. `direct human hours`는 사람이 직접 쓴 시간, `loaded hourly cost`는 시간당 실제 비용, `review-call/support/rework allowance`는 리뷰콜/고객지원/재작업을 미리 반영한 여유 원가다.
 
-| 단계 | Green | Yellow | Red |
+| 단계 | Green(정상) | Yellow(주의) | Red(위험) |
 |---|---:|---:|---:|
-| Intake / fit check | 0.15h | 0.5h | 1h+ |
-| Data readiness / schema 이해 | 0.5h | 1.5h | 3h+ |
-| Column mapping / QA | 0.5h | 1.5h | 3h+ |
-| Trust 설명 / 보안 질문 | 0.25h | 1h | 2h+ |
-| Report draft / 검수 | 1h | 2h | 4h+ |
-| Review call / follow-up | 0.5h | 1h | 2h+ |
+| Intake / fit check(초기 접수/적합성 확인) | 0.15h | 0.5h | 1h+ |
+| Data readiness / schema 이해(데이터 준비도/구조 파악) | 0.5h | 1.5h | 3h+ |
+| Column mapping / QA(컬럼 매핑/품질 점검) | 0.5h | 1.5h | 3h+ |
+| Trust 설명 / 보안 질문(신뢰 설명/보안 질의 대응) | 0.25h | 1h | 2h+ |
+| Report draft / 검수(리포트 초안/검수) | 1h | 2h | 4h+ |
+| Review call / follow-up(리뷰 미팅/후속 대응) | 0.5h | 1h | 2h+ |
 
 ### 성공 기준
 
@@ -105,7 +105,7 @@ Report COGS
 - Data Readiness Gate self-assessment 유무에 따른 사람 시간 비교(self-assessment는 고객이 먼저 데이터 상태를 체크하는 질문지).
 - Report QA checklist로 사람이 수정한 항목 태깅(숫자 오류, 문장 오류, 매핑 오류, Trust 문구 오류를 분류해 자동화 우선순위를 찾음).
 
-## Subagent 3. CAC/신뢰 형성/온보딩 위험
+## 서브에이전트 3. CAC(고객획득비용)/신뢰 형성/온보딩 위험
 
 ### 조사 질문
 
@@ -121,7 +121,7 @@ Report COGS
 4. ICP는 spend보다 "결정 가능성"으로 잘라야 한다(비용이 큰 팀보다 가격/마진/고객 제한 결정을 곧 해야 하는 팀이 더 좋은 고객이다).
 5. 목표 payback은 낮게 잡아야 하며, 보안/데이터 온보딩 비용을 CAC에 포함해야 한다(payback은 고객획득비용을 몇 개월 만에 회수하는지 보는 지표다).
 
-### CAC risk model
+### CAC 리스크 모델
 
 ```text
 CAC
@@ -160,7 +160,7 @@ Payback months = CAC / monthly_gross_profit
 - ICP scoring form: `LLM spend`(월 AI 비용), `usage log`(사용 로그), `revenue link`(매출 연결), `decision urgency`(결정 긴급도), `raw prompt-free export`(민감 원문 없는 export 가능 여부).
 - Trust Pack: data flow(데이터 흐름도), no-training(업로드 데이터가 모델 학습에 쓰이지 않는다는 설명), retention/delete(보관/삭제 정책), PII mapping(개인정보 후보 처리), blocked columns(차단 컬럼) self-serve 제공.
 
-## Subagent 4. 유지율/Monthly Review 위험
+## 서브에이전트 4. 유지율/Monthly Review(월간 반복 리뷰) 위험
 
 ### 조사 질문
 
@@ -176,7 +176,7 @@ Payback months = CAC / monthly_gross_profit
 4. GRR/NRR 기준은 AgentPayroll 자신의 retention뿐 아니라 고객에게 팔 메시지도 된다(GRR은 기존 매출 유지율, NRR은 확장 매출까지 포함한 순매출 유지율이며, AI 원가가 고객 수익성을 깨면 이 지표에도 영향을 준다고 설명할 수 있다).
 5. 가장 큰 위험은 Monthly Review가 recurring workflow가 아니라 consulting retainer처럼 보이는 것이다(recurring workflow는 매월 자동으로 해야 할 일이 생기는 흐름, consulting retainer는 명확한 반복 산출물 없이 매달 자문료처럼 보이는 계약).
 
-### Retention model
+### Retention(유지율) 모델
 
 ```text
 Free Fit Check (무료 적합성 확인)
@@ -205,7 +205,7 @@ Free Fit Check (무료 적합성 확인)
 - Monthly Review vs Quarterly Review 패키지 테스트(매월이 부담스러운 고객에게 분기 리뷰가 더 잘 맞는지 비교).
 - "월간 비용 리포트"가 아니라 "지난 결정 검산" copy 테스트(표현을 바꿨을 때 반복구매 의향이 올라가는지 확인).
 
-## Subagent 5. 반복구매/확장 가능성 위험
+## 서브에이전트 5. 반복구매/확장 가능성 위험
 
 ### 조사 질문
 

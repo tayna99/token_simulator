@@ -1,4 +1,4 @@
-# PRD v0.4 (Architecture): AI Team Operations Workspace — AI Native 구현 아키텍처
+# PRD v0.4 (Architecture, 기술 구조): AI Team Operations Workspace — AI Native 구현 아키텍처
 
 작성일: 2026-05-22  
 성격: **기술 아키텍처 PRD** (제품 PRD가 아니라, 그것을 어떻게 구현하는가)  
@@ -7,7 +7,7 @@
 - `docs/research/2026-05-22-ai-saas-cost-margin-prd-v2.md` (v2.0, AI Native 프레이밍)
 - `2026-05-22-ai-team-ops-workspace-prd.md` (v0.3, Wedge A+B 통합, AITeamConfiguration)
 
-이 문서는 위 세 PRD가 **무엇을** 만들지 정의한 것을 받아, **어떻게** 만들지를 정의한다. 코드베이스 현황 진단 → 시스템 아키텍처 → LLM 실행 모델 → Agent 아키텍처(서브에이전트 포함) → Tool Contract → RAG 설계 → 구현 단계 순서로 간다.
+이 문서는 위 세 PRD가 **무엇을** 만들지 정의한 것을 받아, **어떻게** 만들지를 정의한다. 코드베이스 현황 진단 → 시스템 아키텍처 → LLM 실행 모델 → Agent 아키텍처(서브에이전트 포함) → Tool Contract(Agent가 호출할 수 있는 함수 계약) → RAG(검색으로 근거 문서를 붙여 답하는 방식) 설계 → 구현 단계 순서로 간다.
 
 ---
 
@@ -19,9 +19,9 @@
 | v2.0 | "계산은 deterministic, 해석은 AI" 프레이밍 + 6화면 + MVP1/2/3 | v0.4의 **절대 원칙**과 동일. 충돌 없음 |
 | v0.3 | Wedge A 추가, AITeamConfiguration 단일 객체, 5개 Agent, Risk Card, Decision Log | v0.4가 **구현 레이어로 구체화** |
 
-핵심 확인: v2.0 §6.1과 v0.3 §8.1은 **같은 원칙**을 말한다 — *숫자는 deterministic 엔진, 해석·서술은 AI Agent*. 이 문서는 그 원칙을 깨지 않고, 그 위에 LangGraph 기반 Agent 그래프와 RAG를 얹는다.
+핵심 확인: v2.0 §6.1과 v0.3 §8.1은 **같은 원칙**을 말한다 — *숫자는 deterministic(같은 입력이면 같은 결과가 나오는 결정론적) 엔진, 해석·서술은 AI Agent*. 이 문서는 그 원칙을 깨지 않고, 그 위에 LangGraph 기반 Agent 그래프와 RAG를 얹는다.
 
-> v0.4가 새로 결정하는 것: (1) LLM을 어디서 실행하나, (2) 어떤 Agent 프레임워크, (3) Agent가 deterministic 엔진을 어떻게 호출하나(Tool Contract), (4) RAG corpus와 검색 경로, (5) Decision Log를 어디에 저장하나, (6) 기존 client-only 헌법과의 충돌을 어떻게 푸나.
+> v0.4가 새로 결정하는 것: (1) LLM을 어디서 실행하나, (2) 어떤 Agent 프레임워크, (3) Agent가 deterministic 엔진을 어떻게 호출하나(Tool Contract), (4) RAG corpus(검색할 근거 문서 묶음)와 검색 경로, (5) Decision Log(의사결정 기록)를 어디에 저장하나, (6) 기존 client-only(브라우저만 쓰는 구조) 헌법과의 충돌을 어떻게 푸나.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ### 1.1 현재 스택
 
-`C:\token_simulator` — **클라이언트 사이드 only.** Vite 6 + React 18 + TS 5 + Tailwind 3 + Recharts + i18next + jsPDF/html-to-image. 서버 없음, DB 없음, LLM 연동 없음 (`CLAUDE.md` 헌법에 명시).
+`C:\token_simulator` — **클라이언트 사이드 only(브라우저에서만 실행되는 구조).** Vite 6 + React 18 + TS 5 + Tailwind 3 + Recharts + i18next + jsPDF/html-to-image. 서버 없음, DB 없음, LLM 연동 없음 (`CLAUDE.md` 헌법에 명시).
 
 ```
 src/
@@ -55,7 +55,7 @@ src/
 | 포맷 단일 경로 | `lib/format.ts` | 자동번역 회귀 방지 | ✅ 헌법 보호 |
 | 테스트 문화 | vitest, `*.test.ts(x)` | 전 영역 | ✅ TDD, lib 100% 커버리지 규칙 |
 
-### 1.3 새로 만들어야 하는 것 (gap)
+### 1.3 새로 만들어야 하는 것 (gap, 현재 빈 부분)
 
 | Gap | 설명 | 의존성 | 난이도 |
 | --- | --- | --- | --- |
@@ -121,7 +121,7 @@ src/
 
 현재 앱엔 서버가 없다. Agent가 LLM을 호출하려면 키와 실행 위치가 필요하다. 두 방식을 모두 명세한다.
 
-### 3.1 방식 A — BYO-key, 풀 클라이언트
+### 3.1 방식 A — BYO-key(사용자 개인 API 키 사용), 풀 클라이언트
 
 사용자가 자기 OpenAI/Anthropic API 키를 입력하고, 브라우저에서 직접 LLM·Agent를 실행. L2/L3 모두 브라우저.
 
@@ -135,7 +135,7 @@ src/
 | RAG | ⚠️ 정적 corpus를 번들로 싣고 in-browser 임베딩 검색은 가능하나 무겁다 |
 | SparkClaw 데모 | ✅ 충분 |
 
-### 3.2 방식 B — 얇은 서버리스 백엔드
+### 3.2 방식 B — 얇은 서버리스 백엔드(필요할 때만 실행되는 작은 서버)
 
 Edge/serverless 함수(예: Vercel/Cloudflare Functions)가 LLM 호출·RAG·Decision Log 영속성 담당. 프런트는 그 API를 호출. L2는 양쪽 공유, L3는 서버.
 
@@ -151,7 +151,7 @@ Edge/serverless 함수(예: Vercel/Cloudflare Functions)가 LLM 호출·RAG·Dec
 
 ### 3.3 추천 — 하이브리드 (MVP는 A, P1부터 B)
 
-> **MVP/P0(SparkClaw 데모)는 방식 A**로 빠르게: BYO-key + Sample Data Generator + Decision Log는 localStorage/JSON export. 헌법 거의 유지, 정적 호스팅 그대로.
+> **MVP/P0(SparkClaw 데모)는 방식 A**로 빠르게: BYO-key + Sample Data Generator(샘플 데이터 생성기) + Decision Log는 localStorage/JSON export(브라우저 저장소/JSON 내보내기). 헌법 거의 유지, 정적 호스팅 그대로.
 >
 > **P1부터 방식 B**로 전환: 키 서버 보관, Decision Log 영속화, 주간 리뷰 자동 발송. 이때 헌법을 "프런트는 client-only, AI/영속성은 얇은 backend"로 개정.
 
@@ -253,7 +253,7 @@ Optimization 출력 직후 그래프를 `interrupt`로 멈춘다. UI는 대안 +
 
 ---
 
-## 6. Tool Contract — Agent ↔ Deterministic 엔진
+## 6. Tool Contract(도구 계약) — Agent ↔ Deterministic 엔진
 
 Agent가 호출할 수 있는 tool 목록. 모두 **L2 순수 함수** (기존 자산 재사용 또는 신규 순수 함수). Agent는 이 결과만 인용한다.
 
@@ -271,7 +271,7 @@ Agent가 호출할 수 있는 tool 목록. 모두 **L2 순수 함수** (기존 �
 | `pricingScenario` | `(rows, policy) → ScenarioResult` policy∈{flat,usage,credit,hybrid,cap,overage} | 신규 | 🆕 |
 | `formatReport` | `(data, role) → structured` | `roleLanguage.ts` + 신규 | ⚠️ 확장 |
 
-**RAG tool** (L4a):
+**RAG tool(검색 근거 도구)** (L4a):
 
 | Tool | 용도 | 검색 corpus |
 | --- | --- | --- |
@@ -283,7 +283,7 @@ Agent가 호출할 수 있는 tool 목록. 모두 **L2 순수 함수** (기존 �
 
 ---
 
-## 7. RAG 설계 (벤치마크 + Risk Card)
+## 7. RAG(검색으로 근거 문서를 붙여 답하는 방식) 설계 (벤치마크 + Risk Card)
 
 ### 7.1 왜 RAG가 필요한가
 
@@ -305,7 +305,7 @@ corpus/risk_cards/       ← 추천 유형 → 리스크/조건/안전망
    - "캐싱 → TTL/무효화 비용", "cap → 고객 이탈" 등 10+ 카드
 ```
 
-각 chunk는 `{claim, evidence_id, source_url, persona, pain_tag}` 메타데이터를 단다. Agent 출력은 인용된 `evidence_id`/`source_url`을 그대로 노출 → 검증 가능 (v0.3 신뢰성 + repo의 evidence 검증 문화 계승).
+각 chunk(검색 단위 조각)는 `{claim, evidence_id, source_url, persona, pain_tag}` 메타데이터를 단다. Agent 출력은 인용된 `evidence_id`/`source_url`을 그대로 노출 → 검증 가능 (v0.3 신뢰성 + repo의 evidence 검증 문화 계승).
 
 ### 7.3 검색 경로
 
@@ -383,7 +383,7 @@ Decision {
 
 ---
 
-## 10. 데이터 흐름 (end-to-end, Wedge B 예)
+## 10. 데이터 흐름 (end-to-end, 처음부터 끝까지 보는 Wedge B 예)
 
 ```
 1. 사용자: usage CSV 업로드 (또는 Sample Generator)

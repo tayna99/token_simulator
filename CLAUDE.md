@@ -1,11 +1,11 @@
 # LLM Cost Simulator — 프로젝트 헌법
 
 ## 기술 스택
-- Vite 6 + React 18 + TypeScript 5
+- Vite 6 + React 18 + TypeScript 5 (legacy baseline, Next 전환 전 비교 기준)
 - Tailwind CSS 3
-- Recharts (차트), html-to-image (export)
-- Vitest 4 + @testing-library/react 16 (test; setup는 `src/test-setup.ts`에서 `@testing-library/jest-dom/vitest` import)
-- 클라이언트 사이드 only — 서버 없음, DB 없음
+- Recharts(차트), html-to-image(export, 화면을 이미지로 내보내는 라이브러리)
+- Vitest 4 + @testing-library/react 16(test, 테스트 실행 도구; setup는 `src/test-setup.ts`에서 `@testing-library/jest-dom/vitest` import)
+- 클라이언트 사이드 only(브라우저에서만 실행) — 서버 없음, DB 없음
 
 ## 아키텍처 규칙
 - CRITICAL: 모든 비용 계산은 `src/lib/calculator.ts` 의 `calculateCost` / `calculateMigrationDelta` 단일 경로를 통과한다. 컴포넌트 내에서 가격 연산 금지.
@@ -18,14 +18,14 @@
 
 ## 개발 프로세스
 - CRITICAL: 새 기능/수정은 실패 테스트 → 최소 구현 → 테스트 통과 (TDD). `src/lib/` 순수 함수는 100% 커버리지.
-- 커밋 메시지: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
+- 커밋 메시지: conventional commits(변경 성격을 접두사로 쓰는 커밋 규칙: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - 각 Task 완료 후 `npm run test:run` 전체 통과 + `npm run build` 성공 확인, 이후 커밋.
 - PR 전 `npm run preview` + gstack browse 수동 스모크.
 
 ## 금지 패턴 (안티 슬롭)
 - 모델명/브랜드명이 자동번역으로 깨지도록 방치: `Claude Opus 4.7 → 클로드 작품 4.7` ❌ (translate 보호 레이어가 막음)
 - 통화 표기 혼용: `$195` 와 `195달러` 를 같은 화면에서 ❌
-- "cheapest" 같은 단어를 scope 없이 단독 사용 ❌
+- "cheapest" 같은 단어를 scope(비교 범위) 없이 단독 사용 ❌
 - 차트에서 `model.releaseDate` 이전 달의 데이터 포인트 렌더 ❌ (현재 차트에 해당 없음, 차후 추가 시 주의)
 - glass morphism, 보라 그라데이션 텍스트, 네온 글로우, 과도한 이모지 ❌
 

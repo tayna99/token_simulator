@@ -1,6 +1,6 @@
-# MVP WTP Interview Guide
+# MVP WTP 인터뷰 가이드
 
-**Purpose:** 사람들이 실제로 돈을 낼 지점이 비용 절감인지, 고객당 원가인지, gross margin인지, 가격정책인지, 리포트인지 확인한다.
+**목적:** 사람들이 실제로 돈을 낼 지점이 비용 절감인지, 고객당 원가인지, gross margin(매출총이익률)인지, 가격정책인지, 리포트인지 확인한다. 여기서 MVP는 최소 기능 제품, WTP는 지불 의향을 뜻한다.
 
 ## 1. 인터뷰 대상
 
@@ -10,7 +10,7 @@
 | --- | ---: | --- |
 | AI SaaS 창업자/CEO/PM | 5 | 가격정책, 고객별 손익, 리포트 공유 니즈 |
 | 개발자/ML/백엔드/인프라 | 5 | 로그, 토큰, 기능별 비용, 모델 교체 판단 |
-| Finance/Ops/RevOps/CS Lead | 5 | 예산, 마진, CS 이관 비용, 운영 action |
+| Finance/Ops/RevOps/CS Lead | 5 | 예산, 마진, CS 이관 비용, 운영 action(실행할 조치) |
 
 ## 2. 시작 질문
 
@@ -19,7 +19,7 @@
 1. 지금 제품에서 LLM/API 비용이 월 얼마 정도 나오나요?
 2. 그 비용을 기능별로 나눠서 볼 수 있나요?
 3. 고객 1명당 AI 원가를 알고 있나요?
-4. heavy user 때문에 손해 본 고객이나 플랜이 있나요?
+4. heavy user(많이 쓰는 고객) 때문에 손해 본 고객이나 플랜이 있나요?
 5. AI 기능별 gross margin을 보나요?
 6. 보고서 1개, 고객 문의 1건, job 1회당 원가를 계산하나요?
 7. AI 기능 가격은 어떻게 정했나요?
@@ -41,7 +41,7 @@
 4. 이 숫자가 틀리면 어떤 손실이 생기나요?
 5. 자동화하면 어느 팀 예산에서 살 수 있나요?
 6. 구매자는 개발팀인가요, PM인가요, Finance인가요?
-7. 결제하려면 어떤 조건이 필요하나요: 보안, CSV, SDK, Slack, 보고서 export?
+7. 결제하려면 어떤 조건이 필요하나요: 보안, CSV, SDK(개발자가 기능을 붙이는 코드 패키지), Slack, 보고서 export(내보내기)?
 
 ## 4. 샘플 리포트 반응 확인
 
@@ -72,7 +72,20 @@
 | "고객별/기능별 수익성 질문은 아직 없어요." | 약함 |
 | "pricing이나 margin 결정과는 연결되지 않아요." | 약함 |
 
-## 6. 인터뷰 기록 양식
+## 6. 구매 거부 문장 코딩
+
+인터뷰 후 거부 문장을 아래 6개 버킷으로 태깅한다. 한 인터뷰에 여러 태그가 붙을 수 있다.
+
+| 버킷 | 태그 | 대표 문장 | 다음 액션 |
+| --- | --- | --- | --- |
+| 마진 문제 미인식 | `objection_margin_not_felt` | "비용은 보는데 아직 마진 문제는 아니에요." | AI 비용을 COGS와 고객/기능 손익으로 번역하는 첫 화면 문구 보강 |
+| 데이터 불안 | `objection_data_trust` | "prompt나 고객 데이터가 들어가는 것 아닌가요?" | Trust Gate, blocked columns, snapshot fields, retention/delete proof 강화 |
+| 대체재 충분 | `objection_excel_sql_console` | "엑셀이나 SQL로 보면 됩니다." | 반복 리포트, decision log(의사결정 기록), PM/CEO 공유 artifact(공유 가능한 결과물 파일)를 비교 포인트로 제시 |
+| ROI 불명확 | `objection_roi_unclear` | "그래서 얼마를 아끼는 건가요?" | monthly leak(월간 누수 비용), policy delta(정책 변경 전후 차이), payback hint(회수 기간 힌트)를 리포트 첫 줄에 표시 |
+| 타이밍 부적합 | `objection_wrong_timing` | "아직 비용이 작아요." | free/low-cost diagnosis로 라우팅하고 재접촉 시점 기록 |
+| 메시지 혼선 | `objection_positioning_confusing` | "Payroll이면 HR 도구인가요?" | AgentPayroll보다 AI 비용 진단/손해 고객 찾기/AI 기능 마진 분석 문구 우선 |
+
+## 7. 인터뷰 기록 양식
 
 ```text
 interview_id:
@@ -91,5 +104,10 @@ strongest_quote:
 would_share_sample_report: yes/no
 asked_for_own_data_analysis: yes/no
 wtp_signal: 1-5
+objection_tags:
+exact_refusal_quote:
+trust_blocker:
+roi_number_needed:
+next_follow_up_date:
 notes:
 ```

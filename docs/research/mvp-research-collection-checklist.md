@@ -1,16 +1,16 @@
-# MVP Research Collection Checklist
+# MVP 리서치 수집 체크리스트
 
-**Purpose:** 다음 40개 evidence를 모을 때 "많이 보이는 불만"과 "적게 보여도 돈 되는 신호"를 섞지 않기 위한 수집 체크리스트다.
+**목적:** 다음 40개 evidence(검증 근거 사례)를 모을 때 "많이 보이는 불만"과 "적게 보여도 돈 되는 신호"를 섞지 않기 위한 수집 체크리스트다. 여기서 MVP는 최소 기능 제품을 뜻한다.
 
 ## 1. 수집 전 원칙
 
-- 새 pain tag를 만들지 않는다. 새 태그가 필요하면 먼저 [pain_taxonomy.md](pain_taxonomy.md)와 validator의 허용 태그를 같이 업데이트한다.
+- 새 pain tag(문제 분류 태그)를 만들지 않는다. 새 태그가 필요하면 먼저 [pain_taxonomy.md](pain_taxonomy.md)와 validator(검증 스크립트)의 허용 태그를 같이 업데이트한다.
 - evidence마다 `pain_tag`는 1~3개만 붙인다.
 - 개인 구독/한도 불만과 팀/제품/마진 문제를 분리한다.
 - `frequency_signal`과 `business_keyword_frequency`를 섞지 않는다.
 - `pain_margin_unknown`은 기능/고객/보고서/job 단위 원가나 판매 가격 대비 마진이 있을 때만 붙인다.
 - URL/날짜/quote가 모두 확인된 row만 [evidence_board.csv](evidence_board.csv)에 넣는다.
-- quote가 없거나 직접 검증하지 못한 후보, 중복 후보, Group C 내부 도구 후보는 [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv)에 보관한다.
+- quote(원문 인용)가 없거나 직접 검증하지 못한 후보, 중복 후보, Group C 내부 도구 후보는 [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv)에 보관한다.
 
 ## 2. Stream A: 많이 보이는 불만
 
@@ -20,7 +20,7 @@
 | --- | --- |
 | 주요 키워드 | usage limit, session limit, token cost, burning tokens, wrong token count, cost tracking, provider cost |
 | 좋은 evidence | 반복 불만, 다수 공감, GitHub issue에서 여러 사용자가 재현 |
-| 낮은 WTP 신호 | my plan, personal subscription, hobby, too expensive for me |
+| 낮은 WTP(지불 의향) 신호 | my plan, personal subscription, hobby, too expensive for me |
 | MVP 연결 | CSV import, 비용 추적 신뢰도, provider 비교, 캐시/출력 절감 설명 |
 
 ## 3. Stream B: 적게 보여도 돈 되는 신호
@@ -42,8 +42,8 @@
 - customer, production, pricing, margin, finance, PM, CEO, CFO가 명시됨
 - 현재 스프레드시트, SQL, 수동 계산, 로그 export로 해결 중
 - 고객/기능/보고서/job 단위 원가가 등장함
-- usage-based billing, plan design, gross margin, pricing decision과 연결됨
-- 알림을 받은 뒤 action이 명확함: 모델 교체, rate limit, 고객 연락, plan 변경, budget cap
+- usage-based billing(사용량 기준 청구), plan design(요금제 설계), gross margin(매출총이익률), pricing decision(가격정책 결정)과 연결됨
+- 알림을 받은 뒤 action(실행할 조치)이 명확함: 모델 교체, rate limit(요청 제한), 고객 연락, plan 변경, budget cap(예산 상한)
 
 ## 5. Evidence 입력 순서
 
@@ -62,12 +62,12 @@
 
 ## 6. 후보 시트 사용 규칙
 
-공식 Evidence Board는 제품 주장에 쓸 수 있는 검증 원장이다. 후보 시트는 버리기 아까운 리서치 재료를 보관하는 곳이다.
+공식 Evidence Board(검증 근거 원장)는 제품 주장에 쓸 수 있는 검증 원장이다. 후보 시트는 버리기 아까운 리서치 재료를 보관하는 곳이다.
 
 | 시트 | 사용 기준 | 제품 주장 사용 가능 여부 |
 | --- | --- | --- |
 | `evidence_board.csv` | URL, 날짜, quote가 확인됨 | 가능 |
-| `evidence_candidates_unverified.csv` | quote 없음, 접근 제한, 중복, off-domain, Group C 후보 | 불가. 재검증 후 승격 필요 |
+| `evidence_candidates_unverified.csv` | quote 없음, 접근 제한, 중복, off-domain(현재 제품 범위 밖), Group C 후보 | 불가. 재검증 후 승격 필요 |
 
 후보를 공식 원장으로 승격할 때는 `candidate_id`를 `GR-*`로 새로 부여하고, `quote_status`가 아니라 `quote_verified=true/false/pending` 규칙을 따른다.
 

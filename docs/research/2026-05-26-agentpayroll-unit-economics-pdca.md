@@ -1,4 +1,4 @@
-# AgentPayroll Unit Economics PDCA Plan (2026-05-26)
+# AgentPayroll 유닛 이코노믹스 PDCA 실행 계획 (2026-05-26)
 
 이 문서는 `2026-05-26-agentpayroll-unit-economics-risk-review.md`와 `2026-05-26-agentpayroll-unit-economics-subagent-research.md`를 실행으로 옮기기 위한 PDCA 계획이다.
 
@@ -8,7 +8,7 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 
 따라서 이번 실행의 목적은 무료 진단을 많이 돌리는 것이 아니다. A급 ICP를 빠르게 선별하고, Trust Gate로 데이터 불안을 낮추며, `AI Cost Snapshot`을 `Monthly Decision Review`로 전환할 수 있는지를 검증하는 것이다.
 
-## Plan
+## Plan(계획)
 
 ### 실행 가설
 
@@ -26,7 +26,7 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 4. **Trust Gate 실험:** 업로드 전/후 설명, no-training, retention/delete, PII/blocked column 안내가 전환과 이탈에 미치는 영향을 본다.
 5. **Decision Loop 설계:** 모든 리포트가 비용 설명이 아니라 결정, owner, 다음 리뷰 날짜, outcome review로 끝나게 만든다.
 
-### Plan 성공 기준
+### Plan(계획) 성공 기준
 
 - 15명 인터뷰 중 5명 이상이 "우리 데이터로 해보고 싶다"고 말한다.
 - 3명 이상이 유료 파일럿, 예약금, 또는 명확한 예산 출처를 제시한다.
@@ -38,9 +38,9 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 - 리포트의 70% 이상이 `adopt/reject/hold` 중 하나의 결정으로 끝난다.
 - 첫 3개월 Monthly Review cohort의 GRR이 90% 이상이다.
 
-## Do
+## Do(실행)
 
-| 작업 | owner | 입력 | 산출물 | due | acceptance criteria |
+| 작업 | owner(담당자) | 입력 | 산출물 | due(기한) | acceptance criteria(완료 판정 기준) |
 |---|---|---|---|---|---|
 | WTP 인터뷰 15명 모집/진행 | Revenue/WTP subagent | `mvp-wtp-interview-guide.md`, ICP A/B/C 기준, 인터뷰 질문지 | 인터뷰 로그 15개 | 2026-05-31 | founder/CEO/PM 5명, dev/infra 5명, finance/ops/revops 5명 완료. 각 로그에 `monthly_llm_cost`, `current_workaround`, `decision_delayed`, `buyer`, `wtp_signal`, `objection_tags` 기록 |
 | 인터뷰 신호 코딩 | Revenue/WTP subagent | 인터뷰 로그 15개 | WTP/구매거부/결정지연 태그 매트릭스 | 2026-06-01 | 5명 이상 "우리 데이터로 해보고 싶다", 3명 이상 유료 파일럿/예약금/예산 출처 확인 여부 판정 |
@@ -55,7 +55,7 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 | Decision-before-report gate | Retention subagent | Snapshot report flow, Decision Log | 리포트 마지막 장 `adopt/reject/hold` 결정 섹션 | 2026-06-05 | 리포트의 70% 이상이 `adopt/reject/hold` 중 하나로 끝나는지 측정 가능. decision owner와 다음 리뷰 날짜 필드 포함 |
 | Trigger-based 재접촉 memo | Expansion subagent | 모델 가격 변화, heavy user 증가, plan margin 하락, budget/cap 초과, board/CEO 보고 일정 | 고객별 follow-up trigger memo | 2026-06-07 | 각 유료/파일럿 고객에 최소 1개 재접촉 트리거 기록. "지난번과 달라진 것" 3개 이상을 Monthly Review 입력으로 연결 |
 
-## Check
+## Check(점검)
 
 ### 측정 지표
 
@@ -69,14 +69,14 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 
 ### 통과/실패 기준
 
-- **Pass:** 각 위험 영역이 `Plan -> Do -> Check -> Act`로 연결되고, 모든 Check 항목이 숫자/조건/기한/다음 액션을 가진다.
-- **Pass:** Snapshot이 PDF 산출물에서 끝나지 않고 Decision Log, Outcome Review, Monthly Review로 이어지는 증거가 있다.
-- **Pass:** Trust Gate가 보안 설명문이 아니라 CAC/전환율 측정 흐름으로 설계되어 있다.
-- **Conditional:** 목표 수치는 일부 미달이지만 원인 태그, 재실험 조건, 가격/ICP/온보딩 조정안이 명확하다.
-- **Fail:** "좋아 보인다", "수요가 있다", "비용 절감 가능"처럼 판정 불가능한 문장으로 성공을 대체한다.
-- **Fail:** Free Fit Check 또는 Data Readiness가 무료/저가 컨설팅으로 번져 사람 시간이 목표를 초과한다.
-- **Fail:** production evidence와 demo/static seed/fallback 데이터를 구분하지 않는다.
-- **Fail:** Monthly Review 전환, decision 기록, CAC payback, COGS 중 하나라도 측정 설계가 없다.
+- **Pass(통과):** 각 위험 영역이 `Plan -> Do -> Check -> Act`로 연결되고, 모든 Check 항목이 숫자/조건/기한/다음 액션을 가진다.
+- **Pass(통과):** Snapshot이 PDF 산출물에서 끝나지 않고 Decision Log, Outcome Review, Monthly Review로 이어지는 증거가 있다.
+- **Pass(통과):** Trust Gate가 보안 설명문이 아니라 CAC/전환율 측정 흐름으로 설계되어 있다.
+- **Conditional(조건부 통과):** 목표 수치는 일부 미달이지만 원인 태그, 재실험 조건, 가격/ICP/온보딩 조정안이 명확하다.
+- **Fail(실패):** "좋아 보인다", "수요가 있다", "비용 절감 가능"처럼 판정 불가능한 문장으로 성공을 대체한다.
+- **Fail(실패):** Free Fit Check 또는 Data Readiness가 무료/저가 컨설팅으로 번져 사람 시간이 목표를 초과한다.
+- **Fail(실패):** production evidence와 demo/static seed/fallback 데이터를 구분하지 않는다.
+- **Fail(실패):** Monthly Review 전환, decision 기록, CAC payback, COGS 중 하나라도 측정 설계가 없다.
 
 ### 문서 리뷰 체크리스트
 
@@ -101,7 +101,7 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 - [ ] 컴포넌트 테스트는 `rerender`로 state 변화 후 값 갱신을 검증하는가?
 - [ ] 문장성 영어 요약 블록은 `lang="en"`이고, `notranslate` meta/root translate 보호가 유지되는가?
 
-### Red flags
+### Red flags(위험 신호)
 
 - Snapshot 산출물이 "예쁜 PDF"로 끝나고 다음 decision/follow-up 날짜가 없다.
 - "비용 절감"만 강조하고 가격 변경, cap, credit, plan boundary 같은 의사결정이 없다.
@@ -112,7 +112,7 @@ AgentPayroll은 "좋아 보이는 AI 원가 분석 제품"이 아니라 실제�
 - 코드가 demo seed 또는 deterministic preview를 production evidence처럼 보여준다.
 - 리포트 claim을 사람이 대부분 다시 쓰고, QA 수정 항목이 태깅되지 않는다.
 
-## Act
+## Act(조정)
 
 ### 가격 조정 규칙
 
