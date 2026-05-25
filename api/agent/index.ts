@@ -1,4 +1,4 @@
-import { handleAgentApi } from '../src/server/p1ApiHandlers'
+import { handleAgentApi } from '../../src/server/p1ApiHandlers'
 
 interface VercelRequest {
   method?: string
