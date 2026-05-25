@@ -175,7 +175,7 @@ describe('P1 Vercel API routes', () => {
     expect(result.statusCode).toBe(200)
     expect(result.body).toMatchObject({
       agentRuntime: expect.objectContaining({ status: expect.any(String) }),
-      persistence: expect.objectContaining({ requiredEnv: expect.arrayContaining(['SUPABASE_URL']) }),
+      persistence: expect.objectContaining({ requiredEnv: expect.arrayContaining(['SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL']) }),
     })
   })
 

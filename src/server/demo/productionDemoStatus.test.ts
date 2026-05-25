@@ -27,6 +27,9 @@ const connectedStore: ProductionDemoStatusStore = {
   async hasReportArtifact() {
     return true
   },
+  async hasConnectorLedger() {
+    return true
+  },
 }
 
 const completeEnv = {
@@ -50,9 +53,9 @@ describe('checkProductionDemoStatus', () => {
     expect(result.status).toBe('unavailable')
     expect(result.missing).toEqual(expect.arrayContaining([
       'NEXT_PUBLIC_SUPABASE_URL',
-      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-      'SUPABASE_URL',
-      'SUPABASE_SERVICE_ROLE_KEY',
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY',
       'AGENT_SERVICE_URL',
     ]))
     expect(result.checks.supabaseEnv.status).toBe('unavailable')

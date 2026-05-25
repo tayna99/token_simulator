@@ -15,6 +15,10 @@ AgentPayroll is an AI cost and margin operations web app for AI SaaS teams. It c
 - The default persona is `developer`.
 - The product name is `AgentPayroll`.
 - The first report CTA is PDF.
+- Trust Gate is not a hidden security feature; it is the first reassurance moment. Immediately after upload, explain raw prompt/API key/PII handling and the limited analysis scope.
+- Role-specific UX means one truth, three lenses. Developer/PM/CEO use the same snapshot id and KPI values while changing only questions, emphasis, and card order.
+- PDF is not a secondary export. It is the value proof that a founder, board, or customer can share.
+- The MVP sells decision confidence before billing automation. Connector execution belongs in an admin readiness/locked section; the primary outcome is a Rate Card Draft plus a human decision.
 
 ## 3. Primary Users
 
@@ -55,6 +59,20 @@ AgentPayroll is an AI cost and margin operations web app for AI SaaS teams. It c
 | Optimize+Risk | Routing, pricing, benchmark, rate card, risk cards | Scenario panel, risk cards, rate-card readiness |
 | Decision Log | Adopt/reject/hold, report gate, ledger | Decision list, export gate, report CTA |
 
+## 6.1 Trust Gate First
+
+The first success moment in the Design/Import stage is not a cost chart. It is reassurance about what AgentPayroll did not collect or use.
+
+- Required reassurance copy:
+  - "raw prompt는 수집하지 않았습니다."
+  - "API key 후보는 차단했습니다."
+  - "PII 후보가 있어 매핑 검토가 필요합니다."
+  - "이 데이터는 원가/마진 분석에 필요한 범위로만 사용됩니다."
+- `ready`: show that cost/margin analysis can continue.
+- `needs_mapping`: require PII/plan/customer/revenue mapping review without presenting fake success.
+- `blocked`: state that blocked data cannot become a usage snapshot, decision history corpus, or report artifact.
+- Put detailed security and retention metadata in a secondary panel; the first panel should focus on trust and next action.
+
 ## 7. Role Projection
 
 All roles use the same snapshot, but the central content order changes. Numeric values must not change.
@@ -65,6 +83,16 @@ All roles use the same snapshot, but the central content order changes. Numeric 
 | PM | Feature economics, pricing scenario, customer/plan readiness | Low-level debug refs |
 | CEO | Margin risk, loss-making customers, rate card/report/export | Detailed trace/debug |
 | Customer audience | Accepted facts, public-safe report | Internal refs, debug, raw trace |
+
+Every role header should show a `same snapshot` proof badge. Developer asks "why cost increased", PM asks "which feature or plan is the problem", and CEO asks "how much is leaking and what decision is needed", but monthly cost, margin, customer count, and snapshot id must remain identical.
+
+## 7.1 PDF And Decision Draft
+
+- The first report CTA should use value-oriented copy such as "Share board-ready PDF".
+- The report page should show persisted artifact metadata, source decision, content type, and generated time around the PDF preview/download.
+- The primary rate-card panel is a decision draft, not a billing execution panel.
+- The decision draft must include why pricing needs to change, the recommended mechanism, affected customers, expected margin improvement, and required approval.
+- Stripe/Metronome execution belongs in an admin `Execution deferred`/readiness area and remains secondary locked UI until all safety gates are satisfied.
 
 ## 8. Core State Model
 

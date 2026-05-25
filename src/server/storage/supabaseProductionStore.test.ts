@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import type { EmbeddingProvider } from '../../features/rag/lib/apiDocRag'
 import {
   SupabaseCheckpointStore,
+  SupabaseDecisionStore,
   SupabasePersistentVectorStore,
   SupabaseReportArtifactStore,
+  SupabaseWatchtowerStore,
   createSupabaseClientFromEnv,
 } from './supabaseProductionStore'
 
@@ -39,7 +41,11 @@ const chunk = {
 
 describe('Supabase production store', () => {
   it('ships a pgvector migration with all production tables and match_rag_chunks RPC', () => {
-    const sql = readFileSync('supabase/migrations/202605250001_agentcost_production_store.sql', 'utf8')
+    const sql = [
+      readFileSync('supabase/migrations/202605250001_agentcost_production_store.sql', 'utf8'),
+      readFileSync('supabase/migrations/20260525131059_next_production_demo_memberships.sql', 'utf8'),
+      readFileSync('supabase/migrations/202605260001_production_follow_up_ledgers.sql', 'utf8'),
+    ].join('\n')
 
     for (const table of [
       'workspaces',
@@ -54,6 +60,10 @@ describe('Supabase production store', () => {
       'report_artifacts',
       'retention_jobs',
       'learning_loop_records',
+      'workspace_memberships',
+      'usage_snapshots',
+      'watchtower_candidates',
+      'fact_review_events',
     ]) {
       expect(sql).toContain(`public.${table}`)
     }
@@ -61,6 +71,10 @@ describe('Supabase production store', () => {
     expect(sql).toContain('embedding extensions.vector(1536)')
     expect(sql).toContain('rag_chunks_embedding_hnsw')
     expect(sql).toContain('create or replace function public.match_rag_chunks')
+    expect(sql).toMatch(/grant usage on schema public to authenticated/i)
+    expect(sql).toMatch(/grant select on public\.rag_chunks to authenticated/i)
+    expect(sql).toMatch(/grant all on public\.watchtower_candidates to service_role/i)
+    expect(sql).toMatch(/grant execute on function public\.match_rag_chunks/i)
   })
 
   it('creates a configured Supabase REST client only when production env is present', () => {
@@ -68,6 +82,10 @@ describe('Supabase production store', () => {
     expect(createSupabaseClientFromEnv({
       SUPABASE_URL: 'https://project.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    })).not.toBeNull()
+    expect(createSupabaseClientFromEnv({
+      NEXT_PUBLIC_SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SECRET_KEY: 'secret-key',
     })).not.toBeNull()
   })
 
@@ -254,5 +272,126 @@ describe('Supabase production store', () => {
       contentType: 'text/markdown',
       body: '# report-run-2026-05',
     })
+  })
+
+  it('persists decisions and indexes C9 decision_history chunks with fact override disabled', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init: init ?? {} })
+      if (String(input).includes('/rest/v1/decisions?')) {
+        return new Response(JSON.stringify([{
+          id: 'decision-1',
+          workspace_id: 'workspace-demo',
+          decision_payload: {
+            id: 'decision-1',
+            kind: 'approve',
+            what: 'Accept cache routing',
+            why: 'Protects margin',
+            assumptions: {},
+            toolResultRefs: ['tool:margin'],
+            riskCards: ['risk-cache'],
+            status: 'adopted',
+            createdAt: '2026-05-25T00:00:00.000Z',
+          },
+          created_at: '2026-05-25T00:00:00.000Z',
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+    const client = createSupabaseClientFromEnv({
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }, fetcher)
+    const store = new SupabaseDecisionStore({ client: client!, embeddingProvider })
+
+    await store.saveMany('workspace-demo', [{
+      id: 'decision-1',
+      kind: 'approve',
+      what: 'Accept cache routing',
+      why: 'Protects margin',
+      assumptions: {},
+      toolResultRefs: ['tool:margin'],
+      riskCards: ['risk-cache'],
+      status: 'adopted',
+      createdAt: '2026-05-25T00:00:00.000Z',
+      performanceSnapshot: {},
+      costSnapshot: {},
+      thresholdSnapshot: {},
+      factSourceSnapshot: [],
+      decisionChoice: 'adopt',
+      rateCardDraft: null,
+      pricingFreshnessSnapshot: [],
+      aiMode: 'unknown',
+      operatingLedger: null,
+      agentReview: null,
+      trustReview: null,
+      reportReview: null,
+    }])
+    const listed = await store.list('workspace-demo')
+
+    const decisionUpsert = calls.find(call => call.url.includes('/rest/v1/decisions'))
+    const ragUpsert = calls.find(call => call.url.includes('/rest/v1/rag_chunks'))
+    expect(JSON.parse(String(decisionUpsert?.init.body))[0]).toMatchObject({
+      workspace_id: 'workspace-demo',
+      id: 'decision-1',
+    })
+    expect(JSON.parse(String(ragUpsert?.init.body))[0]).toMatchObject({
+      workspace_id: 'workspace-demo',
+      collection: 'decision_history',
+      source_id: 'decision-1',
+      metadata: expect.objectContaining({
+        sourceId: 'decision-1',
+        officialSourceTrust: 'internal_authoritative',
+        mayOverrideFacts: false,
+      }),
+    })
+    expect(listed[0]).toMatchObject({ id: 'decision-1', status: 'adopted' })
+  })
+
+  it('records Watchtower review decisions and writes accepted facts only on accept', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init: init ?? {} })
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+    const client = createSupabaseClientFromEnv({
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }, fetcher)
+    const store = new SupabaseWatchtowerStore(client!)
+
+    const accepted = await store.reviewCandidate({
+      workspaceId: 'workspace-demo',
+      candidateId: 'candidate:openai-gpt',
+      action: 'accept',
+      reviewer: 'owner@example.com',
+      reason: 'Official pricing source reviewed.',
+      confidence: 'high',
+      factPayload: { id: 'fact:openai-gpt', modelFamily: 'gpt', price: 'reviewed' },
+    })
+
+    expect(accepted.event.action).toBe('accept')
+    expect(calls.some(call => call.url.includes('/rest/v1/watchtower_candidates'))).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/fact_review_events'))).toBe(true)
+    const factCall = calls.find(call => call.url.includes('/rest/v1/accepted_facts'))
+    expect(JSON.parse(String(factCall?.init.body))[0]).toMatchObject({
+      id: 'fact:openai-gpt',
+      workspace_id: 'workspace-demo',
+      source_ref: 'candidate:openai-gpt',
+      confidence: 'high',
+      accepted_by: 'owner@example.com',
+    })
+
+    calls.length = 0
+    await store.reviewCandidate({
+      workspaceId: 'workspace-demo',
+      candidateId: 'candidate:openai-gpt',
+      action: 'hold',
+      reviewer: 'owner@example.com',
+      reason: 'Need FX snapshot.',
+    })
+
+    expect(calls.some(call => call.url.includes('/rest/v1/fact_review_events'))).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/accepted_facts'))).toBe(false)
   })
 })

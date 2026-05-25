@@ -7,12 +7,15 @@ import type {
   VectorStore,
   VectorStoreStats,
 } from '../../features/rag/lib/apiDocRag'
+import { normalizeDecisionRecord, type Decision } from '../../features/decision-log/lib/decisionLog'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 export interface SupabaseEnv {
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_SECRET_KEY?: string
+  NEXT_PUBLIC_SUPABASE_URL?: string
 }
 
 export interface SupabaseClient {
@@ -38,8 +41,8 @@ export function createSupabaseClientFromEnv(
   env: SupabaseEnv = runtimeEnv(),
   fetcher: FetchLike = fetch,
 ): SupabaseClient | null {
-  const url = env.SUPABASE_URL?.replace(/\/$/, '')
-  const key = env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  const url = (env.SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL)?.replace(/\/$/, '')
+  const key = (env.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SECRET_KEY)?.trim()
   if (!url || !key) return null
   const serviceRoleKey = key
 
@@ -123,6 +126,19 @@ function metadataMatchesFilter(metadata: ApiDocChunkMetadata, filter: Partial<Ap
     }
     return actual === expected
   })
+}
+
+function stableHash(value: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function refWithPrefix(prefix: string, value: string): string {
+  return value.startsWith(`${prefix}:`) ? value : `${prefix}:${value}`
 }
 
 export class SupabasePersistentVectorStore implements VectorStore {
@@ -266,6 +282,106 @@ export class SupabaseCheckpointStore {
   }
 }
 
+interface SupabaseDecisionRow {
+  id: string
+  workspace_id: string
+  decision_payload: unknown
+  created_at: string
+}
+
+function decisionText(decision: Decision): string {
+  return [
+    `Decision: ${decision.what}`,
+    `Status: ${decision.status}`,
+    `Why: ${decision.why}`,
+    `Kind: ${decision.kind}`,
+    `Choice: ${decision.decisionChoice ?? 'unknown'}`,
+    `Tool refs: ${decision.toolResultRefs.join(', ') || 'none'}`,
+    `Risk cards: ${decision.riskCards.join(', ') || 'none'}`,
+    `Assumptions: ${JSON.stringify(decision.assumptions)}`,
+  ].join('\n')
+}
+
+function decisionChunk(decision: Decision): ApiDocChunk {
+  const text = decisionText(decision)
+  const contentHash = stableHash(`${decision.id}:${decision.createdAt}:${text}`)
+  const metadata = {
+    sourceId: decision.id,
+    provider: 'internal',
+    servingProvider: 'internal',
+    modelFamilies: [],
+    sourceKind: 'decision_history',
+    sourceLanguage: 'en',
+    pricingRegion: 'workspace',
+    officialSourceTrust: 'internal_authoritative',
+    capturedAt: decision.createdAt,
+    headingPath: ['Decision History', decision.kind],
+    sectionType: 'overview',
+    contentHash,
+    mayOverrideFacts: false,
+    reviewStatus: decision.status === 'held' ? 'needs_review' : decision.status,
+  } as ApiDocChunkMetadata & { mayOverrideFacts: false; reviewStatus: string }
+  return {
+    id: `decision-history:${decision.id}`,
+    collection: 'decision_history',
+    text,
+    sourceUrl: refWithPrefix('decision', decision.id),
+    refs: [refWithPrefix('decision', decision.id), ...decision.toolResultRefs],
+    metadata,
+  }
+}
+
+export class SupabaseDecisionStore {
+  readonly #client: SupabaseClient
+  readonly #embeddingProvider?: EmbeddingProvider
+
+  constructor(input: { client: SupabaseClient; embeddingProvider?: EmbeddingProvider }) {
+    this.#client = input.client
+    this.#embeddingProvider = input.embeddingProvider
+  }
+
+  async list(workspaceId: string): Promise<Decision[]> {
+    const rows = await this.#client.select<SupabaseDecisionRow>('decisions', {
+      workspace_id: `eq.${workspaceId}`,
+      select: '*',
+      order: 'created_at.desc',
+    })
+    return rows
+      .map(row => normalizeDecisionRecord(row.decision_payload))
+      .filter((decision): decision is Decision => Boolean(decision))
+  }
+
+  async saveMany(workspaceId: string, decisions: Decision[]): Promise<void> {
+    if (decisions.length === 0) return
+    await this.#client.upsert('decisions', decisions.map(decision => ({
+      id: decision.id,
+      workspace_id: workspaceId,
+      decision_payload: decision,
+      created_at: decision.createdAt,
+    })), 'id')
+
+    if (!this.#embeddingProvider) return
+    await new SupabasePersistentVectorStore({
+      client: this.#client,
+      workspaceId,
+      collection: 'decision_history',
+      embeddingProvider: this.#embeddingProvider,
+    }).upsertChunks(decisions.map(decisionChunk))
+  }
+
+  async delete(input: { workspaceId: string; id: string }): Promise<void> {
+    await this.#client.delete('decisions', {
+      workspace_id: `eq.${input.workspaceId}`,
+      id: `eq.${input.id}`,
+    })
+    await this.#client.delete('rag_chunks', {
+      workspace_id: `eq.${input.workspaceId}`,
+      source_id: `eq.${input.id}`,
+      collection: 'eq.decision_history',
+    })
+  }
+}
+
 export interface SupabaseReportArtifactRecord {
   id: string
   workspaceId: string
@@ -364,6 +480,34 @@ export interface SupabaseAcceptedFactRecord {
   acceptedAt: string
 }
 
+export type SupabaseFactReviewAction = 'accept' | 'reject' | 'hold' | 'supersede'
+export type SupabaseFactReviewStatus = 'needs_review' | 'accepted' | 'rejected' | 'held' | 'superseded'
+
+export interface SupabaseWatchtowerCandidateRecord {
+  id: string
+  workspaceId: string
+  sourceRef: string
+  status: SupabaseFactReviewStatus
+  candidatePayload: Record<string, unknown>
+  parserConfidence: 'high' | 'medium' | 'low'
+  manualReviewReason: string
+  reviewedBy?: string | null
+  reviewedAt?: string | null
+}
+
+export interface SupabaseFactReviewEventRecord {
+  id: string
+  workspaceId: string
+  candidateId: string
+  action: SupabaseFactReviewAction
+  reviewer: string
+  reason: string
+  factId?: string | null
+  sourceRef: string
+  eventPayload: Record<string, unknown>
+  createdAt: string
+}
+
 interface SupabaseAcceptedFactRow {
   id: string
   workspace_id: string
@@ -437,5 +581,123 @@ export class SupabaseWatchtowerStore {
       acceptedBy: row.accepted_by,
       acceptedAt: row.accepted_at,
     }))
+  }
+
+  async reviewCandidate(input: {
+    workspaceId: string
+    candidateId: string
+    action: SupabaseFactReviewAction
+    reviewer: string
+    reason: string
+    factPayload?: Record<string, unknown>
+    confidence?: SupabaseAcceptedFactRecord['confidence']
+  }): Promise<{
+    candidate: SupabaseWatchtowerCandidateRecord
+    event: SupabaseFactReviewEventRecord
+    acceptedFact?: SupabaseAcceptedFactRecord
+  }> {
+    const now = new Date().toISOString()
+    const status: SupabaseFactReviewStatus = input.action === 'accept'
+      ? 'accepted'
+      : input.action === 'reject'
+        ? 'rejected'
+        : input.action === 'supersede'
+          ? 'superseded'
+          : 'held'
+    const sourceRef = typeof input.factPayload?.sourceRef === 'string'
+      ? input.factPayload.sourceRef
+      : input.candidateId
+    const candidatePayload = input.factPayload ?? {}
+    const confidence = input.confidence ?? (
+      input.factPayload?.confidence === 'medium' || input.factPayload?.confidence === 'low'
+        ? input.factPayload.confidence
+        : 'high'
+    )
+    const factId = input.action === 'accept'
+      ? typeof input.factPayload?.id === 'string'
+        ? input.factPayload.id
+        : `fact:${input.workspaceId}:${stableHash(input.candidateId)}`
+      : null
+
+    await this.#client.upsert('watchtower_candidates', [{
+      id: input.candidateId,
+      workspace_id: input.workspaceId,
+      source_ref: sourceRef,
+      status,
+      candidate_payload: candidatePayload,
+      parser_confidence: confidence,
+      manual_review_reason: input.reason,
+      reviewed_by: input.reviewer,
+      reviewed_at: now,
+      updated_at: now,
+    }], 'workspace_id,id')
+
+    const event: SupabaseFactReviewEventRecord = {
+      id: `fact-review:${input.workspaceId}:${input.candidateId}:${input.action}:${Date.parse(now) || 0}`,
+      workspaceId: input.workspaceId,
+      candidateId: input.candidateId,
+      action: input.action,
+      reviewer: input.reviewer,
+      reason: input.reason,
+      factId,
+      sourceRef,
+      eventPayload: {
+        candidatePayload,
+        status,
+        confidence,
+        acceptedFactDiff: input.action === 'accept' ? input.factPayload ?? {} : null,
+      },
+      createdAt: now,
+    }
+    await this.#client.upsert('fact_review_events', [{
+      id: event.id,
+      workspace_id: event.workspaceId,
+      candidate_id: event.candidateId,
+      action: event.action,
+      reviewer: event.reviewer,
+      reason: event.reason,
+      fact_id: event.factId,
+      source_ref: event.sourceRef,
+      event_payload: event.eventPayload,
+      created_at: event.createdAt,
+    }], 'id')
+
+    let acceptedFact: SupabaseAcceptedFactRecord | undefined
+    if (input.action === 'accept' && factId) {
+      acceptedFact = {
+        id: factId,
+        workspaceId: input.workspaceId,
+        sourceRef,
+        factPayload: candidatePayload,
+        confidence,
+        acceptedBy: input.reviewer,
+        acceptedAt: now,
+      }
+      await this.#client.upsert('accepted_facts', [{
+        id: acceptedFact.id,
+        workspace_id: acceptedFact.workspaceId,
+        source_ref: acceptedFact.sourceRef,
+        fact_payload: acceptedFact.factPayload,
+        confidence: acceptedFact.confidence,
+        accepted_by: acceptedFact.acceptedBy,
+        accepted_at: acceptedFact.acceptedAt,
+      }], 'id')
+    }
+
+    return {
+      candidate: {
+        id: input.candidateId,
+        workspaceId: input.workspaceId,
+        sourceRef,
+        status,
+        candidatePayload,
+        parserConfidence: confidence,
+        manualReviewReason: input.reason,
+        reviewedBy: input.reviewer,
+        reviewedAt: now,
+      },
+      event,
+      acceptedFact,
+    }
   }
 }

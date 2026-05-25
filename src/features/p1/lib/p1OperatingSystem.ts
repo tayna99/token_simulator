@@ -7,12 +7,12 @@ export type CustomerDashboardCtaId =
   | 'open_existing_workspace'
 
 export type CustomerDashboardSectionId =
-  | 'workspace_home'
-  | 'upload_history'
-  | 'monthly_review_history'
-  | 'decision_ledger'
-  | 'report_export'
-  | 'alert_settings'
+  | 'top_margin_leak'
+  | 'margin_breaking_feature'
+  | 'recommended_decision'
+  | 'view_evidence'
+  | 'draft_rate_card'
+  | 'export_pdf'
 
 export interface CustomerWorkspaceDashboardInput {
   workspaceId: string
@@ -648,49 +648,49 @@ export function executeExternalAction(input: {
 
 export function buildCustomerWorkspaceDashboard(input: CustomerWorkspaceDashboardInput): CustomerWorkspaceDashboard {
   return {
-    heroTitle: '내 AI 팀 비용/마진을 5분 안에 보기',
+    heroTitle: 'AI 기능 때문에 손해 보는 고객을 찾으세요',
     workspaceId: input.workspaceId,
     organizationName: input.organizationName,
     ctas: [
-      { id: 'run_sparkclaw_sample', label: '1인 창업자 샘플 실행', action: 'load_sample' },
-      { id: 'upload_usage_export', label: 'usage export 업로드', action: 'upload_usage' },
-      { id: 'open_existing_workspace', label: '기존 workspace 열기', action: 'open_workspace' },
+      { id: 'upload_usage_export', label: '사용량 CSV 업로드', action: 'upload_usage' },
+      { id: 'open_existing_workspace', label: 'Stripe/매출 CSV 업로드', action: 'open_workspace' },
+      { id: 'run_sparkclaw_sample', label: '샘플로 보기', action: 'load_sample' },
     ],
     sections: [
       {
-        id: 'workspace_home',
-        label: 'workspace home',
-        description: '현재 비용, 마진, 운영 팀 검토 상태를 한 화면에서 봅니다.',
+        id: 'top_margin_leak',
+        label: '손해 보는 고객',
+        description: 'AI 기능이 많이 쓰일수록 손해가 커지는 고객을 먼저 찾습니다.',
         count: null,
       },
       {
-        id: 'upload_history',
-        label: 'upload history',
-        description: 'Trust Intake를 통과한 usage export 이력을 봅니다.',
+        id: 'margin_breaking_feature',
+        label: '마진을 깨는 기능',
+        description: '어떤 기능이 gross margin을 낮추는지 사용량과 매출을 연결해 보여줍니다.',
         count: input.uploadCount,
       },
       {
-        id: 'monthly_review_history',
-        label: 'monthly review history',
-        description: '월별 AI 팀 비용/마진 리뷰와 follow-up을 추적합니다.',
+        id: 'recommended_decision',
+        label: '추천 결정',
+        description: '가격표 변경, usage cap, overage, 모델 라우팅 검토 중 다음 결정을 제안합니다.',
         count: input.monthlyReviewCount,
       },
       {
-        id: 'decision_ledger',
-        label: 'decision ledger',
-        description: 'adopt/hold/reject/export 결정과 당시 snapshot을 보관합니다.',
+        id: 'view_evidence',
+        label: '근거 보기',
+        description: '고객 화면에는 요약 근거만 보여주고, 세부 감사 기록은 관리자 화면에 둡니다.',
         count: input.decisionCount,
       },
       {
-        id: 'report_export',
-        label: 'report export',
-        description: 'CEO/CFO/PM/Developer용 한 장 요약 리포트를 생성합니다.',
+        id: 'draft_rate_card',
+        label: '가격표 초안 만들기',
+        description: '마진을 깨는 고객/기능을 기준으로 가격표 초안을 만듭니다.',
         count: input.reportCount,
       },
       {
-        id: 'alert_settings',
-        label: 'alert settings',
-        description: 'margin breach, retry spike, stale pricing source 알림을 draft로 관리합니다.',
+        id: 'export_pdf',
+        label: 'PDF 만들기',
+        description: '팀과 고객에게 설명할 수 있는 한 장짜리 마진 진단 리포트를 만듭니다.',
         count: null,
       },
     ],

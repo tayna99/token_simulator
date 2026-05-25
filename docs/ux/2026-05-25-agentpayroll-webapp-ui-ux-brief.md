@@ -15,6 +15,10 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 - 기본 persona는 `developer`다.
 - 제품명은 `AgentPayroll`이다.
 - report 첫 CTA는 PDF다.
+- Trust Gate는 숨겨진 보안 기능이 아니라 첫 번째 안심 장치다. 업로드 직후 raw prompt/API key/PII/사용 범위를 먼저 말해 구매 장벽을 낮춘다.
+- 역할별 화면은 하나의 진실, 세 개의 렌즈다. Developer/PM/CEO는 같은 snapshot id와 KPI를 보되 질문과 카드 우선순위만 다르다.
+- PDF는 export 부가기능이 아니라 가치 증명물이다. "대시보드에 머무르게 하기"보다 "대표/고객에게 공유 가능한 리포트"를 흐름의 종착점으로 둔다.
+- 초기 MVP는 billing push보다 decision draft를 판다. connector 실행은 admin readiness의 보조/잠금 섹션으로 낮추고, primary outcome은 Rate Card Draft + human decision이다.
 
 ## 3. 주요 사용자
 
@@ -55,6 +59,20 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 | Optimize+Risk | routing, pricing, benchmark, rate card, risk cards | scenario panel, risk cards, rate card readiness |
 | Decision Log | adopt/reject/hold, report gate, ledger | decision list, export gate, report CTA |
 
+## 6.1 Trust Gate First
+
+Design/Import stage의 첫 성공 순간은 비용 차트가 아니라 "이 데이터로 무엇을 하지 않았는가"를 확인시키는 것이다.
+
+- 필수 안심 문구:
+  - "raw prompt는 수집하지 않았습니다."
+  - "API key 후보는 차단했습니다."
+  - "PII 후보가 있어 매핑 검토가 필요합니다."
+  - "이 데이터는 원가/마진 분석에 필요한 범위로만 사용됩니다."
+- `ready`: 원가/마진 분석으로 진행할 수 있음을 보여준다.
+- `needs_mapping`: PII/plan/customer/revenue 매핑 검토가 필요하며, fake success를 만들지 않는다.
+- `blocked`: usage snapshot, decision history corpus, report artifact로 넘어가지 않는다고 명시한다.
+- 상세 보안/retention 정보는 보조 패널로 두되, 첫 화면은 신뢰와 다음 행동 중심으로 쓴다.
+
 ## 7. Role Projection
 
 같은 snapshot을 쓰되 중앙 콘텐츠 순서가 바뀐다. 숫자는 바뀌면 안 된다.
@@ -65,6 +83,16 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 | PM | feature economics, pricing scenario, customer/plan readiness | low-level debug refs |
 | CEO | margin risk, loss customers, rate card/report/export | detailed trace/debug |
 | Customer audience | accepted facts, public-safe report | internal refs, debug, raw trace |
+
+모든 role header에는 `same snapshot` 배지를 둔다. Developer는 "왜 비용이 늘었는지", PM은 "어떤 기능/플랜이 문제인지", CEO는 "얼마가 새고 어떤 결정을 해야 하는지"를 먼저 묻지만 월 비용, 마진, 고객 수, snapshot id는 동일해야 한다.
+
+## 7.1 PDF와 Decision Draft
+
+- Report CTA의 첫 문구는 "Share board-ready PDF" 계열로 둔다.
+- Report page는 persisted artifact metadata, source decision, content type, 생성 시각을 PDF preview 전후에 보여준다.
+- Rate card의 primary panel은 billing 실행이 아니라 decision draft다.
+- Decision draft에는 가격 변경 이유, 추천 방식, 영향 고객, 예상 마진 개선, 필요한 승인을 포함한다.
+- Stripe/Metronome 실행은 admin의 `Execution deferred`/readiness 영역에 두고, 안전 조건이 모두 충족되기 전까지 secondary locked state로 둔다.
 
 ## 8. 핵심 상태 모델
 

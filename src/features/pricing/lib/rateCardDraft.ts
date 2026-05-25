@@ -35,10 +35,26 @@ export interface RateCardExecutionReadiness {
   billingExternalRef?: string
   billingError?: string
   missing: string[]
+  timeline: Exclude<RateCardExecutionReadinessStatus, 'draft'>[]
 }
 
 function nonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+const RATE_CARD_EXECUTION_TIMELINE: Exclude<RateCardExecutionReadinessStatus, 'draft'>[] = [
+  'connector_not_configured',
+  'blocked',
+  'ready',
+  'pushed_to_billing',
+  'failed',
+]
+
+function readiness(input: Omit<RateCardExecutionReadiness, 'timeline'>): RateCardExecutionReadiness {
+  return {
+    ...input,
+    timeline: RATE_CARD_EXECUTION_TIMELINE,
+  }
 }
 
 export function buildRateCardDraft(input: RateCardDraftInput): RateCardDraft {
@@ -122,36 +138,45 @@ export function buildRateCardExecutionReadiness(input: {
 }): RateCardExecutionReadiness {
   const draft = input.draft
   if (draft.status === 'pushed_to_billing') {
-    return {
+    if (!input.hasLedgerRow) {
+      return readiness({
+        status: 'blocked',
+        billingExecutable: false,
+        billingConnectorId: draft.billingConnectorId,
+        billingExternalRef: draft.billingExternalRef,
+        missing: ['ledger_row'],
+      })
+    }
+    return readiness({
       status: 'pushed_to_billing',
       billingExecutable: false,
       billingConnectorId: draft.billingConnectorId,
       billingExternalRef: draft.billingExternalRef,
       missing: [],
-    }
+    })
   }
   if (draft.status === 'failed') {
-    return {
+    return readiness({
       status: 'failed',
       billingExecutable: false,
       billingConnectorId: draft.billingConnectorId,
       billingError: draft.billingError,
       missing: [],
-    }
+    })
   }
   if (draft.status === 'draft') {
-    return {
+    return readiness({
       status: 'draft',
       billingExecutable: false,
       missing: ['approval'],
-    }
+    })
   }
   if (!draft.billingExecutable || !draft.billingConnectorId) {
-    return {
+    return readiness({
       status: 'connector_not_configured',
       billingExecutable: false,
       missing: ['billing_connector'],
-    }
+    })
   }
 
   const missing = [
@@ -161,10 +186,10 @@ export function buildRateCardExecutionReadiness(input: {
     input.hasLedgerRow ? '' : 'ledger_row',
   ].filter(Boolean)
 
-  return {
+  return readiness({
     status: missing.length > 0 ? 'blocked' : 'ready',
     billingExecutable: missing.length === 0,
     billingConnectorId: draft.billingConnectorId,
     missing,
-  }
+  })
 }

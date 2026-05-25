@@ -10,6 +10,8 @@ import { MODELS, type Model } from '../features/alternatives/data/models'
 import { PRODUCT_NAME } from '../lib/productBrand'
 import { parseUsageCsv, type UsageImportSummary } from '../features/usage/lib/usageImport'
 import { validateUsageIngress, type TrustGateDecision } from '../features/trust/lib/securityMiddleware'
+import { buildOnePageReportArtifact, type OnePageReportArtifactInput } from '../features/report/lib/reportArtifacts'
+import type { DecisionChoice } from '../features/decision-loop/lib/decisionHeader'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { estimateAgentWorkload } from '../features/team-cost/lib/estimateAgentWorkload'
 import { normalizeDecisionRecord, type Decision } from '../features/decision-log/lib/decisionLog'
@@ -22,11 +24,16 @@ import {
 import { createOpenAiEmbeddingProviderFromEnv } from './ai/openAiEmbeddingProvider'
 import {
   SupabaseCheckpointStore,
+  SupabaseDecisionStore,
   SupabasePersistentVectorStore,
   SupabaseReportArtifactStore,
   SupabaseWatchtowerStore,
   createSupabaseClientFromEnv,
   type SupabaseAcceptedFactRecord,
+  type SupabaseFactReviewEventRecord,
+  type SupabaseFactReviewAction,
+  type SupabaseFactReviewStatus,
+  type SupabaseWatchtowerCandidateRecord,
   type SupabaseWatchtowerRunRecord,
 } from './storage/supabaseProductionStore'
 import {
@@ -282,6 +289,9 @@ export interface OfficialUpdatesApiResponse {
   inbox: OfficialUpdatesReviewInbox
   latestRun?: SupabaseWatchtowerRunRecord | null
   acceptedFacts?: SupabaseAcceptedFactRecord[]
+  reviewCandidate?: SupabaseWatchtowerCandidateRecord
+  reviewEvent?: SupabaseFactReviewEventRecord
+  acceptedFact?: SupabaseAcceptedFactRecord
   error?: string
 }
 
@@ -291,6 +301,56 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter(item => typeof item === 'string') : []
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function reportMetrics(value: unknown): Array<{ label: string; value: string }> {
+  return Array.isArray(value)
+    ? value
+      .filter(item => isObject(item) && typeof item.label === 'string' && typeof item.value === 'string')
+      .map(item => ({ label: String(item.label), value: String(item.value) }))
+    : []
+}
+
+function decisionChoice(value: unknown): DecisionChoice | undefined {
+  return value === 'adopt' || value === 'reject' || value === 'hold' ? value : undefined
+}
+
+function reportFirstInputFromBody(body: unknown): OnePageReportArtifactInput | undefined {
+  const reportFirst = isObject(body) && isObject(body.reportFirst) ? body.reportFirst : null
+  if (!reportFirst) return undefined
+  const trust = isObject(reportFirst.trust) ? reportFirst.trust : null
+  const title = stringValue(reportFirst.title)
+  const executiveSummary = stringValue(reportFirst.executiveSummary)
+  const formulaVersion = stringValue(reportFirst.formulaVersion)
+  const providerRegistryVersion = stringValue(reportFirst.providerRegistryVersion)
+  const trustStatus = trust ? stringValue(trust.status) : null
+  const retentionNote = trust ? stringValue(trust.retentionNote) : null
+  if (!title || !executiveSummary || !formulaVersion || !providerRegistryVersion || !trustStatus || !retentionNote) {
+    return undefined
+  }
+
+  return {
+    title,
+    executiveSummary,
+    metrics: reportMetrics(reportFirst.metrics),
+    recommendations: stringArray(reportFirst.recommendations),
+    risks: stringArray(reportFirst.risks),
+    refs: stringArray(reportFirst.refs),
+    trust: {
+      status: trustStatus,
+      dataLimitations: stringArray(trust?.dataLimitations),
+      retentionNote,
+    },
+    formulaVersion,
+    providerRegistryVersion,
+    snapshotVersion: stringValue(reportFirst.snapshotVersion) ?? undefined,
+    decisionRefs: stringArray(reportFirst.decisionRefs),
+    decisionChoice: decisionChoice(reportFirst.decisionChoice),
+  }
 }
 
 function isP1UsageAdapterSource(value: unknown): value is P1UsageAdapterSource {
@@ -356,6 +416,19 @@ function capabilityFromEnv(
   }
 }
 
+function supabasePersistenceCapability(env: Record<string, string | undefined>) {
+  const missingEnv = [
+    ...(!env.SUPABASE_URL && !env.NEXT_PUBLIC_SUPABASE_URL ? ['SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL'] : []),
+    ...(!env.SUPABASE_SERVICE_ROLE_KEY && !env.SUPABASE_SECRET_KEY ? ['SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY'] : []),
+    ...(!env.OPENAI_API_KEY ? ['OPENAI_API_KEY'] : []),
+  ]
+  return {
+    status: missingEnv.length === 0 ? 'provider_llm' as const : 'unavailable' as const,
+    requiredEnv: ['SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY', 'OPENAI_API_KEY'],
+    missingEnv,
+  }
+}
+
 function normalizedWorkspaceId(body: unknown, query: Record<string, string | string[] | undefined> = {}): string | null {
   const raw = isObject(body) && typeof body.workspaceId === 'string'
     ? body.workspaceId
@@ -382,6 +455,21 @@ const RAG_COLLECTIONS: RagCollection[] = [
 
 function isRagCollection(value: unknown): value is RagCollection {
   return typeof value === 'string' && (RAG_COLLECTIONS as string[]).includes(value)
+}
+
+function isFactReviewAction(value: unknown): value is SupabaseFactReviewAction {
+  return value === 'accept' || value === 'reject' || value === 'hold' || value === 'supersede'
+}
+
+function reviewStatusFromMetadata(value: unknown): SupabaseFactReviewStatus | null {
+  if (
+    value === 'needs_review'
+    || value === 'accepted'
+    || value === 'rejected'
+    || value === 'held'
+    || value === 'superseded'
+  ) return value
+  return null
 }
 
 function emptyUsageSummary(errors: string[] = []): UsageImportSummary {
@@ -502,6 +590,7 @@ function emptyReportRun(
   configSnapshotRef: string | null = null,
   usageSnapshotRef: string | null = null,
   workspaceId = 'workspace-demo',
+  reportFirst?: OnePageReportArtifactInput,
 ): ReportRunShell {
   const id = `report-run-${period}`
   const createdAt = new Date().toISOString()
@@ -513,7 +602,7 @@ function emptyReportRun(
     persistence,
     createdAt,
     snapshotRefs,
-    artifacts: buildReportArtifacts({ workspaceId, reportRunId: id, period, decisionIds, snapshotRefs, createdAt }),
+    artifacts: buildReportArtifacts({ workspaceId, reportRunId: id, period, decisionIds, snapshotRefs, createdAt, reportFirst }),
   }
 }
 
@@ -528,8 +617,10 @@ function buildReportArtifacts(input: {
   decisionIds: string[]
   snapshotRefs: ReportRunShell['snapshotRefs']
   createdAt: string
+  reportFirst?: OnePageReportArtifactInput
 }): ReportArtifactRecord[] {
-  const markdown = [
+  const onePage = input.reportFirst ? buildOnePageReportArtifact(input.reportFirst) : null
+  const markdown = onePage?.markdown ?? [
     `# ${input.reportRunId}`,
     '',
     `Period: ${input.period}`,
@@ -544,8 +635,10 @@ function buildReportArtifacts(input: {
     decisionIds: input.decisionIds,
     snapshotRefs: input.snapshotRefs,
     createdAt: input.createdAt,
+    reportFirst: input.reportFirst ?? null,
+    refs: onePage?.refs ?? [],
   }, null, 2)
-  const pdf = ['%PDF-1.4', `% ${PRODUCT_NAME} report artifact ${input.reportRunId}`, markdown, '%%EOF'].join('\n')
+  const pdf = ['%PDF-1.4', `% ${onePage?.title ?? `${PRODUCT_NAME} report artifact ${input.reportRunId}`}`, markdown, '%%EOF'].join('\n')
   const basePath = `/api/reports/${input.reportRunId}/download`
   const rows = [
     { format: 'pdf' as const, contentType: 'application/pdf' as const, body: pdf },
@@ -713,9 +806,66 @@ export async function handleDecisionsApi(
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
 
   const store = contextStore(context)
+  const supabaseClient = contextSupabaseClient(context)
+  const embeddingProvider = createOpenAiEmbeddingProviderFromEnv(contextEnv(context), context.fetcher)
   const key = workspaceKey(workspaceId, 'decisions')
 
   try {
+    if (supabaseClient) {
+      const decisionStore = new SupabaseDecisionStore({ client: supabaseClient, embeddingProvider: embeddingProvider ?? undefined })
+      if (method === 'GET') {
+        const decisions = await decisionStore.list(workspaceId)
+        return {
+          status: 200,
+          body: {
+            ...base,
+            persistence: 'supabase',
+            acceptedCount: decisions.length,
+            decisions,
+            message: 'Decision & Approval Log is persisted in Supabase and indexed into C9 decision_history.',
+          },
+        }
+      }
+
+      if (method === 'DELETE') {
+        const id = isObject(body) && typeof body.id === 'string' ? body.id : queryValue(context.query ?? {}, 'id')
+        if (!id) return { status: 400, body: { ...base, persistence: 'supabase', error: 'decision_id_required' } }
+        await decisionStore.delete({ workspaceId, id })
+        const decisions = await decisionStore.list(workspaceId)
+        return {
+          status: 202,
+          body: {
+            ...base,
+            persistence: 'supabase',
+            acceptedCount: decisions.length,
+            decisions,
+            deleted: true,
+            message: 'Decision removed from Supabase and C9 decision_history.',
+          },
+        }
+      }
+
+      if (method !== 'POST') {
+        return { status: 405, body: { ...base, persistence: 'supabase', error: 'Method not allowed' } }
+      }
+      if (!embeddingProvider) {
+        return { status: 503, body: { ...base, persistence: 'supabase', error: 'embedding_provider_not_configured' } }
+      }
+
+      const decisions = coerceDecisions(isObject(body) ? body.decisions : [])
+      await decisionStore.saveMany(workspaceId, decisions)
+      return {
+        status: 202,
+        body: {
+          ...base,
+          persistence: 'supabase',
+          acceptedCount: decisions.length,
+          decisions,
+          message: 'Decision & Approval Log is persisted in Supabase and indexed into C9 decision_history.',
+        },
+      }
+    }
+
     if (method === 'GET') {
       const decisions = coerceDecisions(await store.getJson<unknown[]>(key))
       return { status: 200, body: { ...base, persistence: store.persistence, acceptedCount: decisions.length, decisions } }
@@ -786,7 +936,7 @@ export async function handleRuntimeStatusApi(
 ): Promise<ApiResult<RuntimeStatusApiResponse>> {
   const env = contextEnv(context)
   const connector = (requiredEnv: string[]) => capabilityFromEnv(env, requiredEnv, 'connector_not_configured')
-  const persistenceCapability = capabilityFromEnv(env, ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY'])
+  const persistenceCapability = supabasePersistenceCapability(env)
   const body: RuntimeStatusApiResponse = {
     productName: PRODUCT_NAME,
     agentRuntime: capabilityFromEnv(env, ['OPENAI_API_KEY', 'AGENT_SERVICE_URL']),
@@ -1135,25 +1285,83 @@ function officialDocsEvidenceFromResults(input: {
   }
 }
 
-async function retrieveOfficialDocsVectorStoreEvidence(input: {
+function legacyKindFromCollection(collection: P1VectorRagKind): P1RagEvidenceResult['kind'] {
+  return collection === 'benchmark_evidence' ? 'benchmark' : collection
+}
+
+function evidenceFromVectorResults(input: {
+  collection: P1VectorRagKind
+  results: VectorSearchResult[]
+  structuredFactRefs: string[]
+}): P1RagEvidenceResult {
+  const records = input.results.map(result => ({
+    id: result.chunk.id,
+    text: result.chunk.text,
+    sourceUrl: result.chunk.sourceUrl,
+    refs: result.chunk.refs,
+  }))
+  const metadataWarnings = input.results
+    .map(result => reviewStatusFromMetadata((result.chunk.metadata as { reviewStatus?: unknown }).reviewStatus))
+    .filter((status): status is SupabaseFactReviewStatus => Boolean(status))
+    .filter(status => status === 'needs_review' || status === 'rejected' || status === 'superseded')
+  const refs = Array.from(new Set([
+    ...input.results.flatMap(result => result.chunk.refs),
+    ...(input.collection === 'official_docs' ? input.structuredFactRefs : []),
+  ]))
+  const unavailableWarning = input.collection === 'official_docs'
+    ? 'official_docs_unavailable'
+    : input.collection === 'benchmark_evidence'
+      ? 'baseline_unavailable'
+      : null
+  const warnings = Array.from(new Set([
+    ...(records.length === 0 && unavailableWarning ? [unavailableWarning] : []),
+    ...metadataWarnings,
+  ]))
+
+  return {
+    kind: legacyKindFromCollection(input.collection),
+    found: records.length > 0,
+    refs,
+    mayOverrideFacts: false,
+    records,
+    scores: input.results.map(result => result.score),
+    warnings,
+  }
+}
+
+async function retrieveProductionVectorEvidence(input: {
   query: string
-  vectorStore: VectorStore
+  context: P1ApiContext
+  workspaceId: string
   structuredFactRefs: string[]
   topK?: number
 }): Promise<{
-  evidence: P1RagEvidenceResult
+  evidence: Partial<Record<P1VectorRagKind, P1RagEvidenceResult>>
   contextBlocks: RagContextBlock[]
 }> {
-  const results = await input.vectorStore.search({
-    query: input.query,
-    topK: input.topK,
-    filter: { officialSourceTrust: 'official_pricing' },
-  })
-  return officialDocsEvidenceFromResults({
-    results,
-    structuredFactRefs: input.structuredFactRefs,
-    topK: input.topK,
-  })
+  const evidence: Partial<Record<P1VectorRagKind, P1RagEvidenceResult>> = {}
+  const contextBlocks: RagContextBlock[] = []
+  for (const collection of RAG_COLLECTIONS) {
+    const store = createProductionVectorStore(input.context, input.workspaceId, collection)
+    if (!store) continue
+    const results = await store.search({
+      query: input.query,
+      topK: input.topK,
+      filter: collection === 'official_docs' ? { officialSourceTrust: 'official_pricing' } : undefined,
+    })
+    contextBlocks.push(...buildRagContextBlocks(results, {
+      maxChunks: input.topK ?? 5,
+      maxCharsPerChunk: 1600,
+    }))
+    if (collection === 'official_docs' || collection === 'benchmark_evidence' || collection === 'decision_history') {
+      evidence[collection] = evidenceFromVectorResults({
+        collection,
+        results,
+        structuredFactRefs: input.structuredFactRefs,
+      })
+    }
+  }
+  return { evidence, contextBlocks }
 }
 
 function coerceExternalActions(value: unknown): P1ExternalAction[] {
@@ -1179,6 +1387,83 @@ function coerceExternalActionLedger(value: unknown): P1ExternalActionLedgerEntry
     : []
 }
 
+function externalActionStatus(value: unknown): P1ExternalAction['status'] {
+  return value === 'approved' || value === 'rejected' || value === 'executed' ? value : 'draft'
+}
+
+async function listSupabaseExternalActions(input: {
+  client: ReturnType<typeof contextSupabaseClient>
+  workspaceId: string
+}): Promise<{ actions: P1ExternalAction[]; ledger: P1ExternalActionLedgerEntry[] }> {
+  if (!input.client) return { actions: [], ledger: [] }
+  const [actionRows, ledgerRows] = await Promise.all([
+    input.client.select<Record<string, unknown>>('external_actions', {
+      workspace_id: `eq.${input.workspaceId}`,
+      select: '*',
+      order: 'created_at.desc',
+    }),
+    input.client.select<Record<string, unknown>>('external_action_ledger', {
+      workspace_id: `eq.${input.workspaceId}`,
+      select: '*',
+      order: 'executed_at.desc',
+    }),
+  ])
+  const actions = actionRows
+    .filter(row => typeof row.id === 'string' && isP1ExternalActionKind(row.kind))
+    .map(row => {
+      const payload = isObject(row.payload) ? row.payload : {}
+      const rollbackMetadata = isObject(row.rollback_metadata) ? row.rollback_metadata : {}
+      const approval = isObject(row.approval) ? row.approval : null
+      return {
+        id: String(row.id),
+        workspaceId: String(row.workspace_id ?? input.workspaceId),
+        kind: row.kind as P1ExternalActionKind,
+        title: typeof payload.title === 'string' ? payload.title : String(row.id),
+        status: externalActionStatus(row.status),
+        requiresHumanApproval: true as const,
+        payload,
+        sourceRefs: stringArray(payload.sourceRefs),
+        rollbackRef: typeof rollbackMetadata.rollbackRef === 'string'
+          ? rollbackMetadata.rollbackRef
+          : typeof payload.rollbackRef === 'string'
+            ? payload.rollbackRef
+            : undefined,
+        createdAt: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
+        approval: approval
+          && typeof approval.approver === 'string'
+          && typeof approval.reason === 'string'
+          ? {
+            approver: approval.approver,
+            reason: approval.reason,
+            decidedAt: typeof approval.decidedAt === 'string' ? approval.decidedAt : '',
+          }
+          : undefined,
+      }
+    })
+  const ledger = ledgerRows
+    .filter(row => typeof row.id === 'string' && isP1ExternalConnectorId(row.connector_id) && externalConnectorMode(row.connector_mode))
+    .map(row => {
+      const payload = isObject(row.ledger_payload) ? row.ledger_payload : {}
+      return {
+        id: String(row.id),
+        workspaceId: String(row.workspace_id ?? input.workspaceId),
+        actionId: String(row.action_id ?? ''),
+        kind: isP1ExternalActionKind(payload.kind) ? payload.kind : 'billing_change',
+        status: 'ledgered' as const,
+        connectorMode: externalConnectorMode(row.connector_mode) as P1ExternalConnectorMode,
+        connectorId: row.connector_id as P1ExternalConnectorId,
+        idempotencyKey: String(row.idempotency_key ?? ''),
+        externalRef: typeof row.external_ref === 'string' ? row.external_ref : undefined,
+        rollbackMetadata: isObject(row.rollback_metadata) ? row.rollback_metadata : {},
+        sourceRefs: stringArray(payload.sourceRefs),
+        approvedBy: typeof payload.approvedBy === 'string' ? payload.approvedBy : 'unknown',
+        approvedAt: typeof payload.approvedAt === 'string' ? payload.approvedAt : '',
+        executedAt: typeof row.executed_at === 'string' ? row.executed_at : new Date().toISOString(),
+      }
+    })
+  return { actions, ledger }
+}
+
 function externalActionResponse(input: Partial<P1ExternalActionsApiResponse> = {}): P1ExternalActionsApiResponse {
   return {
     persistence: input.persistence ?? 'not_configured',
@@ -1202,31 +1487,39 @@ export async function handleP1RagEvidenceApi(
     evidence: emptyRagEvidence(),
   }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
-  if (method !== 'POST') return { status: 405, body: { ...base, error: 'Method not allowed' } }
-  if (!isObject(body) || typeof body.query !== 'string') {
+  if (method !== 'POST' && method !== 'GET') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  const requestBody = isObject(body) ? body : {}
+  const ragQuery = typeof requestBody.query === 'string'
+    ? requestBody.query
+    : queryValue(context.query ?? {}, 'query')
+  const topK = typeof requestBody.topK === 'number'
+    ? requestBody.topK
+    : Number(queryValue(context.query ?? {}, 'topK'))
+  const normalizedTopK = Number.isFinite(topK) && topK > 0 ? topK : undefined
+  if (!ragQuery) {
     return { status: 400, body: { ...base, error: 'invalid_rag_query' } }
   }
 
-  const structuredFactRefs = stringArray(body.structuredFactRefs)
+  const structuredFactRefs = stringArray(requestBody.structuredFactRefs)
   const store = contextStore(context)
   const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
-  const previewRagFallback = isObject(body) && body.runtimeMode === 'preview'
+  const previewRagFallback = requestBody.runtimeMode === 'preview'
   if (!productionVectorStore && store.persistence !== 'kv' && !previewRagFallback) {
     return { status: 503, body: { ...base, error: 'storage_not_configured' } }
   }
   const evidence = retrieveP1VectorRagEvidence({
-    query: body.query,
-    collections: ragCollections(body.collections),
+    query: ragQuery,
+    collections: ragCollections(requestBody.collections),
     structuredFactRefs,
-    topK: typeof body.topK === 'number' ? body.topK : undefined,
+    topK: normalizedTopK,
   })
-  const parsedCorpusCollections = corpusCollections(body.corpusCollections)
+  const parsedCorpusCollections = corpusCollections(requestBody.corpusCollections)
   const corpusEvidence = hasCorpusCollections(parsedCorpusCollections)
     ? retrieveCorpusEvidence({
-        query: body.query,
-        agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+        query: ragQuery,
+        agentId: typeof requestBody.agentId === 'string' ? requestBody.agentId : undefined,
         collections: parsedCorpusCollections,
-        topK: typeof body.topK === 'number' ? body.topK : undefined,
+        topK: normalizedTopK,
       })
     : undefined
   if (corpusEvidence) {
@@ -1237,17 +1530,22 @@ export async function handleP1RagEvidenceApi(
     : []
   let contextBlocks: RagContextBlock[] = []
   if (productionVectorStore) {
-    const officialDocs = await retrieveOfficialDocsVectorStoreEvidence({
-      query: body.query,
-      vectorStore: productionVectorStore,
+    const productionEvidence = await retrieveProductionVectorEvidence({
+      query: ragQuery,
+      context,
+      workspaceId,
       structuredFactRefs,
-      topK: typeof body.topK === 'number' ? body.topK : undefined,
+      topK: normalizedTopK,
     })
-    evidence.results.official_docs = officialDocs.evidence
+    for (const collection of ['official_docs', 'benchmark_evidence', 'decision_history'] as const) {
+      if (productionEvidence.evidence[collection]) {
+        evidence.results[collection] = productionEvidence.evidence[collection]
+      }
+    }
     evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
-    contextBlocks = officialDocs.contextBlocks
+    contextBlocks = productionEvidence.contextBlocks
   } else {
-    const requestOfficialDocChunks = apiDocChunks(body.officialDocChunks)
+    const requestOfficialDocChunks = apiDocChunks(requestBody.officialDocChunks)
     if (store.persistence !== 'kv' && !previewRagFallback && requestOfficialDocChunks.length > 0) {
       return { status: 503, body: { ...base, error: 'storage_not_configured' } }
     }
@@ -1256,10 +1554,10 @@ export async function handleP1RagEvidenceApi(
       : requestOfficialDocChunks
     if (officialDocChunks.length > 0) {
       const officialDocs = await retrieveOfficialDocsVectorEvidence({
-        query: body.query,
+        query: ragQuery,
         chunks: officialDocChunks,
         structuredFactRefs,
-        topK: typeof body.topK === 'number' ? body.topK : undefined,
+        topK: normalizedTopK,
       })
       evidence.results.official_docs = officialDocs.evidence
       evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
@@ -1269,7 +1567,7 @@ export async function handleP1RagEvidenceApi(
 
   if (store.persistence === 'kv') {
     await store.setJson(workspaceKey(workspaceId, 'p1-rag-last-query'), {
-      query: body.query,
+      query: ragQuery,
       refs: Array.from(new Set([
         ...Object.values(evidence.results).flatMap(result => result.refs),
         ...(corpusEvidence ? Object.values(corpusEvidence.results).flatMap(result => result.refs) : []),
@@ -1286,7 +1584,7 @@ export async function handleP1RagEvidenceApi(
       evidence,
       corpusEvidence,
       contextBlocks,
-      metadata: { workspaceId, query: body.query },
+      metadata: { workspaceId, query: ragQuery },
     },
   }
 }
@@ -1408,13 +1706,53 @@ export async function handleOfficialUpdatesApi(
     acceptedFacts: [],
   }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
-  if (method !== 'GET') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  if (method !== 'GET' && method !== 'POST') return { status: 405, body: { ...base, error: 'Method not allowed' } }
 
   const client = contextSupabaseClient(context)
   if (!client) return { status: 503, body: { ...base, error: 'storage_not_configured' } }
 
   try {
     const store = new SupabaseWatchtowerStore(client)
+    if (method === 'POST') {
+      if (!isObject(_body)) return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_review_request' } }
+      if (typeof _body.candidateId !== 'string' || !_body.candidateId.trim()) {
+        return { status: 400, body: { ...base, persistence: 'supabase', error: 'candidate_id_required' } }
+      }
+      if (!isFactReviewAction(_body.action)) {
+        return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_review_action' } }
+      }
+      if (typeof _body.reviewer !== 'string' || !_body.reviewer.trim()) {
+        return { status: 400, body: { ...base, persistence: 'supabase', error: 'reviewer_required' } }
+      }
+      if (typeof _body.reason !== 'string' || !_body.reason.trim()) {
+        return { status: 400, body: { ...base, persistence: 'supabase', error: 'review_reason_required' } }
+      }
+      const confidence = _body.confidence === 'medium' || _body.confidence === 'low' || _body.confidence === 'high'
+        ? _body.confidence
+        : undefined
+      const review = await store.reviewCandidate({
+        workspaceId,
+        candidateId: _body.candidateId,
+        action: _body.action,
+        reviewer: _body.reviewer,
+        reason: _body.reason,
+        confidence,
+        factPayload: isObject(_body.factPayload) ? _body.factPayload : undefined,
+      })
+      return {
+        status: 202,
+        body: {
+          persistence: 'supabase',
+          inbox: emptyInbox,
+          latestRun: null,
+          acceptedFacts: review.acceptedFact ? [review.acceptedFact] : [],
+          reviewCandidate: review.candidate,
+          reviewEvent: review.event,
+          acceptedFact: review.acceptedFact,
+        },
+      }
+    }
+
     const [latestRun, acceptedFacts] = await Promise.all([
       store.latestRun(workspaceId),
       store.acceptedFacts(workspaceId),
@@ -1454,10 +1792,16 @@ export async function handleP1ExternalActionsApi(
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
 
   const store = contextStore(context)
+  const supabaseClient = contextSupabaseClient(context)
   const actionsKey = workspaceKey(workspaceId, 'p1-external-actions')
   const ledgerKey = workspaceKey(workspaceId, 'p1-external-action-ledger')
 
   try {
+    if (supabaseClient && method === 'GET') {
+      const { actions, ledger } = await listSupabaseExternalActions({ client: supabaseClient, workspaceId })
+      return { status: 200, body: externalActionResponse({ persistence: 'supabase', actions, ledger }) }
+    }
+
     const actions = coerceExternalActions(await store.getJson<unknown[]>(actionsKey))
     const ledger = coerceExternalActionLedger(await store.getJson<unknown[]>(ledgerKey))
 
@@ -1798,7 +2142,7 @@ export async function handleReportsApi(
       const decisionIds = isObject(body) ? stringArray(body.decisionIds) : []
       const configSnapshotRef = isObject(body) && typeof body.configSnapshotRef === 'string' ? body.configSnapshotRef : null
       const usageSnapshotRef = isObject(body) && typeof body.usageSnapshotRef === 'string' ? body.usageSnapshotRef : null
-      const reportRun = emptyReportRun(period, decisionIds, 'supabase', configSnapshotRef, usageSnapshotRef, workspaceId)
+      const reportRun = emptyReportRun(period, decisionIds, 'supabase', configSnapshotRef, usageSnapshotRef, workspaceId, reportFirstInputFromBody(body))
       await reportArtifactStore.saveMany(reportRun.artifacts)
       const reportRuns = [reportRun, ...groupReportRuns(await reportArtifactStore.list({ workspaceId })).filter(run => run.id !== reportRun.id)]
       return { status: 202, body: { persistence: 'supabase', reportRun, reportRuns } }
@@ -1817,7 +2161,7 @@ export async function handleReportsApi(
     const decisionIds = isObject(body) ? stringArray(body.decisionIds) : []
     const configSnapshotRef = isObject(body) && typeof body.configSnapshotRef === 'string' ? body.configSnapshotRef : null
     const usageSnapshotRef = isObject(body) && typeof body.usageSnapshotRef === 'string' ? body.usageSnapshotRef : null
-    const reportRun = emptyReportRun(period, decisionIds, store.persistence, configSnapshotRef, usageSnapshotRef, workspaceId)
+    const reportRun = emptyReportRun(period, decisionIds, store.persistence, configSnapshotRef, usageSnapshotRef, workspaceId, reportFirstInputFromBody(body))
     const existing = await store.getJson<ReportRunShell[]>(key) ?? []
     const reportRuns = [reportRun, ...existing]
     await store.setJson(key, reportRuns)

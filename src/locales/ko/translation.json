@@ -264,6 +264,25 @@
     "inputTokens": "입력 토큰",
     "outputTokens": "출력 토큰"
   },
+  "trustCheck": {
+    "title": "신뢰 점검",
+    "empty": "사용량 데이터를 업로드하거나 샘플을 불러오면 파일 안전성, 스키마 상태, 분석 가능 범위를 먼저 확인합니다.",
+    "policy": "데이터 수집 정책: raw prompt / PII는 기본 수집하지 않음",
+    "anonymization": "익명화",
+    "snapshotAllowed": "스냅샷 허용",
+    "retention": "보관",
+    "yes": "예",
+    "no": "아니요",
+    "availableTitle": "지금 가능한 분석",
+    "mappingTitle": "정확도를 높이는 매핑",
+    "deferredTitle": "빠진 컬럼 때문에 보류된 판단",
+    "emptyAvailable": "유효한 사용량 파일을 불러오기 전에는 분석을 시작하지 않습니다.",
+    "emptyMapping": "핵심 매핑이 모두 있습니다.",
+    "emptyMappingWaiting": "가져온 뒤 필요한 매핑을 보여줍니다.",
+    "emptyDeferred": "보류된 판단이 없습니다.",
+    "emptyDeferredWaiting": "가져온 뒤 보류된 판단을 보여줍니다.",
+    "warnings": "경고"
+  },
   "unitEconomics": {
     "eyebrow": "가격/마진",
     "title": "기능별 원가와 마진",

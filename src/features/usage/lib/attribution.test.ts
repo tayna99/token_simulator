@@ -74,6 +74,10 @@ describe('rollupUsageByAxis', () => {
     const result = rollupUsageByAxis(ROWS, 'plan')
 
     expect(result.missingCount).toBe(1)
+    expect(result.mappedCount).toBe(2)
+    expect(result.unattributedCostUsd).toBe(10)
+    expect(result.coveragePct).toBeCloseTo(2 / 3)
+    expect(result.costCoveragePct).toBeCloseTo(30 / 40)
     expect(result.rows.map(row => row.key)).toEqual(['pro'])
     expect(result.rows[0].requestCount).toBe(2)
   })

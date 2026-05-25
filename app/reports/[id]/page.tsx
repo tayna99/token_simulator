@@ -37,8 +37,32 @@ export default async function ReportPage({
         {artifact && (
           <article className="mt-6 rounded-wds border border-line-neutral bg-fill-alternative p-4">
             <a className="mb-4 inline-flex rounded-wds bg-primary-normal px-4 py-2 text-sm font-semibold text-white" href={pdfDownloadPath ?? artifact.downloadPath}>
-              Download PDF
+              Share board-ready PDF
             </a>
+            <section className="mb-4 rounded-wds border border-primary-normal/20 bg-surface-normal p-3 text-sm">
+              <p className="text-xs font-semibold uppercase text-primary-normal">Report proof</p>
+              <p className="mt-1 text-label-neutral">
+                This page renders a persisted artifact only. It does not generate a fallback report when storage is unavailable.
+              </p>
+              <dl className="mt-3 grid gap-2 text-xs text-label-alternative sm:grid-cols-2">
+                <div>
+                  <dt className="font-semibold">Workspace</dt>
+                  <dd translate="no">{workspaceId}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold">Report run</dt>
+                  <dd translate="no">{artifact.reportRunId}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold">Format</dt>
+                  <dd translate="no">{artifact.format}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold">Created</dt>
+                  <dd translate="no">{artifact.createdAt}</dd>
+                </div>
+              </dl>
+            </section>
             <p className="text-xs text-label-alternative" translate="no">{artifact.contentType}</p>
             <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-label-normal">{artifact.body}</pre>
           </article>

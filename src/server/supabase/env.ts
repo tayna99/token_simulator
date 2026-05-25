@@ -1,11 +1,13 @@
 export interface SupabaseBrowserEnv {
   NEXT_PUBLIC_SUPABASE_URL?: string
   NEXT_PUBLIC_SUPABASE_ANON_KEY?: string
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string
 }
 
 export interface SupabaseServerEnv extends SupabaseBrowserEnv {
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_SECRET_KEY?: string
 }
 
 export function runtimeEnv(): SupabaseServerEnv {
@@ -13,9 +15,15 @@ export function runtimeEnv(): SupabaseServerEnv {
 }
 
 export function hasBrowserSupabaseEnv(env: SupabaseBrowserEnv = runtimeEnv()): boolean {
-  return Boolean(env.NEXT_PUBLIC_SUPABASE_URL?.trim() && env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())
+  return Boolean(
+    env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    && (env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()),
+  )
 }
 
 export function hasServiceSupabaseEnv(env: SupabaseServerEnv = runtimeEnv()): boolean {
-  return Boolean(env.SUPABASE_URL?.trim() && env.SUPABASE_SERVICE_ROLE_KEY?.trim())
+  return Boolean(
+    (env.SUPABASE_URL?.trim() || env.NEXT_PUBLIC_SUPABASE_URL?.trim())
+    && (env.SUPABASE_SERVICE_ROLE_KEY?.trim() || env.SUPABASE_SECRET_KEY?.trim()),
+  )
 }

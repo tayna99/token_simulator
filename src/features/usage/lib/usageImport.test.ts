@@ -83,6 +83,12 @@ describe('parseUsageCsv', () => {
     const result = parseUsageCsv(csv, MODELS)
 
     expect(result.importHealthReport!.status).toBe('needs_mapping')
+    expect(result.analysisReadiness!.status).toBe('needs_mapping')
+    expect(result.analysisReadiness!.revenueBasis).toBe('none')
+    expect(result.analysisReadiness!.availableAnalyses.map(item => item.id)).toContain('feature_cost')
+    expect(result.analysisReadiness!.availableAnalyses.map(item => item.id)).toContain('model_cost')
+    expect(result.analysisReadiness!.mappingNeeds.map(item => item.id)).toContain('customer_id')
+    expect(result.analysisReadiness!.deferredJudgments.map(item => item.id)).toContain('loss_customer')
     expect(result.importHealthReport!.missingDimensionCounts).toMatchObject({
       customer: 1,
       plan: 1,
@@ -113,5 +119,20 @@ describe('parseUsageCsv', () => {
     expect(result.trustInspection?.allowedForSnapshot).toBe(false)
     expect(result.trustInspection?.warnings).toContain('raw_prompt_detected')
     expect(result.trustInspection?.warnings).toContain('api_key_candidate_detected')
+    expect(result.analysisReadiness?.status).toBe('blocked')
+    expect(result.analysisReadiness?.availableAnalyses).toEqual([])
+  })
+
+  it('marks CSV revenue columns as the revenue basis for margin judgments', () => {
+    const csv = [
+      'customer_id,plan_id,feature,model,session_id,agent_run_id,input_tokens,output_tokens,revenue',
+      'cust_001,pro,rag_chat,claude-sonnet-4.6,sess_001,run_001,1000,500,29',
+    ].join('\n')
+
+    const result = parseUsageCsv(csv, MODELS)
+
+    expect(result.analysisReadiness?.status).toBe('ready')
+    expect(result.analysisReadiness?.revenueBasis).toBe('csv_columns')
+    expect(result.analysisReadiness?.deferredJudgments).toEqual([])
   })
 })

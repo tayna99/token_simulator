@@ -53,20 +53,20 @@ describe('p1OperatingSystem', () => {
       reportCount: 1,
     })
 
-    expect(dashboard.heroTitle).toBe('내 AI 팀 비용/마진을 5분 안에 보기')
+    expect(dashboard.heroTitle).toBe('AI 기능 때문에 손해 보는 고객을 찾으세요')
     expect(dashboard.ctas.map(cta => cta.id)).toEqual([
-      'run_sparkclaw_sample',
       'upload_usage_export',
       'open_existing_workspace',
+      'run_sparkclaw_sample',
     ])
-    expect(dashboard.ctas[0].label).toBe('1인 창업자 샘플 실행')
+    expect(dashboard.ctas[0].label).toBe('사용량 CSV 업로드')
     expect(dashboard.sections.map(section => section.id)).toEqual([
-      'workspace_home',
-      'upload_history',
-      'monthly_review_history',
-      'decision_ledger',
-      'report_export',
-      'alert_settings',
+      'top_margin_leak',
+      'margin_breaking_feature',
+      'recommended_decision',
+      'view_evidence',
+      'draft_rate_card',
+      'export_pdf',
     ])
   })
 

@@ -6,6 +6,8 @@ import { Button, Field, MetricTile } from '../../../../shared/ui/primitives'
 import { fmtCurrency, fmtTokens } from '../../../../lib/format'
 import { SPARK_CLAW_SAMPLE_CSV } from '../../data/sparkClawSample'
 import { ImportTrustCheckPanel } from '../../../trust/components/ImportTrustCheckPanel'
+import { TrustAssurancePanel } from '../../../trust/components/TrustAssurancePanel'
+import type { AnalysisReadinessReport } from '../../lib/analysisReadiness'
 import type { TrustInspectionResult } from '../../../trust/lib/securityMiddleware'
 
 const SAMPLE_USAGE_CSV = [
@@ -27,10 +29,12 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
   const [rawCsv, setRawCsv] = useState(SAMPLE_USAGE_CSV)
   const [error, setError] = useState('')
   const [localTrustInspection, setLocalTrustInspection] = useState<TrustInspectionResult | null>(null)
+  const [localReadiness, setLocalReadiness] = useState<AnalysisReadinessReport | null>(null)
 
   const applyCsv = () => {
     const summary = parseUsageCsv(rawCsv, MODELS)
     setLocalTrustInspection(summary.trustInspection ?? null)
+    setLocalReadiness(summary.analysisReadiness ?? null)
     if (summary.errors.length > 0 || summary.requestCount === 0) {
       setError(summary.errors[0] ?? t('usageImport.error'))
       return
@@ -45,9 +49,10 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
   }
 
   const applySparkClawSample = () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS, { revenueBasis: 'sample_fixture' })
     setRawCsv(SPARK_CLAW_SAMPLE_CSV)
     setLocalTrustInspection(summary.trustInspection ?? null)
+    setLocalReadiness(summary.analysisReadiness ?? null)
     setError('')
     onImport(summary)
     onSparkClawDemo?.(summary)
@@ -66,6 +71,8 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
         <h3 className="text-sm font-semibold text-label-normal">{t('usageImport.title')}</h3>
         <p className="text-xs leading-relaxed text-label-alternative">{t('usageImport.description')}</p>
       </div>
+
+      <TrustAssurancePanel result={importedSummary?.trustInspection ?? localTrustInspection} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-3">
@@ -100,7 +107,10 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
           </div>
           {error && <p className="text-xs text-status-negative">{error}</p>}
           <p className="text-xs text-label-alternative">{t('usageImport.noManualTokens')}</p>
-          <ImportTrustCheckPanel result={importedSummary?.trustInspection ?? localTrustInspection} />
+          <ImportTrustCheckPanel
+            result={importedSummary?.trustInspection ?? localTrustInspection}
+            readiness={importedSummary?.analysisReadiness ?? localReadiness}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">

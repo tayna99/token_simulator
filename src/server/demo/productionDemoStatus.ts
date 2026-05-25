@@ -22,28 +22,35 @@ export interface ProductionDemoStatusStore {
   hasWatchtowerRun(input: { workspaceId: string }): Promise<boolean>
   hasRagChunks(input: { workspaceId: string }): Promise<boolean>
   hasReportArtifact(input: { workspaceId: string }): Promise<boolean>
+  hasConnectorLedger(input: { workspaceId: string }): Promise<boolean>
 }
 
 export interface ProductionDemoEnv {
   NEXT_PUBLIC_SUPABASE_URL?: string
   NEXT_PUBLIC_SUPABASE_ANON_KEY?: string
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_SECRET_KEY?: string
   AGENT_SERVICE_URL?: string
 }
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-const REQUIRED_ENV: Array<keyof ProductionDemoEnv> = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'AGENT_SERVICE_URL',
-]
-
 function missingEnv(env: ProductionDemoEnv): string[] {
-  return REQUIRED_ENV.filter(key => !env[key]?.trim())
+  return [
+    ...(!env.NEXT_PUBLIC_SUPABASE_URL?.trim() ? ['NEXT_PUBLIC_SUPABASE_URL'] : []),
+    ...(!env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() && !env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
+      ? ['NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY']
+      : []),
+    ...(!env.SUPABASE_URL?.trim() && !env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+      ? ['SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL']
+      : []),
+    ...(!env.SUPABASE_SERVICE_ROLE_KEY?.trim() && !env.SUPABASE_SECRET_KEY?.trim()
+      ? ['SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY']
+      : []),
+    ...(!env.AGENT_SERVICE_URL?.trim() ? ['AGENT_SERVICE_URL'] : []),
+  ]
 }
 
 function connected(): ProductionDemoCheck {
@@ -87,6 +94,7 @@ export function createUnavailableProductionDemoStatusStore(): ProductionDemoStat
     hasWatchtowerRun: missing,
     hasRagChunks: missing,
     hasReportArtifact: missing,
+    hasConnectorLedger: missing,
   }
 }
 
@@ -130,6 +138,9 @@ export function createSupabaseProductionDemoStatusStore(client: SupabaseClient):
     },
     hasReportArtifact(input) {
       return hasRows('report_artifacts', { workspace_id: `eq.${input.workspaceId}` })
+    },
+    hasConnectorLedger(input) {
+      return hasRows('external_action_ledger', { workspace_id: `eq.${input.workspaceId}` })
     },
   }
 }
@@ -194,6 +205,10 @@ export async function checkProductionDemoStatus(input: {
   checks.reportArtifact = await booleanCheck(
     () => input.store.hasReportArtifact({ workspaceId: input.workspaceId }),
     'missing_report_artifact',
+  )
+  checks.connectorLedger = await booleanCheck(
+    () => input.store.hasConnectorLedger({ workspaceId: input.workspaceId }),
+    'missing_connector_ledger',
   )
   checks.agentService = await agentServiceCheck(input.env, input.fetcher ?? fetch)
 

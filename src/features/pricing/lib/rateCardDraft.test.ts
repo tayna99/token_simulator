@@ -117,4 +117,45 @@ describe('buildRateCardDraft', () => {
       hasLedgerRow: true,
     })).toMatchObject({ status: 'ready', billingExecutable: true, billingConnectorId: 'metronome' })
   })
+
+  it('requires ledger proof before a pushed billing state is surfaced as pushed_to_billing', () => {
+    const draft = buildRateCardDraft({
+      policyType: 'usage_cap',
+      includedCredits: 2500,
+      overagePricePerRequest: 0.08,
+      capUsdPerCustomer: 149,
+      affectedCustomerCount: 7,
+      marginBasisRefs: ['tool:margin.plan.pro'],
+    })
+    const approved = approveRateCardDraft(draft, {
+      approvedBy: 'owner@example.com',
+      billingConnectorConfigured: true,
+      billingConnectorId: 'stripe_billing',
+    })
+    const pushed = markRateCardPushedToBilling(approved, {
+      connectorId: 'stripe_billing',
+      externalRef: 'stripe:price_123',
+      pushedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(buildRateCardExecutionReadiness({
+      draft: pushed,
+      hasLedgerRow: false,
+      hasIdempotencyKey: true,
+      hasRollbackMetadata: true,
+    })).toMatchObject({ status: 'blocked', missing: ['ledger_row'] })
+    expect(buildRateCardExecutionReadiness({
+      draft: pushed,
+      hasLedgerRow: true,
+      hasIdempotencyKey: true,
+      hasRollbackMetadata: true,
+    })).toMatchObject({ status: 'pushed_to_billing', billingExternalRef: 'stripe:price_123' })
+    expect(buildRateCardExecutionReadiness({ draft }).timeline).toEqual([
+      'connector_not_configured',
+      'blocked',
+      'ready',
+      'pushed_to_billing',
+      'failed',
+    ])
+  })
 })

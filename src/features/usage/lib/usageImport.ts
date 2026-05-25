@@ -1,6 +1,11 @@
 import { calculateCost, calculateMultimodalScenario } from '../../../lib/calculator'
 import { isCostCalculableModel, type Model } from '../../../data/models'
 import { inspectUsageImportSecurity, type TrustInspectionResult } from '../../trust/lib/securityMiddleware'
+import {
+  buildAnalysisReadinessReport,
+  type AnalysisReadinessReport,
+  type RevenueBasis,
+} from './analysisReadiness'
 
 export interface UsageImportRow {
   timestamp: string | null
@@ -77,6 +82,11 @@ export interface UsageImportSummary {
   importHealthReport?: UsageImportHealthReport
   schemaMappingProfile?: UsageSchemaMappingProfile
   trustInspection?: TrustInspectionResult
+  analysisReadiness?: AnalysisReadinessReport
+}
+
+export interface ParseUsageCsvOptions {
+  revenueBasis?: RevenueBasis
 }
 
 const FIELD_KEYS = {
@@ -155,6 +165,11 @@ function mappingProfile(headers: string[]): UsageSchemaMappingProfile {
       ]),
     ) as UsageSchemaMappingProfile['columns'],
   }
+}
+
+function revenueBasisFrom(headers: string[], explicitBasis?: RevenueBasis): RevenueBasis {
+  if (explicitBasis) return explicitBasis
+  return headers.includes('revenue') || headers.includes('subscription_plan_price') ? 'csv_columns' : 'none'
 }
 
 function emptyMissingDimensionCounts(): Record<UsageAttributionDimension, number> {
@@ -252,7 +267,7 @@ function percentile(values: number[], ratio: number): number {
   return sorted[Math.min(sorted.length - 1, Math.max(0, index))]
 }
 
-export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSummary {
+export function parseUsageCsv(rawCsv: string, models: Model[], options: ParseUsageCsvOptions = {}): UsageImportSummary {
   const trustInspection = inspectUsageImportSecurity({ filename: 'inline.csv', rawCsv })
   const empty = (errors: string[] = [], headers: string[] = []): UsageImportSummary => ({
     rows: [],
@@ -270,6 +285,12 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     importHealthReport: healthReport([], errors, rawCsv),
     schemaMappingProfile: mappingProfile(headers),
     trustInspection,
+    analysisReadiness: buildAnalysisReadinessReport({
+      headers,
+      rows: [],
+      revenueBasis: revenueBasisFrom(headers, options.revenueBasis),
+      blocked: trustInspection.status === 'blocked' || !trustInspection.allowedForSnapshot,
+    }),
   })
   const lines = rawCsv
     .split(/\r?\n/)
@@ -393,6 +414,12 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
 
   const requestCount = rows.length
   const pricingWarnings = [...new Set(rows.flatMap(row => row.pricingWarnings ?? []))]
+  const analysisReadiness = buildAnalysisReadinessReport({
+    headers,
+    rows,
+    revenueBasis: revenueBasisFrom(headers, options.revenueBasis),
+    blocked: trustInspection.status === 'blocked' || !trustInspection.allowedForSnapshot,
+  })
 
   return {
     rows,
@@ -410,5 +437,6 @@ export function parseUsageCsv(rawCsv: string, models: Model[]): UsageImportSumma
     importHealthReport: healthReport(rows, [], rawCsv),
     schemaMappingProfile: mappingProfile(headers),
     trustInspection,
+    analysisReadiness,
   }
 }

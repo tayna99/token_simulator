@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { PRODUCT_NAME } from '../../../../src/lib/productBrand'
+import { ReportFirstDiagnosisWorkspace } from '../../../../src/features/report-first/components/ReportFirstDiagnosisWorkspace'
 
 import {
   checkProductionDemoStatus,
@@ -94,8 +94,10 @@ export default async function WorkspacePage({
     env: {
       NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       SUPABASE_URL: process.env.SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
       AGENT_SERVICE_URL: process.env.AGENT_SERVICE_URL,
     },
     store: client ? createSupabaseProductionDemoStatusStore(client) : createUnavailableProductionDemoStatusStore(),
@@ -106,11 +108,10 @@ export default async function WorkspacePage({
       <section className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase text-primary-normal">{PRODUCT_NAME} Workspace</p>
-            <h1 className="mt-2 text-3xl font-semibold" translate="no">/w/{workspaceId}</h1>
+            <p className="text-sm font-semibold uppercase text-primary-normal" translate="no">AI SaaS Margin Diagnosis</p>
+            <h1 className="mt-2 text-3xl font-semibold">분석 완료까지 5분</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-label-neutral">
-              This page only reports production-backed demo readiness. It does not synthesize demo data
-              from UI constants or memory fallback adapters.
+              손해 보는 고객, 마진을 깨는 기능, 추천 결정을 먼저 보여주고 세부 감사 기록은 전문가 모드에 둡니다.
             </p>
           </div>
           <div className="flex gap-2">
@@ -123,6 +124,10 @@ export default async function WorkspacePage({
           </div>
         </div>
 
+        <div className="mt-6">
+          <ReportFirstDiagnosisWorkspace workspaceId={workspaceId} productionStatus={status.status} />
+        </div>
+
         {!user && (
           <div className="mt-6 rounded-wds border border-status-cautionary bg-fill-alternative p-4">
             <p className="font-semibold">Supabase user session required</p>
@@ -130,18 +135,22 @@ export default async function WorkspacePage({
           </div>
         )}
 
-        <div className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
-          <p className="text-sm font-semibold uppercase text-primary-normal">Production demo status</p>
-          <h2 className="mt-2 text-2xl font-semibold">{status.status}</h2>
-          {status.missing.length > 0 && (
-            <p className="mt-2 text-sm text-label-neutral">
-              Missing env: <span translate="no">{status.missing.join(', ')}</span>
-            </p>
-          )}
-          <StatusList checks={status.checks} />
-        </div>
-
-        <RoleLayoutPreview layout={roleLayout} />
+        <details className="mt-6 rounded-wds border border-line-neutral bg-surface-alternative p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-label-normal">
+            전문가 모드: production readiness / dashboard layout
+          </summary>
+          <div className="mt-5">
+            <p className="text-sm font-semibold uppercase text-primary-normal">Production demo status</p>
+            <h2 className="mt-2 text-2xl font-semibold">{status.status}</h2>
+            {status.missing.length > 0 && (
+              <p className="mt-2 text-sm text-label-neutral">
+                Missing env: <span translate="no">{status.missing.join(', ')}</span>
+              </p>
+            )}
+            <StatusList checks={status.checks} />
+            <RoleLayoutPreview layout={roleLayout} />
+          </div>
+        </details>
       </section>
     </main>
   )

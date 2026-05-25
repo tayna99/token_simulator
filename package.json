@@ -20,7 +20,9 @@
     "research:pricing-update": "node scripts/research/check-provider-pricing.mjs --update",
     "research:official-watch": "node scripts/research/watch-official-sources.mjs",
     "research:official-watch-update": "node scripts/research/watch-official-sources.mjs --update",
-    "research:benchmark-corpus": "node scripts/research/benchmark-corpus.mjs"
+    "research:benchmark-corpus": "node scripts/research/benchmark-corpus.mjs",
+    "production:demo:seed:dry-run": "node scripts/supabase/seed-production-demo.mjs --dry-run",
+    "production:demo:smoke": "node scripts/supabase/smoke-production-demo.mjs"
   },
   "dependencies": {
     "@langchain/langgraph": "^1.3.2",

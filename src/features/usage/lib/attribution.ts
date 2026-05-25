@@ -18,7 +18,11 @@ export interface AttributionRow {
 export interface AttributionResult {
   axis: AttributionAxis
   rows: AttributionRow[]
+  mappedCount: number
   missingCount: number
+  unattributedCostUsd: number
+  coveragePct: number
+  costCoveragePct: number
   totalCostUsd: number
 }
 
@@ -37,14 +41,18 @@ function valueForAxis(row: UsageImportRow, axis: AttributionAxis): string | null
 
 export function rollupUsageByAxis(rows: UsageImportRow[], axis: AttributionAxis): AttributionResult {
   const totals = rows.reduce((acc, row) => acc + finiteNonNegative(row.totalCostUsd), 0)
+  let mappedCount = 0
   let missingCount = 0
+  let unattributedCostUsd = 0
   const grouped = rows.reduce<Map<string, AttributionRow>>((map, row) => {
     const key = valueForAxis(row, axis)
     if (!key) {
       missingCount += 1
+      unattributedCostUsd += finiteNonNegative(row.totalCostUsd)
       return map
     }
 
+    mappedCount += 1
     const existing = map.get(key) ?? {
       key,
       label: key,
@@ -78,7 +86,11 @@ export function rollupUsageByAxis(rows: UsageImportRow[], axis: AttributionAxis)
   return {
     axis,
     rows: rowsOut,
+    mappedCount,
     missingCount,
+    unattributedCostUsd,
+    coveragePct: rows.length > 0 ? mappedCount / rows.length : 0,
+    costCoveragePct: totals > 0 ? (totals - unattributedCostUsd) / totals : 0,
     totalCostUsd: totals,
   }
 }

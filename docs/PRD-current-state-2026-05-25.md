@@ -224,7 +224,11 @@ audience: internal | customer                                        (얼마나 
 
 - **Production truth first:** 연결되지 않은 기능은 성공처럼 보이지 않는다. `unavailable`, `connector_not_configured`, `deterministic_preview`, `baseline_unavailable`을 숨기지 않고 사용자 행동으로 이어지게 한다.
 - **Decision workspace, not dashboard museum:** 첫 화면은 많은 카드를 보여주는 곳이 아니라 "어떤 고객/기능/플랜이 마진을 깨고, 무엇을 승인/보류/수정해야 하는지"를 드러내야 한다.
+- **Trust Gate first:** Trust Gate는 숨겨진 보안 기능이 아니라 구매 장벽을 낮추는 첫 안심 장치다. 업로드 직후 raw prompt/API key/PII/사용 범위를 먼저 설명한다.
 - **Same numbers, different emphasis:** developer/PM/CEO는 같은 snapshot을 보되 우선순위와 설명 깊이가 다르다. 숫자는 항상 `calculator.ts`/`format.ts` 경로를 통과한다.
+- **One truth, three lenses:** role projection은 다른 제품 세 개가 아니라 같은 `snapshotId`, 같은 KPI, 같은 generated timestamp를 공유하는 세 가지 렌즈다.
+- **PDF as value proof:** PDF report는 export 부가기능이 아니라 구매 이유가 되는 persisted artifact다. 첫 CTA는 board/customer 공유 가능한 PDF여야 한다.
+- **Decision draft before billing execution:** 초기 MVP의 primary outcome은 Stripe/Metronome 실행이 아니라 Rate Card Draft + human decision이다. connector/billing 실행은 admin readiness의 secondary locked surface로 둔다.
 - **Evidence is inspectable:** RAG/Watchtower/benchmark 결과는 신뢰 배지, source, accepted/review 상태, stale 여부를 함께 보여준다.
 - **Operations are gated:** Slack/Email/Billing/Retention 같은 실행 UI는 approval, idempotency, rollback, ledger 조건을 먼저 보여주고 조건 누락 시 실행 버튼 대신 block reason을 보여준다.
 - **Dense but calm:** SaaS 운영 도구답게 스캔 가능하고 조용해야 한다. 앱 내부에서는 랜딩식 hero, 과한 카드 장식, 보라 그라데이션 중심 팔레트를 피한다.
@@ -289,8 +293,9 @@ audience: internal | customer                                        (얼마나 
 | Login | Supabase Auth 설명, email/password, auth error | Sign in | demo credential을 코드에 하드코딩 노출하지 않음 |
 | Workspace unavailable | missing env/table/service checklist, admin link, retry | Fix setup / retry | fake KPI, fake chart, fake agent success 금지 |
 | Workspace connected | KPI strip, stage nav, attribution/margin/pricing/decision data | Review next decision | 숫자 inline 계산 금지 |
+| Trust Gate | raw prompt/API key/PII 처리, allowed scope, next action | Continue only after ready/mapping review | 보안 검사를 숨기거나 blocked 데이터를 snapshot처럼 사용 금지 |
 | Admin | membership role, connector config status, seed/watchtower/RAG/report/retention readiness | Run checks / review queue | owner/admin 아닌 사용자의 connector 실행 UI 노출 금지 |
-| Report | artifact metadata, source decision, content type, download choices | Download PDF first, then Markdown/JSON | 저장되지 않은 markdown 문자열 즉석 report처럼 렌더 금지 |
+| Report | artifact metadata, source decision, content type, download choices | Share board-ready PDF first, then Markdown/JSON | 저장되지 않은 markdown 문자열 즉석 report처럼 렌더 금지 |
 
 ### 11.6 상태 모델
 
@@ -318,6 +323,11 @@ audience: internal | customer                                        (얼마나 
 - `AgentRunPanel`: providerRunId, invocation proof, fallback reason, runtime status.
 - `DecisionLedgerPanel`: adopt/reject/hold, actor, timestamp, export gate.
 - `ConnectorApprovalPanel`: approval/idempotency/rollback/ledger checklist.
+- `TrustAssurancePanel`: 업로드 직후 raw prompt/API key/PII/사용 범위를 먼저 안심시키는 primary panel.
+- `SnapshotTruthBadge`: role 전환 중에도 같은 snapshot/KPI를 보고 있음을 증명하는 badge.
+- `BoardReadyReportCTA`: PDF를 핵심 가치 산출물로 보여주는 report CTA.
+- `RateCardDecisionDraftPanel`: 가격 변경 이유, 추천 방식, 영향 고객, 예상 마진 개선, 승인 필요성을 묶는 primary decision panel.
+- `ExecutionDeferredPanel`: billing/connector 실행을 admin secondary locked surface로 낮추는 readiness panel.
 - `ReportArtifactViewer`: persisted artifact render/download.
 
 ### 11.8 반응형/접근성/콘텐츠 기준
@@ -334,6 +344,10 @@ audience: internal | customer                                        (얼마나 
 - `/w/demo`에서 production checks 실패 시 KPI/chart/agent success가 나타나지 않는다.
 - 로그인하지 않은 사용자는 workspace data를 보지 못하고 `/login` 또는 unavailable state로 안내된다.
 - 같은 snapshot에서 role을 바꿔도 핵심 비용/마진 숫자는 동일하다.
+- Design/Import stage는 비용 분석 전에 Trust reassurance를 먼저 보여준다.
+- Role projection header는 `same snapshot` 증거를 보여준다.
+- PDF CTA는 report actions 중 첫 번째 가치 산출물로 보인다.
+- Optimize/Decision flow의 primary outcome은 Rate Card Draft이며 billing push는 secondary/admin readiness로만 보인다.
 - report page는 저장된 artifact가 없으면 `production_report_unavailable`을 보여준다.
 - connector 실행 UI는 approval/idempotency/rollback/ledger 조건이 모두 충족되기 전까지 blocked state다.
 - 모바일 375px 폭에서 버튼/카드 텍스트가 부모 영역을 넘지 않는다.

@@ -264,6 +264,25 @@
     "inputTokens": "Input tokens",
     "outputTokens": "Output tokens"
   },
+  "trustCheck": {
+    "title": "Trust check",
+    "empty": "Upload or load sample usage data to inspect file safety, schema health, and analysis scope.",
+    "policy": "Data intake policy: no raw prompt / no PII by default",
+    "anonymization": "Anonymization",
+    "snapshotAllowed": "Snapshot allowed",
+    "retention": "Retention",
+    "yes": "yes",
+    "no": "no",
+    "availableTitle": "What we can analyze now",
+    "mappingTitle": "Mapping that improves accuracy",
+    "deferredTitle": "Judgments deferred by missing columns",
+    "emptyAvailable": "No analysis available until a valid usage file is loaded.",
+    "emptyMapping": "All key mappings are present.",
+    "emptyMappingWaiting": "Mapping needs appear after import.",
+    "emptyDeferred": "No judgments are deferred.",
+    "emptyDeferredWaiting": "Deferred judgments appear after import.",
+    "warnings": "Warnings"
+  },
   "unitEconomics": {
     "eyebrow": "Pricing / margin",
     "title": "Feature cost and margin",

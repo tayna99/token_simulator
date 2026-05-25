@@ -12,6 +12,7 @@ import { toLegacySimState, type PlannerState } from '../lib/plannerState'
 import type { UsageImportSummary } from '../features/usage/lib/usageImport'
 import { UsageImportPanel } from '../features/usage/components/UsageImportPanel'
 import { rollupUsageByAxis, type AttributionAxis, type AttributionResult } from '../features/usage/lib/attribution'
+import { hasRevenueBasis, type AnalysisReadinessReport } from '../features/usage/lib/analysisReadiness'
 import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../features/usage/data/sparkClawSample'
 import { customerProfitability, heavyUserDetection, marginByPlan, type CustomerMarginRow, type MarginRow } from '../features/unit-economics/lib/margin'
 import { calculatePricingScenario, type ScenarioResult } from '../features/pricing/lib/pricingScenario'
@@ -624,6 +625,14 @@ function AttributionTable({ result }: { result: AttributionResult }) {
           ))}
         </tbody>
       </table>
+      <div className="border-t border-line-neutral px-3 py-2 text-xs text-label-alternative">
+        <span translate="no">
+          coverage {fmtPercent(result.coveragePct)} rows / {fmtPercent(result.costCoveragePct)} cost
+        </span>
+        {result.unattributedCostUsd > 0 && (
+          <span translate="no"> · unattributed {fmtCurrency(result.unattributedCostUsd, result.unattributedCostUsd < 1 ? 3 : 0)}</span>
+        )}
+      </div>
       {result.missingCount > 0 && (
         <p className="border-t border-line-neutral px-3 py-2 text-xs text-label-alternative">
           {result.missingCount} row(s) are missing this dimension and are excluded from the roll-up.
@@ -663,21 +672,66 @@ function riskTone(risk: string): 'positive' | 'caution' | 'negative' {
   return 'caution'
 }
 
+function DeferredAnalysisNotice({
+  title,
+  readiness,
+  fallback,
+}: {
+  title: string
+  readiness: AnalysisReadinessReport | null | undefined
+  fallback: string
+}) {
+  const mappingNeeds = readiness?.mappingNeeds.map(item => item.id) ?? []
+  const deferred = readiness?.deferredJudgments.map(item => item.id) ?? []
+
+  return (
+    <div className="mb-4 rounded-wds border border-status-cautionary/30 bg-status-cautionary/10 p-3 text-xs text-label-neutral">
+      <p className="font-semibold text-status-cautionary">{title}</p>
+      <p className="mt-1">{fallback}</p>
+      {(mappingNeeds.length > 0 || deferred.length > 0) && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {mappingNeeds.map(item => (
+            <Badge key={`mapping-${item}`} tone="caution">
+              <span translate="no">needs {item}</span>
+            </Badge>
+          ))}
+          {deferred.map(item => (
+            <Badge key={`deferred-${item}`} tone="neutral">
+              <span translate="no">deferred {item}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MarginRiskWorkspace({
   planMargins,
   customerMargins,
   topDecileShare,
+  readiness,
 }: {
   planMargins: MarginRow[]
   customerMargins: CustomerMarginRow[]
   topDecileShare: number
+  readiness: AnalysisReadinessReport | null | undefined
 }) {
+  const revenueReady = hasRevenueBasis(readiness)
+
   return (
     <Surface
       eyebrow="Margin engine"
       title="3. Margin Risk"
       description="Plan margin, loss customers, and heavy-user concentration are deterministic outputs from imported usage plus business revenue inputs."
     >
+      {!revenueReady && (
+        <DeferredAnalysisNotice
+          title="Margin judgment deferred"
+          readiness={readiness}
+          fallback="Add revenue, subscription_plan_price, or a manual revenue map before loss-customer and plan-margin judgments are shown."
+        />
+      )}
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="grid gap-3">
           <MetricTile label="Top-decile cost share" value={fmtPercent(topDecileShare)} tone={topDecileShare > 0.5 ? 'negative' : 'caution'} />
@@ -734,17 +788,28 @@ function PricingSimulatorWorkspace({
   scenarios,
   riskCards,
   onAdopt,
+  readiness,
 }: {
   scenarios: ScenarioResult[]
   riskCards: RiskCard[]
   onAdopt: () => void
+  readiness: AnalysisReadinessReport | null | undefined
 }) {
+  const revenueReady = hasRevenueBasis(readiness)
+
   return (
     <Surface
       eyebrow="What-if simulator"
       title="4. Pricing Simulator"
       description="Flat, credit, cap, and hybrid policies are recalculated against the same imported usage rows. Recommendations cannot be adopted without risk cards."
     >
+      {!revenueReady && (
+        <DeferredAnalysisNotice
+          title="Pricing recommendation deferred"
+          readiness={readiness}
+          fallback="Add revenue or a sample/manual revenue basis before pricing recommendations are calculated."
+        />
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         {scenarios.map(scenario => (
           <div key={scenario.policy} className={`rounded-wds border p-4 ${scenario.policy === 'credit' ? 'border-primary-normal bg-primary-normal/5' : 'border-line-neutral'}`}>
@@ -770,7 +835,7 @@ function PricingSimulatorWorkspace({
             </div>
           ))}
         </div>
-        <Button className="mt-3" variant="primary" size="sm" onClick={onAdopt} disabled={riskCards.length === 0}>
+        <Button className="mt-3" variant="primary" size="sm" onClick={onAdopt} disabled={riskCards.length === 0 || !revenueReady}>
           Adopt credit scenario
         </Button>
       </div>
@@ -813,8 +878,21 @@ interface WorkspacePanelDefinition {
   node: ReactNode
 }
 
-function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
+function RoleProjectionPanel({
+  view,
+  snapshotVersion,
+  showInternal,
+}: {
+  view: RoleViewModel
+  snapshotVersion: string
+  showInternal: boolean
+}) {
   const visiblePanelOrder = orderCardsForRole(COST_STAGE_CARDS, view.role).map(card => card.key)
+  const lensCopy: Record<RoleViewModel['role'], string> = {
+    developer: 'Developer lens: 왜 비용이 늘었는지 trace, retry/cache, serving 신호를 먼저 봅니다.',
+    pm: 'PM lens: 어떤 기능/플랜이 문제인지 제품 경제성과 decision readiness를 먼저 봅니다.',
+    ceo: 'CEO lens: 얼마가 새고 어떤 결정을 해야 하는지 마진, rate card, report를 먼저 봅니다.',
+  }
 
   return (
     <Surface
@@ -823,6 +901,17 @@ function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
       title={view.title}
       description="같은 deterministic snapshot을 역할별 workspace 순서로 재배치합니다. 이 패널은 새 숫자를 계산하지 않습니다."
     >
+      <div className="mb-3 flex flex-col gap-2 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">One truth, three lenses</p>
+          <p className="mt-1 text-sm text-label-neutral">{lensCopy[view.role]}</p>
+        </div>
+        <Badge tone="primary">
+          <span data-testid="role-projection-snapshot" translate="no">
+            {showInternal ? `same snapshot: ${snapshotVersion}` : 'same snapshot proof stored'}
+          </span>
+        </Badge>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {view.primaryKpis.map(kpi => (
           <MetricTile key={kpi.id} label={kpi.label} value={kpi.value} />
@@ -880,9 +969,28 @@ function RateCardDraftPanel({
       <p className="mt-1 text-xs text-label-alternative">
         Stripe/Metronome 같은 billing 시스템은 실행하지 않고, 사람이 검토할 가격표 초안만 만듭니다.
       </p>
+      <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
+        <p className="text-xs font-semibold uppercase text-primary-normal">Rate Card Decision Draft</p>
+        <ul className="mt-2 grid gap-1 text-sm text-label-neutral">
+          <li>가격 변경이 필요합니다: {decisionHeader.reason}</li>
+          <li>추천 방식: {rateCardDraft.policyType}</li>
+          <li>영향 고객: <span translate="no">{fmtTokens(rateCardDraft.affectedCustomerCount)}</span></li>
+          <li>예상 마진 개선: decision record와 PDF artifact에서 검토합니다.</li>
+          <li>사람 승인 필요: adopt, reject, hold 중 하나의 결정 기록이 필요합니다.</li>
+        </ul>
+      </div>
       <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-        <p className="text-xs font-semibold uppercase text-primary-normal">Billing readiness</p>
+        <p className="text-xs font-semibold uppercase text-primary-normal">Execution deferred</p>
+        <p className="mt-1 text-xs text-label-alternative">
+          초기 MVP의 목표는 billing push가 아니라 승인 가능한 가격 결정 초안을 만드는 것입니다. 실행 준비 상태는 admin 보조 정보로만 표시합니다.
+        </p>
+        <p className="mt-2 text-xs font-semibold uppercase text-label-alternative">Billing readiness</p>
         <div className="mt-2 flex flex-wrap gap-2">
+          {billingReadiness.timeline.map(status => (
+            <Badge key={status} tone={billingReadiness.status === status ? 'positive' : 'neutral'}>
+              {status}
+            </Badge>
+          ))}
           <Badge tone={rateCardDraft.billingExecutable ? 'positive' : 'caution'}>
             executable: {String(rateCardDraft.billingExecutable)}
           </Badge>
@@ -1042,12 +1150,18 @@ function OnePageReportPanel({
 
   return (
     <Surface
-      eyebrow="One-page export"
-      title="CEO/CFO/PM/Developer Report"
-      description="A paid-value one-pager that keeps cost, margin, risk, decision refs, and AI citations together."
-      action={<Button size="sm" variant="primary" onClick={onExport} disabled={!exportGate.allowed}>Export one-page report</Button>}
+      eyebrow="Board-ready PDF"
+      title="Board-ready AgentPayroll report"
+      description="A paid-value PDF artifact that keeps cost, margin, risk, decision refs, and AI citations together."
+      action={<Button size="sm" variant="primary" onClick={onExport} disabled={!exportGate.allowed}>Share board-ready PDF</Button>}
     >
       <div className="rounded-wds-lg border border-line-neutral bg-fill-alternative p-4">
+        <section className="mb-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-normal">PDF value proof</p>
+          <p className="mt-1 text-sm text-label-neutral">
+            이 리포트는 대시보드 캡처가 아니라 결정, 숫자, 근거가 묶인 persisted artifact입니다.
+          </p>
+        </section>
         <section className="mb-3 rounded-wds border border-status-cautionary/30 bg-status-cautionary/10 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-status-cautionary">{decisionHeader.title}</p>
           <p className="mt-1 text-sm font-semibold text-label-normal">{decisionHeader.question}</p>
@@ -1480,16 +1594,15 @@ function CustomerDashboardEntryPanel({
     <section data-testid="customer-dashboard-entry" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-primary-normal">고객용 웹앱</p>
+          <p className="text-xs font-semibold uppercase text-primary-normal" translate="no">AI SaaS Margin Diagnosis</p>
           <h2 className="mt-2 text-2xl font-semibold text-label-normal">{dashboard.heroTitle}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-label-neutral">
-            한 화면에서 샘플 실행, usage 업로드, 월간 리뷰, 의사결정 기록까지 바로 이어집니다.
+            OpenAI 비용이 늘었는데 매출은 그대로라면, 어떤 고객과 기능이 마진을 깨는지 먼저 보여줍니다.
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <Badge tone="positive">최신 Google Gemini 3.5 Flash 단가 반영</Badge>
-            <Badge tone="neutral">가격 출처 확인일: 2026-05-24</Badge>
-            <Badge tone="caution">Gemini Omni / 비디오 비용은 공식 API 단가 확인 필요</Badge>
-            <Badge tone="neutral">사용자 단가 입력 시 시나리오 계산 가능</Badge>
+            <Badge tone="positive">분석 완료</Badge>
+            <Badge tone="neutral">근거 있음</Badge>
+            <Badge tone="caution">검토 필요 항목은 평균으로 대체하지 않음</Badge>
           </div>
         <p className="mt-2 text-xs text-label-alternative">
           고객 기본 화면에는 내부 실행 식별자와 기술 감사 정보를 노출하지 않습니다.
@@ -1818,10 +1931,10 @@ function P1ExternalAutomationPanel({
     <section data-testid="p1-external-automation-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase text-primary-normal">P1 external execution</p>
-          <h2 className="mt-1 text-base font-semibold text-label-normal">Draft → approval → execute → ledger</h2>
+          <p className="text-xs font-semibold uppercase text-primary-normal">P1 admin readiness</p>
+          <h2 className="mt-1 text-base font-semibold text-label-normal">Review first, execute later</h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
-            External mutation stays blocked until human approval, connector config, rollback metadata, and idempotency are present.
+            External mutation is secondary in the MVP. The primary outcome is a human-approved decision draft with rollback, idempotency, and ledger proof ready.
           </p>
         </div>
         <Badge tone="caution">approval gate required</Badge>
@@ -1866,8 +1979,9 @@ function P1ExternalAutomationPanel({
 
         <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
           <p className="text-sm font-semibold text-label-normal">Stripe/Metronome dry-run</p>
+          <p className="mt-1 text-xs font-semibold uppercase text-status-cautionary">Execution deferred</p>
           <p className="mt-1 text-xs text-label-alternative">
-            Billing changes require approval and rollback metadata before any execution path opens.
+            Billing push is a later operational step. In the demo, this stays locked unless approval, sandbox env, rollback metadata, idempotency, and ledger conditions are present.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={onApproveBilling} disabled={billingAction.status !== 'draft'}>
@@ -2577,20 +2691,24 @@ function App() {
     () => summarizeOperationalSignals(importedUsage?.rows ?? []),
     [importedUsage],
   )
+  const analysisReadiness = importedUsage?.analysisReadiness ?? null
+  const revenueJudgmentsReady = hasRevenueBasis(analysisReadiness)
+  const revenueRows = revenueJudgmentsReady ? importedUsage?.rows ?? [] : []
   const planMargins = useMemo(
-    () => marginByPlan(importedUsage?.rows ?? [], PLAN_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
-    [effectiveAssumptions, importedUsage, thresholdPolicy],
+    () => marginByPlan(revenueRows, PLAN_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
+    [effectiveAssumptions, revenueRows, thresholdPolicy],
   )
   const customerMargins = useMemo(
-    () => customerProfitability(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
-    [effectiveAssumptions, importedUsage, thresholdPolicy],
+    () => customerProfitability(revenueRows, CUSTOMER_MONTHLY_REVENUE, effectiveAssumptions, { thresholdPolicy }),
+    [effectiveAssumptions, revenueRows, thresholdPolicy],
   )
   const heavyUsers = useMemo(
-    () => heavyUserDetection(importedUsage?.rows ?? [], CUSTOMER_MONTHLY_REVENUE, { thresholdPolicy }),
-    [importedUsage, thresholdPolicy],
+    () => heavyUserDetection(revenueRows, CUSTOMER_MONTHLY_REVENUE, { thresholdPolicy }),
+    [revenueRows, thresholdPolicy],
   )
   const scenarios = useMemo(() => {
-    const rows = importedUsage?.rows ?? []
+    const rows = revenueRows
+    if (!revenueJudgmentsReady) return []
     return [
       calculatePricingScenario(rows, {
         policy: 'flat',
@@ -2623,7 +2741,7 @@ function App() {
         overagePricePerRequest: 45,
       }),
     ]
-  }, [importedUsage])
+  }, [revenueJudgmentsReady, revenueRows])
   const riskCards = useMemo(() => retrieveRiskCards(['credit', 'overage', 'cap', 'hybrid', 'usage', 'agent-loop']), [])
   useEffect(() => {
     setTeamCostCompanyProfile(profile => ({
@@ -4005,6 +4123,7 @@ function App() {
                 planMargins={planMargins}
                 customerMargins={customerMargins}
                 topDecileShare={heavyUsers.topDecileShare}
+                readiness={analysisReadiness}
               />
             ),
           },
@@ -4042,6 +4161,7 @@ function App() {
                 planMargins={planMargins}
                 customerMargins={customerMargins}
                 topDecileShare={heavyUsers.topDecileShare}
+                readiness={analysisReadiness}
               />
             ),
           },
@@ -4057,6 +4177,7 @@ function App() {
                 scenarios={scenarios}
                 riskCards={riskCards}
                 onAdopt={handleAdoptCreditScenario}
+                readiness={analysisReadiness}
               />
             ),
           },
@@ -4244,7 +4365,7 @@ function App() {
             onOpenTeamCost={() => setShowTeamCostSimulator(true)}
           />
 
-          <RoleProjectionPanel view={roleProjection} />
+          <RoleProjectionPanel view={roleProjection} snapshotVersion={agentSnapshot.snapshotVersion} showInternal={showInternal} />
 
           <P1SdkLitePanel
             state={sdkLitePanel}

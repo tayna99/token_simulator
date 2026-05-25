@@ -99,16 +99,17 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('decision-assistant-panel')).not.toHaveTextContent(/snapshot:/i)
     expect(screen.queryByRole('button', { name: /Run full operating review/i })).not.toBeInTheDocument()
     expect(screen.getByText(/Trust check/i)).toBeInTheDocument()
-    expect(screen.getByText(/내 AI 팀 비용\/마진을 5분 안에 보기/i)).toBeInTheDocument()
-    expect(screen.getByText(/1인 창업자 샘플 실행/i)).toBeInTheDocument()
-    expect(screen.getByText(/usage export 업로드/i)).toBeInTheDocument()
-    expect(screen.getByText(/기존 workspace 열기/i)).toBeInTheDocument()
-    expect(screen.getByText(/최신 Google Gemini 3\.5 Flash 단가 반영/i)).toBeInTheDocument()
-    expect(screen.getByText(/가격 출처 확인일: 2026-05-24/i)).toBeInTheDocument()
-    expect(screen.getByText(/Gemini Omni \/ 비디오 비용은 공식 API 단가 확인 필요/i)).toBeInTheDocument()
-    expect(screen.getByText(/사용자 단가 입력 시 시나리오 계산 가능/i)).toBeInTheDocument()
-    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/monthly review history/i)
-    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/alert settings/i)
+    expect(screen.getByRole('heading', { name: /AI 기능 때문에 손해 보는 고객을 찾으세요/i })).toBeInTheDocument()
+    expect(screen.queryAllByText(/손해 보는 고객/i).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/마진/i).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/추천 결정/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/샘플로 보기/i)).toBeInTheDocument()
+    expect(screen.getByText(/사용량 CSV 업로드/i)).toBeInTheDocument()
+    expect(screen.getByText(/Stripe\/매출 CSV 업로드/i)).toBeInTheDocument()
+    expect(screen.getByTestId('customer-dashboard-entry')).not.toHaveTextContent(/\bRAG\b|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)
+    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/근거 있음/i)
+    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/마진을 깨는 기능/i)
+    expect(screen.getByTestId('customer-dashboard-entry')).toHaveTextContent(/PDF 만들기/i)
 
     await user.click(lifecycleButton(/Bottleneck/i))
 
@@ -632,7 +633,8 @@ describe('App AI team operations workspace', () => {
     expect(screen.getAllByText(/Report review/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/called agents:/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/snapshot:decision-log:/i).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Share board-ready PDF/i })).toBeInTheDocument()
+    expect(screen.getByText(/PDF value proof/i)).toBeInTheDocument()
     expect(screen.getAllByText(/This customer is unprofitable/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/Report review gate/i)).toBeInTheDocument()
     expect(screen.getByText(/Formula version visible/i)).toBeInTheDocument()
@@ -646,7 +648,7 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getByText(/오늘 내려야 할 결정/i)).toBeInTheDocument()
     expect(screen.getByText(/Record adopt, reject, or hold before exporting/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Share board-ready PDF/i })).toBeDisabled()
   })
 
   it('renders the customer-facing rate card draft in the report panel', async () => {
@@ -657,6 +659,8 @@ describe('App AI team operations workspace', () => {
 
     const rateCard = screen.getByRole('region', { name: /Rate card draft/i })
     expect(within(rateCard).getByRole('heading', { name: /Rate card draft/i })).toBeInTheDocument()
+    expect(screen.getByText(/Rate Card Decision Draft/i)).toBeInTheDocument()
+    expect(screen.getByText(/Execution deferred/i)).toBeInTheDocument()
     expect(screen.getByText(/Billing readiness/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/검토용 가격표 초안/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/실제 청구 실행 아님/i)).toBeInTheDocument()
@@ -664,11 +668,11 @@ describe('App AI team operations workspace', () => {
     expect(within(rateCard).getByText(/Export readiness/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/초안 생성됨/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/결정 기록 필요/i)).toBeInTheDocument()
-    expect(screen.getByText(/Policy type/i)).toBeInTheDocument()
-    expect(screen.getByText(/Included credits/i)).toBeInTheDocument()
-    expect(screen.getByText(/Overage/i)).toBeInTheDocument()
-    expect(screen.getByText(/Customer cap/i)).toBeInTheDocument()
-    expect(screen.getByText(/Affected customers/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/Policy type/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/Included credits/i)).toBeInTheDocument()
+    expect(within(rateCard).getAllByText(/Overage/i).length).toBeGreaterThan(0)
+    expect(within(rateCard).getByText(/Customer cap/i)).toBeInTheDocument()
+    expect(within(rateCard).getByText(/Affected customers/i)).toBeInTheDocument()
     expect(within(rateCard).queryByText(/tool:margin\.plan\.pro/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/\btool:/i)).not.toBeInTheDocument()
   })
@@ -694,7 +698,7 @@ describe('App AI team operations workspace', () => {
 
     await waitFor(() => expect(screen.getAllByText(/Hold AI team cost optimization/i).length).toBeGreaterThan(0))
     expect(screen.getAllByText(/decision: hold/i).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Share board-ready PDF/i })).toBeEnabled()
   }, 60000)
 
   it('projects the central workspace and assistant copy by selected role', async () => {
@@ -702,16 +706,20 @@ describe('App AI team operations workspace', () => {
     render(<App />)
 
     expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/Developer projection/i)
+    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/One truth, three lenses/i)
+    const snapshotProof = screen.getByTestId('role-projection-snapshot').textContent
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Model, token, retry, and cache/i)
 
     await user.click(screen.getByRole('tab', { name: /PM view/i }))
 
     expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/PM projection/i)
+    expect(screen.getByTestId('role-projection-snapshot')).toHaveTextContent(snapshotProof ?? '')
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Feature, customer, and plan/i)
 
     await user.click(screen.getByRole('tab', { name: /CEO view/i }))
 
     expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/CEO projection/i)
+    expect(screen.getByTestId('role-projection-snapshot')).toHaveTextContent(snapshotProof ?? '')
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Margin, loss customers, and operating decision/i)
   })
 

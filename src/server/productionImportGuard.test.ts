@@ -66,4 +66,15 @@ describe('Next production import guard', () => {
     expect(source).toContain('buildRoleWorkspaceLayout')
     expect(source).toContain('COST_STAGE_CARDS')
   })
+
+  it('keeps migrated production APIs on App Router and marks root api as legacy-only', () => {
+    expect(existsSync(join(repoRoot, 'app', 'api', 'decisions', 'route.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'app', 'api', 'usage', 'import', 'route.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'app', 'api', 'watchtower', 'review', 'route.ts'))).toBe(true)
+    expect(existsSync(join(repoRoot, 'app', 'api', 'rag', 'p1-evidence', 'route.ts'))).toBe(true)
+
+    const legacyReadme = readFileSync(join(repoRoot, 'api', 'README.md'), 'utf8')
+    expect(legacyReadme).toContain('legacy Vite')
+    expect(legacyReadme).toContain('app/api/**')
+  })
 })

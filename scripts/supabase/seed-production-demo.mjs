@@ -7,12 +7,19 @@ const workspaceId = env.DEMO_WORKSPACE_ID || 'demo'
 const demoEmail = env.DEMO_USER_EMAIL || 'demo@agentpayroll.local'
 const demoPassword = env.DEMO_USER_PASSWORD
 
-const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
-const missing = required.filter(key => !env[key])
+const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseSecretKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY
+const missing = [
+  ...(!supabaseUrl ? ['SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL'] : []),
+  ...(!supabaseSecretKey ? ['SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY'] : []),
+]
 
 if (missing.length > 0) {
-  console.error(`Missing required env: ${missing.join(', ')}`)
-  process.exit(1)
+  if (!dryRun) {
+    console.error(`Missing required env: ${missing.join(', ')}`)
+    process.exit(1)
+  }
+  console.warn(`[dry-run] missing Supabase env ignored: ${missing.join(', ')}`)
 }
 
 if (!dryRun && !demoPassword) {
@@ -20,7 +27,7 @@ if (!dryRun && !demoPassword) {
   process.exit(1)
 }
 
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+const supabase = dryRun ? null : createClient(supabaseUrl, supabaseSecretKey, {
   auth: { persistSession: false },
 })
 
@@ -32,6 +39,26 @@ const provenance = {
 
 function vector1536() {
   return Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0))
+}
+
+function ragMetadata(input) {
+  return {
+    sourceId: input.sourceId,
+    provider: input.provider || 'internal',
+    servingProvider: input.servingProvider || 'internal',
+    modelFamilies: input.modelFamilies || [],
+    sourceKind: input.sourceKind,
+    sourceLanguage: input.sourceLanguage || 'en',
+    pricingRegion: input.pricingRegion || 'global',
+    officialSourceTrust: input.officialSourceTrust,
+    capturedAt: input.capturedAt,
+    headingPath: input.headingPath,
+    sectionType: input.sectionType || 'overview',
+    contentHash: input.contentHash,
+    mayOverrideFacts: false,
+    reviewStatus: input.reviewStatus || 'accepted',
+    tags: input.tags || [],
+  }
 }
 
 async function findOrCreateDemoUser() {
@@ -143,13 +170,19 @@ async function main() {
     source_url: 'https://platform.openai.com/docs/pricing',
     text: 'Production demo RAG chunk seeded into Supabase pgvector for official pricing evidence checks.',
     refs: ['official-demo-pricing'],
-    metadata: {
+    metadata: ragMetadata({
       sourceId: 'official-demo-pricing',
+      provider: 'openai',
+      servingProvider: 'first_party',
+      modelFamilies: ['gpt'],
+      sourceKind: 'pricing',
+      officialSourceTrust: 'official_pricing',
+      headingPath: ['OpenAI', 'Pricing'],
+      sectionType: 'pricing',
       contentHash: `demo-${demoFixtureVersion}`,
       capturedAt: now,
-      corpusTrust: 'official_pricing',
       tags: ['pricing', 'demo'],
-    },
+    }),
     embedding: vector1536(),
     content_hash: `demo-${demoFixtureVersion}`,
     captured_at: now,
@@ -163,14 +196,20 @@ async function main() {
     source_url: 'https://lmarena.ai/leaderboard',
     text: 'LMArena is third-party benchmark evidence for model routing quality. It requires human review and cannot override accepted facts.',
     refs: ['evidence:lmarena-leaderboard'],
-    metadata: {
+    metadata: ragMetadata({
       sourceId: 'lmarena-leaderboard',
+      provider: 'third_party',
+      servingProvider: 'third_party',
+      modelFamilies: ['gpt', 'claude', 'gemini'],
+      sourceKind: 'benchmark',
+      officialSourceTrust: 'third_party_market_radar',
+      headingPath: ['Benchmark Evidence', 'LMArena'],
+      sectionType: 'overview',
       contentHash: `demo-${demoFixtureVersion}-benchmark`,
       capturedAt: now,
-      corpusTrust: 'third_party_benchmark',
       reviewStatus: 'needs_review',
       tags: ['benchmark', 'demo'],
-    },
+    }),
     embedding: vector1536(),
     content_hash: `demo-${demoFixtureVersion}-benchmark`,
     captured_at: now,
@@ -184,13 +223,20 @@ async function main() {
     source_url: 'https://docs.vllm.ai/en/stable/api/vllm/benchmarks/',
     text: 'vLLM benchmark docs provide serving economics evidence for TTFT, TPOT, throughput, GPU utilization, KV cache, prefix cache, and batching.',
     refs: ['serving:vllm-benchmark-docs'],
-    metadata: {
+    metadata: ragMetadata({
       sourceId: 'vllm-benchmark-docs',
+      provider: 'vllm',
+      servingProvider: 'custom',
+      modelFamilies: [],
+      sourceKind: 'serving_economics',
+      officialSourceTrust: 'official_docs',
+      headingPath: ['Serving Economics', 'vLLM'],
+      sectionType: 'overview',
       contentHash: `demo-${demoFixtureVersion}-serving`,
       capturedAt: now,
-      corpusTrust: 'standard_reference',
+      reviewStatus: 'needs_review',
       tags: ['serving-economics', 'demo'],
-    },
+    }),
     embedding: vector1536(),
     content_hash: `demo-${demoFixtureVersion}-serving`,
     captured_at: now,
@@ -204,13 +250,19 @@ async function main() {
     source_url: 'https://platform.openai.com/docs/api-reference/usage',
     text: 'Usage schema evidence maps required dimensions: customer, feature, model, plan, session, agent run, input tokens, and output tokens.',
     refs: ['evidence:usage-schema-openai'],
-    metadata: {
+    metadata: ragMetadata({
       sourceId: 'usage-schema-openai',
+      provider: 'openai',
+      servingProvider: 'first_party',
+      modelFamilies: ['gpt'],
+      sourceKind: 'schema',
+      officialSourceTrust: 'official_docs',
+      headingPath: ['Usage Schema', 'OpenAI'],
+      sectionType: 'schema',
       contentHash: `demo-${demoFixtureVersion}-usage-schema`,
       capturedAt: now,
-      corpusTrust: 'official_docs',
       tags: ['usage-schema', 'demo'],
-    },
+    }),
     embedding: vector1536(),
     content_hash: `demo-${demoFixtureVersion}-usage-schema`,
     captured_at: now,
@@ -224,13 +276,19 @@ async function main() {
     source_url: `decision:${workspaceId}:model-routing`,
     text: 'Decision history records the approved production demo routing baseline and links reporting to tenant-scoped evidence.',
     refs: [`decision:${workspaceId}:model-routing`],
-    metadata: {
+    metadata: ragMetadata({
       sourceId: `decision:${workspaceId}:model-routing`,
+      provider: 'internal',
+      servingProvider: 'internal',
+      modelFamilies: [],
+      sourceKind: 'decision_history',
+      officialSourceTrust: 'internal_authoritative',
+      headingPath: ['Decision History', 'Routing'],
+      sectionType: 'overview',
       contentHash: `demo-${demoFixtureVersion}-decision-history`,
       capturedAt: now,
-      corpusTrust: 'internal_authoritative',
       tags: ['decision-history', 'demo'],
-    },
+    }),
     embedding: vector1536(),
     content_hash: `demo-${demoFixtureVersion}-decision-history`,
     captured_at: now,
@@ -238,14 +296,101 @@ async function main() {
     demo_fixture_version: demoFixtureVersion,
   }], 'workspace_id,chunk_id')
 
+  await upsert('watchtower_candidates', [{
+    id: `candidate:${workspaceId}:demo-pricing`,
+    workspace_id: workspaceId,
+    source_ref: 'official:pricing:demo',
+    status: 'needs_review',
+    candidate_payload: {
+      sourceUrl: 'https://platform.openai.com/docs/pricing',
+      parserConfidence: 'high',
+      requiredManualReviewReason: 'Seeded candidate proves the review workflow without auto-accepting new facts.',
+      acceptedFactDiff: {
+        before: null,
+        after: { provider: 'OpenAI', factType: 'pricing_reference' },
+      },
+    },
+    parser_confidence: 'high',
+    manual_review_reason: 'Seeded candidate proves the review workflow without auto-accepting new facts.',
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }], 'workspace_id,id')
+
+  await upsert('fact_review_events', [{
+    id: `fact-review:${workspaceId}:pricing-ledger:seed`,
+    workspace_id: workspaceId,
+    candidate_id: `candidate:${workspaceId}:demo-pricing`,
+    action: 'accept',
+    reviewer: 'production-demo-seed',
+    reason: 'Initial production demo accepted fact seed.',
+    fact_id: `fact:${workspaceId}:pricing-ledger`,
+    source_ref: 'official:pricing:demo',
+    event_payload: {
+      acceptedFactDiff: {
+        after: {
+          provider: 'OpenAI',
+          factType: 'pricing_reference',
+          statement: 'Demo fact ledger row loaded from Supabase.',
+        },
+      },
+    },
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }])
+
+  await upsert('external_actions', [{
+    id: `external:${workspaceId}:billing-change:demo-rate-card`,
+    workspace_id: workspaceId,
+    kind: 'billing_change',
+    status: 'executed',
+    payload: {
+      policy: 'usage_cap',
+      includedCredits: 1000,
+      rollbackRef: `rollback:${workspaceId}:demo-rate-card`,
+    },
+    approval: {
+      approver: 'production-demo-seed',
+      reason: 'Seed sandbox connector ledger proof for readiness smoke.',
+      decidedAt: now,
+    },
+    rollback_metadata: {
+      rollbackRef: `rollback:${workspaceId}:demo-rate-card`,
+      rollbackPreview: { restorePreviousRateCard: true },
+    },
+  }])
+
+  await upsert('external_action_ledger', [{
+    id: `ledger:external:${workspaceId}:billing-change:demo-rate-card`,
+    workspace_id: workspaceId,
+    action_id: `external:${workspaceId}:billing-change:demo-rate-card`,
+    connector_id: 'stripe_billing',
+    connector_mode: 'dry_run',
+    idempotency_key: `idem:${workspaceId}:demo-rate-card`,
+    external_ref: `dry-run:${workspaceId}:billing_change`,
+    rollback_metadata: {
+      rollbackRef: `rollback:${workspaceId}:demo-rate-card`,
+      rollbackPreview: { restorePreviousRateCard: true },
+    },
+    ledger_payload: {
+      kind: 'billing_change',
+      status: 'ledgered',
+      pushedStateAllowed: false,
+      note: 'Dry-run ledger proof only; no live billing mutation.',
+    },
+    executed_at: now,
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }])
+
+  const reportRunId = `report:${workspaceId}:latest`
   await upsert('report_artifacts', [{
     id: 'demo-report',
     workspace_id: workspaceId,
-    report_run_id: `report:${workspaceId}:latest`,
+    report_run_id: reportRunId,
     format: 'pdf',
     content_type: 'application/pdf',
     body: `%PDF-1.4\n% AgentPayroll Production Demo\nThis report was loaded from Supabase report_artifacts.\n%%EOF`,
-    download_path: `/api/reports/demo-report/download?workspaceId=${workspaceId}`,
+    download_path: `/api/reports/${encodeURIComponent(reportRunId)}/download?workspaceId=${encodeURIComponent(workspaceId)}&artifactId=demo-report`,
     size_bytes: 99,
     provenance,
     demo_fixture_version: demoFixtureVersion,
