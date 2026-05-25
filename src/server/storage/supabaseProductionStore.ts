@@ -112,6 +112,19 @@ interface MatchRagChunkRow {
   similarity: number
 }
 
+function metadataMatchesFilter(metadata: ApiDocChunkMetadata, filter: Partial<ApiDocChunkMetadata> = {}): boolean {
+  return Object.entries(filter).every(([key, expected]) => {
+    const actual = metadata[key as keyof ApiDocChunkMetadata]
+    if (expected === undefined) return true
+    if (Array.isArray(actual)) {
+      return Array.isArray(expected)
+        ? expected.every(item => actual.includes(item))
+        : actual.includes(String(expected))
+    }
+    return actual === expected
+  })
+}
+
 export class SupabasePersistentVectorStore implements VectorStore {
   readonly #client: SupabaseClient
   readonly #workspaceId: string
@@ -164,7 +177,7 @@ export class SupabasePersistentVectorStore implements VectorStore {
       match_threshold: 0,
     })
     return rows
-      .filter(row => !input.filter?.sourceId || row.metadata.sourceId === input.filter.sourceId)
+      .filter(row => metadataMatchesFilter(row.metadata, input.filter))
       .map(row => ({
         score: row.similarity,
         chunk: {

@@ -5,7 +5,7 @@ import { runTeamCostAgentWithLlm, type TeamCostLlmMode } from '../features/agent
 import { retrieveRiskCards } from '../features/agent/lib/riskCards'
 import type { RiskCard } from '../features/agent/lib/riskCards'
 import type { TeamCostGraphEvent } from '../features/team-cost/lib/teamCostState'
-import type { TeamCostCheckpoint } from '../features/agent/lib/checkpointStore'
+import type { CheckpointPersistence, TeamCostCheckpoint } from '../features/agent/lib/checkpointStore'
 import { MODELS, type Model } from '../features/alternatives/data/models'
 import { parseUsageCsv, type UsageImportSummary } from '../features/usage/lib/usageImport'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
@@ -17,6 +17,11 @@ import {
   isStorageNotConfigured,
   type JsonKvStore,
 } from './storage/kvStore'
+import { createOpenAiEmbeddingProviderFromEnv } from './ai/openAiEmbeddingProvider'
+import {
+  SupabasePersistentVectorStore,
+  createSupabaseClientFromEnv,
+} from './storage/supabaseProductionStore'
 import {
   normalizeSdkLiteUsageEvent,
   approveExternalAction,
@@ -48,6 +53,8 @@ import {
   searchVectorIndex,
   type ApiDocChunk,
   type RagContextBlock,
+  type VectorSearchResult,
+  type VectorStore,
   type VectorStoreStats,
 } from '../features/rag/lib/apiDocRag'
 import {
@@ -85,7 +92,7 @@ export interface AgentApiResponse {
   error?: string
 }
 
-type PersistenceState = 'kv' | 'not_configured'
+type PersistenceState = 'kv' | 'not_configured' | 'supabase'
 type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
 
 export interface RuntimeStatusApiResponse {
@@ -434,7 +441,7 @@ function asTeamCostAgentInput(body: unknown): TeamCostRuntimeInput | null {
   }
 }
 
-function checkpointFor(input: TeamCostRuntimeInput, persistence: PersistenceState): TeamCostCheckpoint {
+function checkpointFor(input: TeamCostRuntimeInput, persistence: CheckpointPersistence): TeamCostCheckpoint {
   const threadId = input.threadId?.trim() || `thread-${new Date().toISOString().slice(0, 10)}`
   const status = input.approvalMode === 'interrupt'
     ? input.resumeApproval ? 'resumed' : 'interrupt_requested'
@@ -837,6 +844,19 @@ function uniqueApiDocChunks(chunks: ApiDocChunk[]): ApiDocChunk[] {
   return Array.from(byId.values()).sort((left, right) => left.id.localeCompare(right.id))
 }
 
+function officialDocsProductionVectorStore(context: P1ApiContext, workspaceId: string): VectorStore | null {
+  const env = contextEnv(context)
+  const client = createSupabaseClientFromEnv(env, context.fetcher)
+  const embeddingProvider = createOpenAiEmbeddingProviderFromEnv(env, context.fetcher)
+  if (!client || !embeddingProvider) return null
+  return new SupabasePersistentVectorStore({
+    client,
+    workspaceId,
+    collection: 'official_docs',
+    embeddingProvider,
+  })
+}
+
 async function officialDocsVectorStats(chunks: ApiDocChunk[]): Promise<VectorStoreStats> {
   const vectorStore = createMemoryVectorStore({
     collection: 'official_docs',
@@ -911,13 +931,28 @@ async function retrieveOfficialDocsVectorEvidence(input: {
     embeddingProvider,
     filter: { officialSourceTrust: 'official_pricing' },
   })
-  const records = results.map(result => ({
+  return officialDocsEvidenceFromResults({
+    results,
+    structuredFactRefs: input.structuredFactRefs,
+    topK: input.topK,
+  })
+}
+
+function officialDocsEvidenceFromResults(input: {
+  results: VectorSearchResult[]
+  structuredFactRefs: string[]
+  topK?: number
+}): {
+  evidence: P1RagEvidenceResult
+  contextBlocks: RagContextBlock[]
+} {
+  const records = input.results.map(result => ({
     id: result.chunk.id,
     text: result.chunk.text,
     sourceUrl: result.chunk.sourceUrl,
   }))
   const refs = Array.from(new Set([
-    ...results.flatMap(result => result.chunk.refs),
+    ...input.results.flatMap(result => result.chunk.refs),
     ...input.structuredFactRefs,
   ]))
 
@@ -928,14 +963,35 @@ async function retrieveOfficialDocsVectorEvidence(input: {
       refs,
       mayOverrideFacts: false,
       records,
-      scores: results.map(result => result.score),
+      scores: input.results.map(result => result.score),
       warnings: records.length > 0 ? [] : ['official_docs_unavailable'],
     },
-    contextBlocks: buildRagContextBlocks(results, {
+    contextBlocks: buildRagContextBlocks(input.results, {
       maxChunks: input.topK ?? 5,
       maxCharsPerChunk: 1600,
     }),
   }
+}
+
+async function retrieveOfficialDocsVectorStoreEvidence(input: {
+  query: string
+  vectorStore: VectorStore
+  structuredFactRefs: string[]
+  topK?: number
+}): Promise<{
+  evidence: P1RagEvidenceResult
+  contextBlocks: RagContextBlock[]
+}> {
+  const results = await input.vectorStore.search({
+    query: input.query,
+    topK: input.topK,
+    filter: { officialSourceTrust: 'official_pricing' },
+  })
+  return officialDocsEvidenceFromResults({
+    results,
+    structuredFactRefs: input.structuredFactRefs,
+    topK: input.topK,
+  })
 }
 
 function coerceExternalActions(value: unknown): P1ExternalAction[] {
@@ -990,6 +1046,7 @@ export async function handleP1RagEvidenceApi(
 
   const structuredFactRefs = stringArray(body.structuredFactRefs)
   const store = contextStore(context)
+  const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
   const evidence = retrieveP1VectorRagEvidence({
     query: body.query,
     collections: ragCollections(body.collections),
@@ -1008,23 +1065,35 @@ export async function handleP1RagEvidenceApi(
   if (corpusEvidence) {
     applyCorpusEvidenceToLegacyP1({ evidence, corpusEvidence, structuredFactRefs })
   }
-  const storedOfficialDocChunks = store.persistence === 'kv'
+  const storedOfficialDocChunks = !productionVectorStore && store.persistence === 'kv'
     ? apiDocChunks(await store.getJson<unknown[]>(ragIndexKey(workspaceId)))
     : []
   let contextBlocks: RagContextBlock[] = []
-  const officialDocChunks = storedOfficialDocChunks.length > 0
-    ? storedOfficialDocChunks
-    : apiDocChunks(body.officialDocChunks)
-  if (officialDocChunks.length > 0) {
-    const officialDocs = await retrieveOfficialDocsVectorEvidence({
+  if (productionVectorStore) {
+    const officialDocs = await retrieveOfficialDocsVectorStoreEvidence({
       query: body.query,
-      chunks: officialDocChunks,
+      vectorStore: productionVectorStore,
       structuredFactRefs,
       topK: typeof body.topK === 'number' ? body.topK : undefined,
     })
     evidence.results.official_docs = officialDocs.evidence
     evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
     contextBlocks = officialDocs.contextBlocks
+  } else {
+    const officialDocChunks = storedOfficialDocChunks.length > 0
+      ? storedOfficialDocChunks
+      : apiDocChunks(body.officialDocChunks)
+    if (officialDocChunks.length > 0) {
+      const officialDocs = await retrieveOfficialDocsVectorEvidence({
+        query: body.query,
+        chunks: officialDocChunks,
+        structuredFactRefs,
+        topK: typeof body.topK === 'number' ? body.topK : undefined,
+      })
+      evidence.results.official_docs = officialDocs.evidence
+      evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
+      contextBlocks = officialDocs.contextBlocks
+    }
   }
 
   if (store.persistence === 'kv') {
@@ -1041,7 +1110,7 @@ export async function handleP1RagEvidenceApi(
   return {
     status: 200,
     body: {
-      persistence: store.persistence,
+      persistence: productionVectorStore ? 'supabase' : store.persistence,
       evidence,
       corpusEvidence,
       contextBlocks,
@@ -1068,6 +1137,41 @@ export async function handleRagIndexApi(
   }
 
   const store = contextStore(context)
+  const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
+  if (productionVectorStore) {
+    try {
+      if (method === 'GET') {
+        const stats = await productionVectorStore.stats()
+        return {
+          status: 200,
+          body: {
+            persistence: 'supabase',
+            indexedCount: stats.itemCount,
+            stats,
+          },
+        }
+      }
+
+      if (!isObject(body)) return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_rag_index_request' } }
+      const chunks = apiDocChunks(body.chunks)
+      if (chunks.length === 0) {
+        return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_rag_chunks' } }
+      }
+      await productionVectorStore.upsertChunks(uniqueApiDocChunks(chunks))
+      const stats = await productionVectorStore.stats()
+      return {
+        status: 202,
+        body: {
+          persistence: 'supabase',
+          indexedCount: chunks.length,
+          stats,
+        },
+      }
+    } catch {
+      return { status: 500, body: { ...base, persistence: 'supabase', error: 'rag_index_failed' } }
+    }
+  }
+
   if (store.persistence !== 'kv') {
     return { status: 503, body: { ...base, error: 'storage_not_configured' } }
   }

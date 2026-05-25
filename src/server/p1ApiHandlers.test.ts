@@ -491,6 +491,77 @@ describe('P1 API handlers', () => {
     expect(evidence.body.evidence.results.official_docs.refs).not.toContain('source:request-body-ignored')
   })
 
+  it('uses Supabase pgvector for official RAG index and retrieval when production env is configured', async () => {
+    const officialDocChunks = chunkApiDoc(normalizeApiDoc({
+      source: {
+        id: 'openai-api-pricing',
+        modelOwner: 'openai',
+        servingProvider: 'first_party',
+        modelFamilies: ['gpt'],
+        sourceKind: 'pricing',
+        url: 'https://openai.com/api/pricing/',
+        pricingRegion: 'global',
+        sourceLanguage: 'en',
+        officialSourceTrust: 'official_pricing',
+      },
+      capturedAt: '2026-05-25T00:00:00.000Z',
+      rawText: '# OpenAI pricing\n\nCached input token pricing is discounted for repeated context.',
+    }))
+    const env = {
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+      OPENAI_API_KEY: 'sk-test',
+    }
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({ url, init: init ?? {} })
+      if (url === 'https://api.openai.com/v1/embeddings') {
+        return new Response(JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }), { status: 200 })
+      }
+      if (url.includes('/rest/v1/rpc/match_rag_chunks')) {
+        return new Response(JSON.stringify([{
+          chunk_id: officialDocChunks[0].id,
+          collection: 'official_docs',
+          source_url: officialDocChunks[0].sourceUrl,
+          text: officialDocChunks[0].text,
+          refs: officialDocChunks[0].refs,
+          metadata: officialDocChunks[0].metadata,
+          similarity: 0.91,
+        }]), { status: 200 })
+      }
+      if (url.includes('/rest/v1/rag_chunks?') && init?.method === 'GET') {
+        return new Response(JSON.stringify([{ chunk_id: officialDocChunks[0].id }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+
+    const indexed = await handleRagIndexApi('POST', {
+      workspaceId: 'workspace-demo',
+      chunks: officialDocChunks,
+    }, { env, fetcher })
+    const evidence = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cached input token pricing',
+      officialDocChunks: [{
+        ...officialDocChunks[0],
+        id: 'chunk:request-body-ignored',
+        text: 'Unrelated request-local body chunk.',
+        refs: ['source:request-body-ignored'],
+      }],
+    }, { env, fetcher })
+
+    expect(indexed.status).toBe(202)
+    expect(indexed.body.persistence).toBe('supabase')
+    expect(indexed.body.stats).toMatchObject({ collection: 'official_docs', dimensions: 1536, itemCount: 1 })
+    expect(evidence.body.persistence).toBe('supabase')
+    expect(evidence.body.evidence.results.official_docs.refs).toContain('source:openai-api-pricing')
+    expect(evidence.body.evidence.results.official_docs.refs).not.toContain('source:request-body-ignored')
+    expect(calls.some(call => call.url === 'https://api.openai.com/v1/embeddings')).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/rag_chunks'))).toBe(true)
+    expect(calls.some(call => call.url.includes('/rest/v1/rpc/match_rag_chunks'))).toBe(true)
+  })
+
   it('keeps P1 RAG API benchmark gaps explicit instead of inventing peer averages', async () => {
     const response = await handleP1RagEvidenceApi('POST', {
       workspaceId: 'workspace-demo',
