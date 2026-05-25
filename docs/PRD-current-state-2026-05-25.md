@@ -1,8 +1,8 @@
-# PRD: AgentPayroll — 현 상태 기준 (Implementation Truth Record)
+# PRD: AgentPayroll — 현 상태 기준 (Implementation Truth Record, 구현 사실 기록)
 
 문서 버전: current-state · 2026-05-25
 상태: 사실 기록 + 2026-05-25 확정 전환 방향 (내부 정렬용)
-성격: §1~§8은 *"지금 코드에 무엇이 실제로 존재하고, 무엇이 검증됐고, 무엇이 아직 검증 안 됐는가"* 를 정직하게 기록한다. §9~§11은 이미 확정된 **Next.js primary frontend + Production Demo First** 방향을 UI/UX 기획으로 내려쓰기 위한 실행 기준이다.
+성격: §1~§8은 *"지금 코드에 무엇이 실제로 존재하고, 무엇이 검증됐고, 무엇이 아직 검증 안 됐는가"* 를 정직하게 기록한다. §9~§11은 이미 확정된 **Next.js primary frontend(주 프론트엔드) + Production Demo First(운영 경로 기준 데모 우선)** 방향을 UI/UX 기획으로 내려쓰기 위한 실행 기준이다.
 관계: `docs/PRD-v3.md`(v3.2, 합의된 방향+다음 MVP)와 병존한다. v3.2가 "가야 할 곳"이라면 이 문서는 "지금 있는 곳 + 지금부터 Next.js로 옮길 때 지켜야 할 UX 기준"이다. 충돌 시 구현 사실은 §1~§8, Next 전환/UX 기준은 §9~§11을 우선한다.
 
 ---
@@ -23,14 +23,14 @@
 
 AgentPayroll은 AI SaaS의 사용 로그를 **고객·기능·모델·플랜·세션별 원가와 마진**으로 재분류하고, **어떤 결정을 내려야 하는지까지 운영 일지에 남기는 의사결정 워크스페이스**다.
 
-현 코드 기준 이 제품은 더 이상 "토큰 계산기"가 아니다. 실제로는 다음을 갖춘 **AI SaaS Cost · Margin · Decision Operating System**이다:
+현 코드 기준 이 제품은 더 이상 "토큰 계산기"가 아니다. 실제로는 다음을 갖춘 **AI SaaS Cost · Margin · Decision Operating System(AI SaaS 비용·마진·결정 운영체계)**이다:
 
 - 결정론적 비용·마진 엔진
 - usage import → attribution → margin risk → pricing scenario → decision ledger → one-page report 흐름
 - 11개 운영 에이전트 + 10개 운영 자산
-- C1~C9 RAG 코퍼스(공식·벤치마크·서빙·usage-schema·decision-history 등)
+- C1~C9 RAG(검색으로 근거 문서를 붙여 답하는 방식) corpus(문서 묶음: 공식·벤치마크·서빙·usage-schema·decision-history 등)
 - 역할별(dev/pm/ceo) projection + 내부/고객 audience 분리
-- TypeScript 프런트 + Python `agent_service`(agentic runtime) 2-런타임
+- TypeScript 프런트 + Python `agent_service`(agentic runtime, 에이전트 실행 환경) 2-런타임
 
 README의 1차 표현("토큰 시뮬레이터")은 현 실체보다 좁다. 정체성 표현은 본 문서 기준으로 통일한다.
 
@@ -56,9 +56,9 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 1. **계산은 결정론 엔진 단일 경로.** 비용·마진·절감·예산초과·alert 조건은 `src/lib/calculator.ts`, `src/domain/cost/`, `unit-economics`/`pricing` 순수 모듈에서만 계산한다. 컴포넌트 내 가격 연산 금지. ✅
 2. **표시는 format 단일 경로.** 사용자 표시 숫자는 `src/lib/format.ts`(`fmtCurrency`/`fmtPercent`/`fmtTokens`/`fmtDelta`)를 통과. inline `toFixed`/`toLocaleString` 금지. ✅
 3. **AI는 숫자를 만들지 않는다.** AI는 `tool:*`/`snapshot:*`/`risk:*`/`decision:*`/`evidence:*` ref를 설명하고 다음 액션 초안만 쓴다. ✅
-4. **RAG는 스니펫만, 숫자는 사람 승인 후 Fact Ledger.** retrieve 결과를 바로 숫자로 쓰지 않는다. `official_docs_change_monitor`가 "Human approval before Fact Ledger update"를 명시. ✅
+4. **RAG는 스니펫만, 숫자는 사람 승인 후 Fact Ledger(사실 장부).** retrieve(검색) 결과를 바로 숫자로 쓰지 않는다. `official_docs_change_monitor`가 "Human approval before Fact Ledger update"를 명시. ✅
 5. **baseline 없으면 지어내지 않는다.** 벤치마크 peer가 없으면 평균을 만들지 않고 `baseline_unavailable`을 반환. ✅ (`modelBenchmarkCorpus.ts`, `agentic_runtime.py`)
-6. **billing 실행 안 함.** 가격 정책은 `draft_only`, `stripeExecutable:false`, `requiresHumanApproval:true`. ✅ (`rateCardDraft.ts`)
+6. **billing(과금) 실행 안 함.** 가격 정책은 `draft_only`, `stripeExecutable:false`, `requiresHumanApproval:true`. ✅ (`rateCardDraft.ts`)
 7. **역할별 화면은 달라도 숫자는 같다.** dev/pm/ceo는 같은 deterministic snapshot을 읽는다. ✅ (`projectSnapshotForRole.ts`)
 8. **자동번역 보호.** `<meta name="google" content="notranslate">` + root `translate="no"` + 영어 블록 `lang="en"` 유지. ✅ (헌법 회귀 경로)
 9. **Prompt-free 기본값.** raw prompt/messages/API key/PII 기본 미수집. 🟡 (trust intake 부분 구현)
@@ -122,7 +122,7 @@ role    : developer | pm | ceo                                       (무엇을 
 audience: internal | customer                                        (얼마나 노출)
 ```
 
-같은 deterministic snapshot 위에서 stage가 큰 단계를, role이 그 안의 강조/순서를, audience가 내부 ref 노출 여부를 정한다. 흐름의 종착점은 항상 **결정 기록(adopt/reject/hold)**이며, 이 결정이 있어야 one-page report export가 열린다(`exportGate`).
+같은 deterministic snapshot(결정론 계산으로 만든 그 시점 분석 데이터 묶음) 위에서 stage가 큰 단계를, role이 그 안의 강조/순서를, audience가 내부 ref(참조 ID) 노출 여부를 정한다. 흐름의 종착점은 항상 **결정 기록(adopt/reject/hold)**이며, 이 결정이 있어야 one-page report export(1장 보고서 내보내기)가 열린다(`exportGate`).
 
 ---
 
@@ -132,7 +132,7 @@ audience: internal | customer                                        (얼마나 
 - 벤치마크가 부족할 때 가짜 peer 평균을 만들지 않는다(`baseline_unavailable`).
 - billing(Stripe/Metronome 등)은 자동 실행하지 않는다. Rate card는 `draft → approved → pushed_to_billing | failed` 상태 머신과 connector readiness gate를 통과해야 한다.
 - raw prompt/API key/PII를 기본 수집하지 않는다.
-- Vector DB/저장소는 Supabase pgvector production path를 기준으로 둔다. KV/memory/request-body chunk는 preview/test adapter이며 production demo 성공으로 렌더하지 않는다. RAG는 여전히 스니펫/근거만 제공하고 숫자 권위는 Fact Ledger/결정론 레지스트리에 둔다.
+- Vector DB(벡터 검색 저장소)/저장소는 Supabase pgvector(Postgres 안의 벡터 검색 확장) production path(실제 운영 경로)를 기준으로 둔다. KV/memory/request-body chunk는 preview/test adapter이며 production demo 성공으로 렌더하지 않는다. RAG는 여전히 스니펫/근거만 제공하고 숫자 권위는 Fact Ledger/결정론 레지스트리에 둔다.
 - 개인용 ChatGPT 구독 비교 도구가 아니다 — API 기반 AI 기능 운영 팀 대상.
 
 ---

@@ -1,6 +1,6 @@
-# Research Ontology Sync Plan
+# Research Ontology Sync Plan(리서치 온톨로지 동기화 계획)
 
-**Goal:** Obsidian 제품 정의와 repo research 문서를 같은 방향으로 맞추고, 50개 evidence 확장 전에 taxonomy 분류 기준을 고정한다.
+**목표:** Obsidian 제품 정의와 repo research(저장소의 리서치 문서)를 같은 방향으로 맞추고, 50개 evidence(검증 근거) 확장 전에 taxonomy(분류 체계) 기준을 고정한다.
 
 ## 현재 판정
 
@@ -40,19 +40,19 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 - unit economics
 - effective margin
 
-## Business Keyword Frequency Tracking
+## Business Keyword Frequency Tracking(비즈니스 키워드 빈도 추적)
 
 중요: 위 키워드는 일반 개발자 불만보다 빈도가 낮을 수 있다. 그래서 `frequency_signal`과 별도로 기록한다.
 
 - `frequency_signal`: 개별 evidence의 반복/공감/업보트/이슈 중요도 신호다.
-- `business_keyword_frequency`: 특정 business keyword가 후보군에서 얼마나 자주 보였는지 따로 세는 값이다.
+- `business_keyword_frequency`: 특정 business keyword(사업 가치와 연결되는 키워드)가 후보군에서 얼마나 자주 보였는지 따로 세는 값이다.
 - `accepted_evidence_count`: 실제 `evidence_board.csv`에 채택한 evidence 수다.
 
 이 세 값은 서로 다르다. 예를 들어 `usage limit` 불만은 많이 보일 수 있지만 WTP가 낮을 수 있고, `gross margin`은 적게 보여도 구매 신호가 높을 수 있다.
 
 다음 리서치부터는 [business_keyword_frequency.csv](business_keyword_frequency.csv)를 같이 업데이트한다.
 
-| keyword_group | 목적 | 목표 채택 수 | 빈도 해석 |
+| keyword_group(키워드 묶음) | 목적 | 목표 채택 수 | 빈도 해석 |
 | --- | --- | ---: | --- |
 | `cost_per_customer` | 고객 1명당 AI 원가 pain 검증 | 6 | 적게 보여도 PM/Finance 맥락이면 강한 신호 |
 | `gross_margin` | AI 기능이 팔수록 돈이 되는지 검증 | 6 | 빈도보다 WTP가 중요 |
@@ -77,7 +77,7 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 - 기능별 판매가와 gross margin
 - heavy-user profitability
 - usage-based / credit / hybrid pricing simulation
-- raw cost vs effective cost
+- raw cost vs effective cost(표면 비용과 재시도/검수 비용까지 반영한 실제 비용)
 - PM/CEO/개발자용 보고서
 
 ### P1 보류
@@ -86,7 +86,7 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 - usage/billing reconciliation
 - AI COGS 분리 리포트
 
-### P2 또는 archive 유지
+### P2 또는 archive(보관 후보) 유지
 
 - 예산/쿼터 가드레일
 - 개발자 진단 화면

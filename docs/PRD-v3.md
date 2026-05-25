@@ -1,6 +1,6 @@
 # PRD: AgentPayroll v3.3
 
-부제: **AI SaaS Cost · Margin · Decision Operating System**
+부제: **AI SaaS Cost · Margin · Decision Operating System(AI SaaS 비용·마진·결정 운영체계)**
 문서 버전: 3.3 · 2026-05-25
 상태: Draft · Next.js 웹앱 전환 기준 PRD
 관계: `docs/PRD-v2.md`는 구현 사실 복구 정본으로 보존한다. `docs/PRD-current-state-2026-05-25.md`는 현재 코드 사실 기록이다. 이 문서는 v1/v2/v3의 제품 방향, 2026-05-25 현재 구현 내용, 그리고 Next.js 프론트 웹앱으로 이관하며 구현할 범위를 한데 묶은 **현재 방향 PRD**다.
@@ -15,7 +15,7 @@ v3.3은 단순히 "PRD 문구 업데이트"가 아니라 다음 세 종류의 �
 | --- | --- |
 | 기존 PRD(v1, v2, v3.2) | AgentPayroll의 문제, 페르소나, 5단계 결정 흐름, deterministic cost/margin 원칙, SDK-lite와 Margin Guard 방향 |
 | 현재 구현 사실(2026-05-25) | 11개 운영 에이전트, C1-C9 RAG 코퍼스 계약, backend Chroma RAG, P1 RAG evidence API, report download, retention runner, runtime status, Supabase production store 준비 |
-| 지금 구현 계획 | Next.js App Router 기반 프론트 웹앱, workspace/customer/admin route 분리, Route Handler/Server Action 경계, Supabase pgvector official-doc retrieval, Python agent service 연동, Trust pipeline과 decision ledger 운영화 |
+| 지금 구현 계획 | Next.js App Router 기반 프론트 웹앱, workspace/customer/admin route 분리, Route Handler/Server Action 경계, Supabase pgvector(Postgres 안의 벡터 검색 확장) official-doc retrieval(공식 문서 검색), Python agent service 연동, Trust pipeline(신뢰 확인 흐름)과 decision ledger(결정 기록 장부) 운영화 |
 
 이 문서는 "지금 있는 것"과 "Next.js로 옮기며 만들 것"을 분리한다. 구현 사실은 `docs/PRD-current-state-2026-05-25.md`가 더 엄격한 기준이고, 이 문서는 제품과 구현 계획을 함께 잡는 실행용 PRD다.
 
@@ -28,19 +28,19 @@ AgentPayroll은 AI SaaS의 사용 기록을 고객·기능·모델·요금제·�
 핵심은 토큰 계산기가 아니다. 질문은 "토큰을 얼마 썼나"가 아니라 다음이다.
 
 - 어떤 고객이 AI 원가 때문에 손해인가?
-- 어떤 기능이 gross margin을 깨고 있는가?
-- 정액제, credit, cap, overage, hybrid 중 무엇으로 가격을 바꿔야 하는가?
+- 어떤 기능이 gross margin(매출총이익률)을 깨고 있는가?
+- 정액제, credit(충전식 크레딧), cap(사용 상한), overage(초과 요금), hybrid(혼합 과금) 중 무엇으로 가격을 바꿔야 하는가?
 - 모델을 바꾸면 비용은 줄어도 품질·지연·리스크가 감당 가능한가?
 - Developer, PM, CEO가 같은 숫자와 같은 근거로 의사결정할 수 있는가?
 - 다음 달에도 같은 기준으로 반복 리뷰와 리포트를 만들 수 있는가?
 
-장기 비전은 **AI Native Company의 CFO/Ops 레이어**다. Observability와 Billing 사이에 비어 있는 "LLM 사용량을 비즈니스 판단으로 번역하는 레이어"를 차지한다.
+장기 비전은 **AI Native Company(AI를 운영 방식의 기본으로 삼는 회사)의 CFO/Ops 레이어(재무·운영 판단층)**다. Observability(관측/추적 도구)와 Billing(과금 도구) 사이에 비어 있는 "LLM 사용량을 비즈니스 판단으로 번역하는 레이어"를 차지한다.
 
 ---
 
 ## 2. 문제
 
-AI 기능이 들어간 SaaS에서 LLM 비용은 단순 운영비가 아니라 매출 원가(COGS)다. 전통 SaaS는 사용량이 늘어도 한계비용이 낮지만, AI SaaS는 요청 수, 입출력 길이, 재시도, 캐시 적중률, 모델 선택, latency, human review 여부에 따라 원가가 계속 변한다.
+AI 기능이 들어간 SaaS에서 LLM 비용은 단순 운영비가 아니라 매출 원가(COGS)다. 전통 SaaS는 사용량이 늘어도 한계비용이 낮지만, AI SaaS는 요청 수, 입출력 길이, 재시도, 캐시 적중률, 모델 선택, latency(지연 시간), human review(사람 검수) 여부에 따라 원가가 계속 변한다.
 
 OpenAI, Anthropic, Gemini 콘솔이나 Helicone, Langfuse 같은 도구는 총 토큰과 총 비용을 보여준다. 하지만 팀이 실제로 내려야 하는 결정은 더 비즈니스적이다.
 
@@ -50,7 +50,7 @@ OpenAI, Anthropic, Gemini 콘솔이나 Helicone, Langfuse 같은 도구는 총 �
 - "가격표를 바꿔도 되는가, 아니면 먼저 human review/A-B/rollback이 필요한가?"
 - "경영진에게 한 장으로 설명 가능한가?"
 
-AgentPayroll은 총액 dashboard가 아니라 **usage export → trust check → deterministic snapshot → operating agents → human decision → ledger/report**까지 이어지는 의사결정 제품이다.
+AgentPayroll은 총액 dashboard(대시보드)가 아니라 **usage export(사용량 내보내기) → trust check(신뢰 확인) → deterministic snapshot(결정론 계산으로 만든 그 시점 분석 데이터 묶음) → operating agents(운영 분석 에이전트) → human decision(사람의 결정) → ledger/report(기록 장부/보고서)**까지 이어지는 의사결정 제품이다.
 
 ---
 
@@ -59,11 +59,11 @@ AgentPayroll은 총액 dashboard가 아니라 **usage export → trust check →
 1. **계산은 TypeScript 결정론 엔진.** 비용, 마진, 절감액, 예산 초과, alert 조건은 `src/lib/calculator.ts`, `src/domain/cost/`, unit-economics/pricing pure modules가 권위다.
 2. **표시는 format 경로.** 사용자 표시 숫자는 `src/lib/format.ts` 계열 함수를 통과한다.
 3. **AI는 숫자를 만들지 않는다.** AI와 RAG는 `tool:*`, `snapshot:*`, `risk:*`, `decision:*`, `evidence:*` ref가 붙은 해석, 요약, 다음 액션 초안만 만든다.
-4. **RAG는 스니펫과 근거만 제공한다.** 공식 가격 숫자는 Watchtower candidate → human review → Fact Ledger 경로를 거쳐야 한다.
+4. **RAG(검색으로 근거 문서를 붙여 답하는 방식)는 스니펫과 근거만 제공한다.** 공식 가격 숫자는 Watchtower candidate(감시함의 후보 항목) → human review(사람 검토) → Fact Ledger(사실 장부) 경로를 거쳐야 한다.
 5. **baseline 없으면 지어내지 않는다.** 벤치마크가 비어 있으면 `baseline_unavailable`을 유지하고 평균/순위/품질점수를 만들지 않는다.
 6. **Prompt-free가 기본값.** raw prompt, messages, API key, secrets, PII는 기본 수집하지 않는다.
 7. **역할별 화면은 달라도 숫자는 같다.** Developer/PM/CEO view는 같은 deterministic snapshot과 같은 usage rows를 읽는다.
-8. **Billing 실행은 금지.** Rate Card와 pricing policy는 draft/export/decision record까지다. Stripe/Metronome 변경은 별도 human-approved mutation path가 생기기 전까지 실행하지 않는다.
+8. **Billing(과금) 실행은 금지.** Rate Card(요금표 초안)와 pricing policy(가격 정책)는 draft/export/decision record(초안/내보내기/결정 기록)까지다. Stripe/Metronome 변경은 별도 human-approved mutation path(사람이 승인한 변경 실행 경로)가 생기기 전까지 실행하지 않는다.
 9. **Next.js 서버 모듈은 lazy init.** Supabase, OpenAI, Resend, Slack 같은 runtime client는 module scope에서 만들지 않고 getter/handler 내부에서 초기화한다.
 
 ---

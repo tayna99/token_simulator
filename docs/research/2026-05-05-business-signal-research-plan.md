@@ -1,6 +1,6 @@
-# Business Signal Research Plan
+# Business Signal Research Plan(사업 신호 리서치 계획)
 
-**Goal:** MVP를 만들기 전에 지금까지 생산한 제품/리서치 문서를 기준으로, "많이 보이는 불만"과 "적게 보여도 돈 되는 신호"를 분리해서 검증한다.
+**목표:** MVP(최소 기능 제품)를 만들기 전에 지금까지 생산한 제품/리서치 문서를 기준으로, "많이 보이는 불만"과 "적게 보여도 돈 되는 신호"를 분리해서 검증한다.
 
 **결론:** MVP 방향은 유지한다. 다만 기능을 더 늘리지 않고 `CSV usage import -> 기능별 원가 -> 비즈니스 단위 원가 -> gross margin -> PM/CEO/개발자 리포트`로 좁힌다. 다음 리서치는 이 방향에 실제 구매 신호가 있는지 확인하는 데 집중한다.
 
@@ -13,9 +13,9 @@
 | 문서 | 역할 | 확인한 결론 |
 | --- | --- | --- |
 | `README.md` | 현재 제품 정의와 구현 상태 | 토큰 계산기가 아니라 AI 기능 원가/마진 의사결정 도구로 정의되어 있다. |
-| `docs/cost-quality-decision-workspace.md` | cost-quality-risk UX 계획 | 싼 모델 추천만으로는 위험하며 quality/risk/effective cost가 필요하다. |
-| `PLAN.md` | developer-first decision workspace 계획 | 기능 갤러리가 아니라 의사결정 흐름을 좁혀야 한다. |
-| `docs/architecture/folder-structure.md` | MVP 구조와 archive 기준 | guardrails/developer diagnostics는 research-gated로 보류되어 있다. |
+| `docs/cost-quality-decision-workspace.md` | cost-quality-risk UX(비용-품질-위험 사용자 경험) 계획 | 싼 모델 추천만으로는 위험하며 quality/risk/effective cost(품질/위험/실제 비용)가 필요하다. |
+| `PLAN.md` | developer-first decision workspace(개발자 우선 의사결정 작업 공간) 계획 | 기능 갤러리가 아니라 의사결정 흐름을 좁혀야 한다. |
+| `docs/architecture/folder-structure.md` | MVP 구조와 archive(보관 후보) 기준 | guardrails/developer diagnostics(가드레일/개발자 진단)는 research-gated(리서치로 검증될 때까지 보류)로 보류되어 있다. |
 | `docs/research/pain_taxonomy.md` | pain 분류 기준 | `pain_margin_unknown`, `pain_customer_profitability_unknown`, `pain_heavy_user_loss`, `pain_usage_pricing_mismatch`, `pain_feature_cost_unknown`이 MVP 핵심 pain이다. |
 | `docs/research/token_cost_ontology.md` | Evidence -> Pain -> Feature 연결 | 제품은 `LLM usage -> feature cost -> customer cost -> gross margin -> pricing decision` 흐름으로 evidence를 PM/CEO/개발자 리포트로 변환한다. |
 | `docs/research/developer-token-cost-pain-report.md` | Grok evidence report | Group A는 개발자 유입 이유, Group B는 회사가 돈 낼 이유라는 결론을 정리한다. |
@@ -44,7 +44,7 @@ MVP는 "토큰 수 입력 계산기"가 아니라 아래 질문에 답해야 한
 - 싼 모델로 바꾸면 raw cost만 줄고 effective cost는 늘지 않는가?
 - PM/CEO/Finance에게 바로 설명할 수 있는가?
 
-### 2.2 현재 evidence는 치우쳐 있다
+### 2.2 현재 evidence(근거)는 치우쳐 있다
 
 최신 Grok evidence의 Top Pain은 validator로 계산한다.
 
@@ -58,7 +58,7 @@ npm run research:validate
 
 많이 보이는 불만은 제품 진입점이 될 수 있다. 하지만 돈 내는 이유는 아닐 수 있다.
 
-적게 보이는 business signal은 빈도는 낮아도 구매 이유가 될 수 있다.
+적게 보이는 business signal(사업적으로 돈을 낼 이유가 되는 신호)은 빈도는 낮아도 구매 이유가 될 수 있다.
 
 따라서 다음 리서치는 하나의 빈도표로 섞지 않는다.
 
@@ -66,7 +66,7 @@ npm run research:validate
 
 ### Stream A. 많이 보이는 불만
 
-목적: 개발자들이 실제로 자주 겪는 표면 pain을 확인한다.
+목적: 개발자들이 실제로 자주 겪는 표면 pain(겉으로 드러나는 불편)을 확인한다.
 
 예시 키워드:
 
@@ -97,7 +97,7 @@ npm run research:validate
 
 ### Stream B. 적게 보여도 돈 되는 신호
 
-목적: 실제 구매 가능성이 있는 B2B pain을 확인한다.
+목적: 실제 구매 가능성이 있는 B2B pain(기업 구매자가 돈을 낼 만한 문제)을 확인한다.
 
 핵심 키워드:
 
@@ -126,8 +126,8 @@ npm run research:validate
 평가 기준:
 
 - `wtp_score`
-- buyer persona
-- business metric 명확성
+- buyer persona(구매자 유형)
+- business metric(사업 지표) 명확성
 - 리포트 공유 대상
 - pricing/margin/action 가능성
 
@@ -139,7 +139,7 @@ npm run research:validate
 
 ## 4. 빈도 표시 분리 규칙
 
-### 4.1 Evidence frequency
+### 4.1 Evidence frequency(근거 빈도)
 
 `frequency_signal`은 개별 evidence가 얼마나 반복/공감/업보트/이슈화되었는지 나타낸다.
 
@@ -150,7 +150,7 @@ usage limit 불만이 Reddit에서 여러 번 반복됨 -> frequency_signal 높�
 GitHub issue에서 billing mismatch가 여러 사람이 확인함 -> frequency_signal 높음
 ```
 
-### 4.2 Business keyword frequency
+### 4.2 Business keyword frequency(비즈니스 키워드 빈도)
 
 `business_keyword_frequency.csv`는 business keyword 후보가 검색 과정에서 얼마나 보였는지 따로 기록한다.
 
@@ -164,7 +164,7 @@ usage-based pricing 후보 12개 발견, 그중 6개 채택
 
 ### 4.3 비교 방식
 
-두 stream은 같은 방식으로 비교하지 않는다.
+두 stream(리서치 흐름)은 같은 방식으로 비교하지 않는다.
 
 | 항목 | 많이 보이는 불만 | 돈 되는 신호 |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ usage-based pricing 후보 12개 발견, 그중 6개 채택
 | 위험 | 개인 불만에 끌려감 | 표본이 적어서 과해석 |
 | MVP 반영 | 진입점/설명 보강 | 핵심 기능/가격 검증 |
 
-## 5. 다음 Evidence 수집 설계
+## 5. 다음 Evidence(근거) 수집 설계
 
 현재 공식 Evidence Board는 `GR-038`까지 채웠다. 다음 확장은 `GR-039`부터 50개까지 채운다.
 
@@ -243,7 +243,7 @@ Stream B 안에서는 아래 목표를 둔다.
 LLM usage log와 billing 숫자를 검증하고, 기능별 원가 리포트로 변환하는 도구
 ```
 
-### Gate 3. Guardrails 재검토
+### Gate 3. Guardrails(예산/쿼터 가드레일) 재검토
 
 다음 조건이면 archive의 예산/쿼터 가드레일을 다시 검토한다.
 
