@@ -46,7 +46,7 @@ export type P1ApprovalStatus = 'draft' | 'approved' | 'rejected' | 'executed'
 export type P1ExternalActionKind = 'retention_reminder' | 'audit_export' | 'slack_alert' | 'email_alert' | 'billing_change'
 export type P1ExternalActionStatus = 'draft' | 'approved' | 'rejected' | 'executed'
 export type P1ExternalConnectorMode = 'dry_run' | 'live'
-export type P1ExternalConnectorId = 'slack_webhook' | 'resend_email' | 'stripe_billing' | 'metronome'
+export type P1ExternalConnectorId = 'slack_webhook' | 'resend_email' | 'stripe_billing' | 'metronome' | 'data_room_export'
 
 export interface P1RagRecord {
   id: string
@@ -117,6 +117,8 @@ export interface P1ExternalActionLedgerEntry {
   externalRef?: string
   rollbackMetadata: Record<string, unknown>
   sourceRefs: string[]
+  approvedBy: string
+  approvedAt: string
   executedAt: string
 }
 
@@ -626,6 +628,8 @@ export function executeExternalAction(input: {
     externalRef: connectorMode === 'live' ? externalRef : undefined,
     rollbackMetadata,
     sourceRefs: input.action.sourceRefs,
+    approvedBy: input.action.approval?.approver ?? 'unknown',
+    approvedAt: input.action.approval?.decidedAt ?? '',
     executedAt,
   }
 

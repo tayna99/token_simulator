@@ -425,7 +425,44 @@ describe('p1OperatingSystem', () => {
       connectorMode: 'dry_run',
       connectorId: 'resend_email',
       idempotencyKey: 'idem:email:follow-up',
+      approvedBy: 'owner@example.com',
+      approvedAt: '2026-05-25T00:00:00.000Z',
       status: 'ledgered',
+    })
+  })
+
+  it('routes Data Room audit exports through a separate connector before ledgering', () => {
+    const dataRoom = buildDataRoomWorkspace({
+      workspaceId: 'workspace-demo',
+      hasRawUpload: true,
+      hasRawPrompt: false,
+      hasApiKey: false,
+      hasPii: false,
+    })
+    const approved = approveExternalAction({
+      action: dataRoom.auditExportDraft,
+      approver: 'security@example.com',
+      reason: 'Export sanitized audit package.',
+      decidedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    const result = executeExternalAction({
+      action: approved,
+      connectorMode: 'dry_run',
+      connectorConfig: { id: 'data_room_export', configured: true, rollbackMetadata: { retentionPolicy: 'sanitized_only' } },
+      idempotencyKey: 'idem:data-room:workspace-demo',
+      executedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(result.status).toBe('executed')
+    expect(result.connectorId).toBe('data_room_export')
+    expect(result.ledgerEntry).toMatchObject({
+      kind: 'audit_export',
+      connectorId: 'data_room_export',
+      approvedBy: 'security@example.com',
+      approvedAt: '2026-05-25T00:00:00.000Z',
+      idempotencyKey: 'idem:data-room:workspace-demo',
+      rollbackMetadata: expect.objectContaining({ retentionPolicy: 'sanitized_only' }),
     })
   })
 

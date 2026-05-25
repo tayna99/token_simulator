@@ -311,6 +311,7 @@ function isP1ExternalConnectorId(value: unknown): value is P1ExternalConnectorId
     || value === 'resend_email'
     || value === 'stripe_billing'
     || value === 'metronome'
+    || value === 'data_room_export'
 }
 
 function queryValue(query: Record<string, string | string[] | undefined>, key: string): string | undefined {
@@ -1433,6 +1434,8 @@ export async function handleP1ExternalActionsApi(
             ? Boolean(env.STRIPE_SECRET_KEY)
             : connectorId === 'metronome'
               ? Boolean(env.METRONOME_API_KEY)
+              : connectorId === 'data_room_export'
+                ? Boolean(env.DATA_ROOM_EXPORT_URL)
               : false
       const connectorConfigured = typeof body.connectorConfigured === 'boolean'
         ? body.connectorConfigured

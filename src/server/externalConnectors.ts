@@ -192,9 +192,39 @@ const metronomeConnector: ExternalConnector = {
   rollbackPreview: execution => ({ archiveMetronomeRateCardRef: execution.externalRef }),
 }
 
+const dataRoomExportConnector: ExternalConnector = {
+  id: 'data_room_export',
+  validateConfig: env => Boolean(env.DATA_ROOM_EXPORT_URL),
+  prepare(action, env) {
+    return {
+      connectorId: 'data_room_export',
+      action,
+      url: env.DATA_ROOM_EXPORT_URL ?? '',
+      body: {
+        artifactIds: Array.isArray(action.payload.artifactIds) ? action.payload.artifactIds : [],
+        excludedArtifactIds: Array.isArray(action.payload.excludedArtifactIds) ? action.payload.excludedArtifactIds : [],
+        sourceRefs: action.sourceRefs,
+      },
+      rollbackMetadata: rollbackMetadata(action, 'data_room_export'),
+    }
+  },
+  async execute(prepared, input) {
+    const response = await input.fetcher(prepared.url, {
+      method: 'POST',
+      headers: jsonHeaders({ 'Idempotency-Key': input.idempotencyKey }),
+      body: JSON.stringify(prepared.body),
+    })
+    if (!response.ok) throw new Error(`Data Room export connector failed with ${response.status}`)
+    const externalRef = await parseConnectorRef(response, `data-room:${prepared.action.id}`)
+    return { externalRef, rollbackMetadata: prepared.rollbackMetadata }
+  },
+  rollbackPreview: execution => ({ revokeExportRef: execution.externalRef }),
+}
+
 export const EXTERNAL_CONNECTORS: Record<P1ExternalConnectorId, ExternalConnector> = {
   slack_webhook: slackWebhookConnector,
   resend_email: resendEmailConnector,
   stripe_billing: stripeBillingConnector,
   metronome: metronomeConnector,
+  data_room_export: dataRoomExportConnector,
 }

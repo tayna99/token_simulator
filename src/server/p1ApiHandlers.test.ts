@@ -930,7 +930,106 @@ describe('P1 API handlers', () => {
       connectorMode: 'live',
       connectorId: 'resend_email',
       externalRef: 'email:test-message',
+      approvedBy: 'owner@example.com',
+      approvedAt: expect.any(String),
     })
+  })
+
+  it('keeps Data Room exports behind approval, connector success, idempotency, and ledger', async () => {
+    const store = createMemoryKvStore()
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ id: 'data-room:export_123' }), { status: 202 }))
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'audit_export',
+      title: 'Data Room export',
+      payload: {
+        artifactIds: ['normalized_usage_snapshot', 'decision_log'],
+        excludedArtifactIds: ['raw_prompt', 'api_key'],
+      },
+      sourceRefs: ['asset:data_room', 'decision:human_approval_required'],
+    }, { store })
+    const actionId = draft.body.action?.id
+
+    await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'security@example.com',
+      reason: 'Export sanitized customer audit package.',
+    }, { store, now: () => new Date('2026-05-25T00:00:00.000Z') })
+    const blocked = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+      connectorMode: 'live',
+      connectorId: 'data_room_export',
+    }, { store, env: { DATA_ROOM_EXPORT_URL: 'https://data-room.example/export' }, fetcher })
+    const executed = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+      connectorMode: 'live',
+      connectorId: 'data_room_export',
+      idempotencyKey: 'idem:data-room:workspace-demo',
+    }, {
+      store,
+      env: { DATA_ROOM_EXPORT_URL: 'https://data-room.example/export' },
+      fetcher,
+      now: () => new Date('2026-05-25T00:01:00.000Z'),
+    })
+
+    expect(blocked.status).toBe(409)
+    expect(blocked.body.execution?.error).toBe('idempotency_key_required')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher).toHaveBeenCalledWith('https://data-room.example/export', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'Idempotency-Key': 'idem:data-room:workspace-demo' }),
+    }))
+    expect(executed.status).toBe(202)
+    expect(executed.body.ledger).toEqual([expect.objectContaining({
+      kind: 'audit_export',
+      connectorId: 'data_room_export',
+      externalRef: 'data-room:export_123',
+      approvedBy: 'security@example.com',
+      approvedAt: '2026-05-25T00:00:00.000Z',
+    })])
+  })
+
+  it('does not ledger live connector failures', async () => {
+    const store = createMemoryKvStore()
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ error: 'down' }), { status: 500 }))
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    }, { store })
+    const actionId = draft.body.action?.id
+    await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+    }, { store })
+
+    const failed = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+      connectorMode: 'live',
+      connectorId: 'resend_email',
+      idempotencyKey: 'idem:email:failure',
+    }, { store, env: { RESEND_API_KEY: 're_test' }, fetcher })
+    const listed = await handleP1ExternalActionsApi('GET', undefined, { store, query: { workspaceId: 'workspace-demo' } })
+
+    expect(failed.status).toBe(502)
+    expect(failed.body.error).toBe('connector_execution_failed')
+    expect(listed.body.actions[0]).toMatchObject({ status: 'approved' })
+    expect(listed.body.ledger).toEqual([])
   })
 
   it('keeps billing execution blocked until rollback metadata is attached', async () => {
