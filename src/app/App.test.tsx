@@ -114,6 +114,125 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByRole('button', { name: /Run full operating review/i })).toBeInTheDocument()
   })
 
+  it('lets a customer ingest a clean SDK-lite event and see Trust status without internal metadata', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/sdk-lite/usage') {
+        return new Response(JSON.stringify({
+          persistence: 'kv',
+          snapshotAllowed: true,
+          eventRef: 'sdk:p1:workspace-demo:req_safe',
+          normalized: {
+            source: 'application_gateway',
+            normalizedEvent: { request_id: 'req_safe', customer: 'cust_safe' },
+            excludedFields: [],
+            trustInspection: {
+              allowedForSnapshot: true,
+              analysisScope: 'normalized_usage_only',
+              findings: [],
+              blockedFields: [],
+            },
+            snapshotAllowed: true,
+          },
+          history: [{ eventRef: 'sdk:p1:workspace-demo:req_safe', ingestedAt: '2026-05-24T12:00:00.000Z' }],
+        }), { status: 202 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Send clean SDK event/i }))
+
+    const panel = await screen.findByTestId('p1-sdk-lite-panel')
+    expect(panel).toHaveTextContent(/SDK-lite event ingest/i)
+    expect(panel).toHaveTextContent(/Snapshot possible/i)
+    expect(panel).toHaveTextContent(/Recent ingest history/i)
+    expect(panel).not.toHaveTextContent(/sdk:p1:/i)
+    expect(panel).not.toHaveTextContent(/normalizedEvent/i)
+    expect(panel).not.toHaveTextContent(/persistence/i)
+    expect(fetchMock).toHaveBeenCalledWith('/api/sdk-lite/usage', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('shows Trust blocking in customer copy and exposes SDK/RAG internals only in debug mode', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/sdk-lite/usage') {
+        return new Response(JSON.stringify({
+          persistence: 'kv',
+          snapshotAllowed: false,
+          eventRef: null,
+          normalized: {
+            source: 'openai',
+            normalizedEvent: { request_id: 'req_blocked', customer: 'cust_blocked' },
+            excludedFields: ['rawPrompt', 'apiKey'],
+            trustInspection: {
+              allowedForSnapshot: false,
+              analysisScope: 'blocked',
+              findings: ['raw_prompt_detected', 'api_key_detected'],
+              blockedFields: ['rawPrompt', 'apiKey'],
+            },
+            snapshotAllowed: false,
+          },
+          history: [],
+          error: 'trust_pipeline_blocked',
+        }), { status: 422 })
+      }
+      if (url === '/api/rag/p1-evidence') {
+        return new Response(JSON.stringify({
+          persistence: 'kv',
+          evidence: {
+            mayOverrideFacts: false,
+            results: {
+              official_docs: {
+                found: true,
+                refs: ['source:google-pricing', 'fact:gemini-3-5-flash'],
+                records: [{ id: 'google-pricing', text: 'Cache pricing source.' }],
+                warnings: [],
+              },
+              benchmark_evidence: {
+                found: false,
+                refs: [],
+                records: [],
+                warnings: ['baseline_unavailable'],
+              },
+              decision_history: {
+                found: true,
+                refs: ['decision:cache-policy'],
+                records: [{ id: 'cache-policy', text: 'Held cache routing until QA.' }],
+                warnings: [],
+              },
+            },
+            warnings: ['baseline_unavailable'],
+          },
+          metadata: { workspaceId: 'workspace-demo', query: 'cache margin' },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Send blocked SDK event/i }))
+    const sdkPanel = await screen.findByTestId('p1-sdk-lite-panel')
+    expect(sdkPanel).toHaveTextContent(/Blocked by Trust check/i)
+    expect(sdkPanel).toHaveTextContent(/rawPrompt/i)
+    expect(sdkPanel).toHaveTextContent(/apiKey/i)
+    expect(sdkPanel).toHaveTextContent(/normalizedEvent/i)
+    expect(sdkPanel).toHaveTextContent(/persistence: kv/i)
+
+    await user.click(screen.getByRole('button', { name: /Run P1 RAG evidence check/i }))
+    const ragPanel = await screen.findByTestId('p1-rag-evidence-panel')
+    expect(ragPanel).toHaveTextContent(/source:google-pricing/i)
+    expect(ragPanel).toHaveTextContent(/decision:cache-policy/i)
+    expect(ragPanel).toHaveTextContent(/baseline_unavailable/i)
+    expect(ragPanel).toHaveTextContent(/RAG route metadata/i)
+  })
+
   it('shows the front operating panel only in admin mode', () => {
     render(<App />)
 

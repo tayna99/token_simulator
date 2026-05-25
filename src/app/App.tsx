@@ -64,7 +64,17 @@ import {
   type ThresholdPolicy,
 } from '../features/metrics/lib/thresholdPolicy'
 import { OPERATING_AGENTS, OPERATING_ASSETS, P1_AUTOMATION_MODULES, p0OperatingAssetSummary, type OperatingAgent, type OperatingAgentId } from '../features/operating-assets/lib/operatingAssets'
-import { buildCustomerWorkspaceDashboard, type CustomerWorkspaceDashboard } from '../features/p1/lib/p1OperatingSystem'
+import {
+  buildCustomerWorkspaceDashboard,
+  normalizeSdkLiteUsageEvent,
+  retrieveP1VectorRagEvidence,
+  type CustomerWorkspaceDashboard,
+  type NormalizedP1SdkLiteUsageEvent,
+  type P1RagRecord,
+  type P1SdkLiteUsageEvent,
+  type P1UsageAdapterSource,
+  type P1VectorRagEvidenceResult,
+} from '../features/p1/lib/p1OperatingSystem'
 import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../features/front-operating/lib/frontOperatingContext'
 import {
   INITIAL_FX_RATE_SNAPSHOTS,
@@ -139,6 +149,53 @@ interface WeeklyReportRun {
     configSnapshotRef: string | null
     usageSnapshotRef: string | null
   }
+}
+
+type SdkLitePanelStatus = 'idle' | 'accepted' | 'blocked' | 'error'
+
+interface SdkLiteHistoryEntry {
+  eventRef: string
+  ingestedAt: string
+}
+
+interface SdkLitePanelState {
+  status: SdkLitePanelStatus
+  snapshotAllowed: boolean
+  eventRef: string | null
+  normalized: NormalizedP1SdkLiteUsageEvent | null
+  history: SdkLiteHistoryEntry[]
+  persistence: string
+  error?: string
+}
+
+interface SdkLiteUsageApiBody {
+  persistence?: string
+  snapshotAllowed?: boolean
+  eventRef?: string | null
+  normalized?: NormalizedP1SdkLiteUsageEvent | null
+  history?: SdkLiteHistoryEntry[]
+  error?: string
+}
+
+interface P1RagEvidencePanelState {
+  status: 'idle' | 'loaded' | 'error'
+  persistence: string
+  evidence: P1VectorRagEvidenceResult | null
+  metadata?: {
+    workspaceId: string
+    query: string
+  }
+  error?: string
+}
+
+interface P1RagEvidenceApiBody {
+  persistence?: string
+  evidence?: P1VectorRagEvidenceResult
+  metadata?: {
+    workspaceId: string
+    query: string
+  }
+  error?: string
 }
 
 const WORKSPACE_STORAGE_KEY = 'token-simulator:p1-workspace-id'
@@ -279,6 +336,123 @@ const MODEL_PERF_MATRIX = [
     risk: 'Executive-facing reports need review before cheaper-model routing.',
   },
 ]
+
+const EMPTY_SDK_LITE_PANEL_STATE: SdkLitePanelState = {
+  status: 'idle',
+  snapshotAllowed: false,
+  eventRef: null,
+  normalized: null,
+  history: [],
+  persistence: 'not_checked',
+}
+
+const EMPTY_P1_RAG_EVIDENCE_STATE: P1RagEvidencePanelState = {
+  status: 'idle',
+  persistence: 'not_checked',
+  evidence: null,
+}
+
+const P1_RAG_SAMPLE_COLLECTIONS: Record<'official_docs' | 'benchmark_evidence' | 'decision_history', P1RagRecord[]> = {
+  official_docs: [
+    {
+      id: 'google-pricing',
+      text: 'Cache pricing source for Gemini API models.',
+      sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+    },
+  ],
+  benchmark_evidence: [
+    {
+      id: 'peer-cache',
+      text: 'Peer teams improve margin when cache hit rate is tracked separately from raw input tokens.',
+    },
+  ],
+  decision_history: [
+    {
+      id: 'cache-policy',
+      text: 'Held cache routing until QA confirmed no quality regression.',
+    },
+  ],
+}
+
+function sdkLiteSampleEvent(kind: 'clean' | 'blocked'): {
+  source: P1UsageAdapterSource
+  event: P1SdkLiteUsageEvent
+} {
+  const base: P1SdkLiteUsageEvent = {
+    timestamp: '2026-05-24T12:00:00.000Z',
+    requestId: kind === 'clean' ? 'req_safe' : 'req_blocked',
+    customerId: kind === 'clean' ? 'cust_safe' : 'cust_blocked',
+    feature: 'support_reply',
+    model: 'gpt-5-mini',
+    plan: 'pro',
+    sessionId: kind === 'clean' ? 'session_safe' : 'session_blocked',
+    agentRunId: kind === 'clean' ? 'agent_run_safe' : 'agent_run_blocked',
+    inputTokens: kind === 'clean' ? 1200 : 100,
+    outputTokens: kind === 'clean' ? 240 : 20,
+    retryCount: 0,
+    cacheReadTokens: kind === 'clean' ? 800 : 0,
+    cacheWriteTokens: kind === 'clean' ? 100 : 0,
+    latencyMs: kind === 'clean' ? 920 : 500,
+    status: 'success',
+    deliverable: 'CS reply',
+    taskType: 'classification',
+    humanReview: false,
+  }
+
+  return kind === 'clean'
+    ? { source: 'application_gateway', event: base }
+    : {
+      source: 'openai',
+      event: {
+        ...base,
+        rawPrompt: 'Customer asked about refund terms.',
+        apiKey: 'sk-test',
+      },
+    }
+}
+
+function localSdkLiteFallback(input: {
+  workspaceId: string
+  source: P1UsageAdapterSource
+  event: P1SdkLiteUsageEvent
+  previousHistory: SdkLiteHistoryEntry[]
+}): SdkLitePanelState {
+  const normalized = normalizeSdkLiteUsageEvent({ source: input.source, event: input.event })
+  const eventRef = normalized.snapshotAllowed ? `sdk:p1:${input.workspaceId}:${input.event.requestId}` : null
+  const history = eventRef
+    ? [{ eventRef, ingestedAt: input.event.timestamp }, ...input.previousHistory].slice(0, 5)
+    : input.previousHistory
+
+  return {
+    status: normalized.snapshotAllowed ? 'accepted' : 'blocked',
+    snapshotAllowed: normalized.snapshotAllowed,
+    eventRef,
+    normalized,
+    history,
+    persistence: 'local_fallback',
+    error: normalized.snapshotAllowed ? undefined : 'trust_pipeline_blocked',
+  }
+}
+
+function sdkLiteStatusCopy(state: SdkLitePanelState): string {
+  if (state.status === 'accepted') return 'Snapshot possible'
+  if (state.status === 'blocked') return 'Blocked by Trust check'
+  if (state.status === 'error') return 'SDK-lite ingest failed'
+  return 'Waiting for SDK-lite event'
+}
+
+function allRagRefs(evidence: P1VectorRagEvidenceResult | null): string[] {
+  if (!evidence) return []
+  return Object.values(evidence.results).flatMap(result => result.refs)
+}
+
+function allRagWarnings(evidence: P1VectorRagEvidenceResult | null): string[] {
+  if (!evidence) return []
+  return Array.from(new Set([
+    ...evidence.warnings,
+    ...Object.values(evidence.results).flatMap(result => result.warnings),
+  ]))
+}
 
 function AttributionTable({ result }: { result: AttributionResult }) {
   return (
@@ -1154,6 +1328,150 @@ function CustomerDashboardEntryPanel({
   )
 }
 
+function P1SdkLitePanel({
+  state,
+  showInternal,
+  onSendClean,
+  onSendBlocked,
+}: {
+  state: SdkLitePanelState
+  showInternal: boolean
+  onSendClean: () => void
+  onSendBlocked: () => void
+}) {
+  const blockedFields = state.normalized?.excludedFields ?? []
+  const findings = state.normalized?.trustInspection.warnings ?? []
+  const statusTone = state.status === 'accepted' ? 'positive' : state.status === 'blocked' ? 'negative' : 'neutral'
+
+  return (
+    <section data-testid="p1-sdk-lite-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">P1 product connection</p>
+          <h2 className="mt-1 text-base font-semibold text-label-normal">SDK-lite event ingest</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
+            Send a minimal usage event through the Trust pipeline before it can enter a deterministic snapshot.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="primary" onClick={onSendClean}>Send clean SDK event</Button>
+          <Button size="sm" variant="secondary" onClick={onSendBlocked}>Send blocked SDK event</Button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <MetricTile label="Trust status" value={sdkLiteStatusCopy(state)} tone={statusTone} />
+        <MetricTile label="Snapshot gate" value={state.snapshotAllowed ? 'snapshot 가능' : 'snapshot 불가'} tone={state.snapshotAllowed ? 'positive' : 'caution'} />
+        <MetricTile label="Recent ingest history" value={fmtTokens(state.history.length)} />
+      </div>
+
+      {state.status === 'blocked' && (
+        <p className="mt-3 rounded-wds border border-status-negative/20 bg-status-negative/10 p-3 text-sm text-label-neutral">
+          This event was blocked before snapshot creation because it included sensitive raw fields.
+          {showInternal && blockedFields.length > 0 ? ` Blocked fields: ${blockedFields.join(', ')}` : ''}
+        </p>
+      )}
+
+      {state.history.length > 0 && (
+        <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-xs font-semibold uppercase text-primary-normal">Recent ingest history</p>
+          <ul className="mt-2 grid gap-1 text-xs text-label-neutral">
+            {state.history.slice(0, 5).map((item, index) => (
+              <li key={`${item.eventRef}-${item.ingestedAt}`} translate="no">
+                {showInternal ? item.eventRef : `event ${index + 1}`} / {item.ingestedAt}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showInternal && (
+        <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-xs font-semibold uppercase text-primary-normal">SDK-lite internal metadata</p>
+          <p className="mt-1 text-xs text-label-neutral" translate="no">persistence: {state.persistence}</p>
+          {state.eventRef && <p className="mt-1 text-xs text-label-neutral" translate="no">eventRef: {state.eventRef}</p>}
+          {state.error && <p className="mt-1 text-xs text-label-neutral" translate="no">error: {state.error}</p>}
+          {state.normalized && (
+            <pre className="mt-2 max-h-48 overflow-auto rounded-wds bg-surface-normal p-2 text-[11px] text-label-neutral" translate="no">
+              {JSON.stringify({
+                normalizedEvent: state.normalized.normalizedEvent,
+                excludedFields: state.normalized.excludedFields,
+                findings,
+                blockedFields,
+              }, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function P1RagEvidencePanel({
+  state,
+  showInternal,
+  onRun,
+}: {
+  state: P1RagEvidencePanelState
+  showInternal: boolean
+  onRun: () => void
+}) {
+  const refs = allRagRefs(state.evidence)
+  const warnings = allRagWarnings(state.evidence)
+
+  return (
+    <section data-testid="p1-rag-evidence-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">RAG evidence</p>
+          <h2 className="mt-1 text-base font-semibold text-label-normal">P1 RAG evidence check</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
+            Evidence retrieval is ready. Official numbers still come from the Fact Ledger and deterministic engine.
+          </p>
+        </div>
+        {showInternal && <Button size="sm" variant="secondary" onClick={onRun}>Run P1 RAG evidence check</Button>}
+      </div>
+
+      {!showInternal ? (
+        <p className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-sm text-label-neutral">
+          근거 검색 준비됨. 공식 숫자는 Fact Ledger 기준이며 RAG는 설명과 근거 조회만 담당합니다.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="neutral">official_docs</Badge>
+            <Badge tone="neutral">benchmark_evidence</Badge>
+            <Badge tone="neutral">decision_history</Badge>
+            <Badge tone="primary">mayOverrideFacts: false</Badge>
+            {state.persistence !== 'not_checked' && <Badge tone="neutral">persistence: {state.persistence}</Badge>}
+          </div>
+          {refs.length > 0 && (
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+              <p className="text-xs font-semibold uppercase text-primary-normal">Refs</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {refs.map(ref => <Badge key={ref} tone="neutral">{ref}</Badge>)}
+              </div>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+              <p className="text-xs font-semibold uppercase text-status-cautionary">Warnings</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {warnings.map(warning => <Badge key={warning} tone="caution">{warning}</Badge>)}
+              </div>
+            </div>
+          )}
+          {state.metadata && (
+            <p className="text-xs text-label-alternative" translate="no">
+              RAG route metadata: {state.metadata.workspaceId} / {state.metadata.query}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function DecisionAssistantPanel({
   activeStage,
   teamEstimate,
@@ -1629,6 +1947,8 @@ function App() {
   const [workspaceId] = useState(loadWorkspaceId)
   const [remoteBackendStatus, setRemoteBackendStatus] = useState<RemoteBackendStatus>('checking')
   const [remoteBackendMessage, setRemoteBackendMessage] = useState('Checking P1 backend persistence')
+  const [sdkLitePanel, setSdkLitePanel] = useState<SdkLitePanelState>(EMPTY_SDK_LITE_PANEL_STATE)
+  const [p1RagEvidencePanel, setP1RagEvidencePanel] = useState<P1RagEvidencePanelState>(EMPTY_P1_RAG_EVIDENCE_STATE)
   const [importedUsage, setImportedUsage] = useState<UsageImportSummary | null>(null)
   const [usageSnapshotRef, setUsageSnapshotRef] = useState<string | null>(null)
   const [usageHistory, setUsageHistory] = useState<RemoteUsageHistoryEntry[]>([])
@@ -2067,6 +2387,97 @@ function App() {
     setActiveDecisionStage('decision-log')
     setRequestedOperatingAgentId('knowledge_release_ops')
     setAgentExecutionMode('single_agent')
+  }
+
+  const handleSendSdkLiteSample = async (kind: 'clean' | 'blocked') => {
+    const sample = sdkLiteSampleEvent(kind)
+    const fallback = () => localSdkLiteFallback({
+      workspaceId,
+      source: sample.source,
+      event: sample.event,
+      previousHistory: sdkLitePanel.history,
+    })
+
+    if (typeof fetch !== 'function') {
+      setSdkLitePanel(fallback())
+      return
+    }
+
+    try {
+      const response = await fetch('/api/sdk-lite/usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          source: sample.source,
+          event: sample.event,
+        }),
+      })
+      const body = await response.json() as SdkLiteUsageApiBody
+      if (!body.normalized || typeof body.snapshotAllowed !== 'boolean') {
+        throw new Error(body.error ?? `SDK-lite API returned ${response.status}`)
+      }
+      setSdkLitePanel({
+        status: body.snapshotAllowed ? 'accepted' : 'blocked',
+        snapshotAllowed: body.snapshotAllowed,
+        eventRef: body.eventRef ?? null,
+        normalized: body.normalized,
+        history: (body.history ?? []).slice(0, 5),
+        persistence: body.persistence ?? 'unknown',
+        error: body.error,
+      })
+    } catch {
+      setSdkLitePanel(fallback())
+    }
+  }
+
+  const handleRunP1RagEvidenceCheck = async () => {
+    const query = 'cache margin'
+    const structuredFactRefs = ['fact:gemini-3-5-flash']
+    const fallbackEvidence = retrieveP1VectorRagEvidence({
+      query,
+      collections: P1_RAG_SAMPLE_COLLECTIONS,
+      structuredFactRefs,
+    })
+
+    if (typeof fetch !== 'function') {
+      setP1RagEvidencePanel({
+        status: 'loaded',
+        persistence: 'local_fallback',
+        evidence: fallbackEvidence,
+        metadata: { workspaceId, query },
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/rag/p1-evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId,
+          query,
+          collections: P1_RAG_SAMPLE_COLLECTIONS,
+          structuredFactRefs,
+        }),
+      })
+      const body = await response.json() as P1RagEvidenceApiBody
+      if (!body.evidence) throw new Error(body.error ?? `P1 RAG API returned ${response.status}`)
+      setP1RagEvidencePanel({
+        status: 'loaded',
+        persistence: body.persistence ?? 'unknown',
+        evidence: body.evidence,
+        metadata: body.metadata ?? { workspaceId, query },
+        error: body.error,
+      })
+    } catch {
+      setP1RagEvidencePanel({
+        status: 'loaded',
+        persistence: 'local_fallback',
+        evidence: fallbackEvidence,
+        metadata: { workspaceId, query },
+      })
+    }
   }
 
   const decisionAuditSnapshot = () => ({
@@ -3138,6 +3549,19 @@ function App() {
           />
 
           <RoleProjectionPanel view={roleProjection} />
+
+          <P1SdkLitePanel
+            state={sdkLitePanel}
+            showInternal={showInternal}
+            onSendClean={() => void handleSendSdkLiteSample('clean')}
+            onSendBlocked={() => void handleSendSdkLiteSample('blocked')}
+          />
+
+          <P1RagEvidencePanel
+            state={p1RagEvidencePanel}
+            showInternal={showInternal}
+            onRun={() => void handleRunP1RagEvidenceCheck()}
+          />
 
           <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
             <p className="text-xs font-semibold uppercase text-primary-normal">Deterministic setup</p>
