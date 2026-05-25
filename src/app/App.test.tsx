@@ -730,11 +730,15 @@ describe('App AI team operations workspace', () => {
 
     expect(appearsBefore(costPanel(), marginPanel())).toBe(true)
     expect(auxiliaryCards()).not.toHaveAttribute('open')
+    expect(auxiliaryCards()).toHaveTextContent(/Additional review details/i)
+    expect(auxiliaryCards()).not.toHaveTextContent(/Technical detail \(developer\)/i)
     expect(within(auxiliaryCards()).getByTestId('workspace-panel-operational_signals')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /CEO view/i }))
     expect(appearsBefore(marginPanel(), costPanel())).toBe(true)
     expect(auxiliaryCards()).not.toHaveAttribute('open')
+    expect(auxiliaryCards()).toHaveTextContent(/Additional review details/i)
+    expect(auxiliaryCards()).not.toHaveTextContent(/Technical detail \(developer\)/i)
     expect(within(auxiliaryCards()).getByTestId('workspace-panel-operational_signals')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Developer view/i }))

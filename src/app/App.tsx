@@ -3878,9 +3878,7 @@ function App() {
     </div>
   )
 
-  const auxiliarySummary = roleProjection.role === 'developer'
-    ? 'Business detail'
-    : 'Technical detail (developer)'
+  const auxiliarySummary = 'Additional review details'
 
   const renderWorkspacePanels = (
     panels: WorkspacePanelDefinition[],
