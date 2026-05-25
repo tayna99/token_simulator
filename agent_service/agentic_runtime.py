@@ -62,12 +62,14 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
         "retrieve_model_release_candidates",
         "retrieve_pricing_fact_candidates",
         "retrieve_fx_rate_snapshot",
+        "retrieve_p1_vector_rag_evidence",
     },
     "model_inference_research": {
         "retrieve_model_perf_matrix",
         "retrieve_benchmark_evidence",
         "retrieve_risk_cards",
         "retrieve_operating_asset",
+        "retrieve_p1_vector_rag_evidence",
     },
     "cost_modeling": {
         "lookup_snapshot_value",
@@ -90,6 +92,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
         "retrieve_operating_asset",
         "retrieve_pricing_fact_candidates",
         "retrieve_fx_rate_snapshot",
+        "retrieve_p1_vector_rag_evidence",
     },
     "optimization_routing": {
         "retrieve_metric_flags",
@@ -138,6 +141,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
         "retrieve_official_source_registry",
         "retrieve_official_source_snippets",
         "retrieve_model_release_candidates",
+        "retrieve_p1_vector_rag_evidence",
     },
 }
 
@@ -182,6 +186,16 @@ def _matches_query(record: Mapping[str, Any], query: str, tags: Sequence[str]) -
     return (query.lower() in haystack if query else True) and (
         not tag_set or bool(tag_set.intersection(record_tags))
     )
+
+
+def _matches_text(record: Mapping[str, Any], query: str) -> bool:
+    if not query:
+        return True
+    terms = [term for term in query.lower().split() if term]
+    if not terms:
+        return True
+    haystack = json.dumps(record, ensure_ascii=False).lower()
+    return any(term in haystack for term in terms)
 
 
 def _refs_from_tool_results(tool_results: Mapping[str, Any]) -> list[str]:
@@ -857,6 +871,70 @@ def build_agent_tools(
         )
 
     @tool
+    def retrieve_p1_vector_rag_evidence(query: str = "") -> str:
+        """Retrieve P1 RAG evidence across official docs, benchmark/risk evidence, and decision history. Read-only."""
+        official_matches = [
+            item for item in official_source_snippets
+            if _matches_text(item, query)
+        ]
+        benchmark_matches = [
+            item for item in benchmark_cards
+            if _matches_text(item, query)
+        ]
+        risk_matches = [
+            item for item in risk_cards
+            if _matches_text(item, query)
+        ]
+        decision_matches = [
+            item for item in decision_history
+            if _matches_text(item, query)
+        ]
+
+        official_refs: list[str] = []
+        for item in official_matches:
+            if item.get("snippetId"):
+                official_refs.append(str(item.get("snippetId")))
+            else:
+                official_refs.extend(str(ref) for ref in item.get("refs", []) if ref)
+        benchmark_refs = [
+            f"evidence:{item.get('evidenceId') or item.get('evidenceRef') or item.get('id')}"
+            for item in benchmark_matches
+            if item.get("evidenceId") or item.get("evidenceRef") or item.get("id")
+        ]
+        risk_refs = [
+            f"risk:{item.get('id')}"
+            for item in risk_matches
+            if item.get("id")
+        ]
+        decision_refs = [
+            f"decision:{item.get('id')}"
+            for item in decision_matches
+            if item.get("id")
+        ]
+        refs = _unique([*official_refs, *benchmark_refs, *risk_refs, *decision_refs])
+        warnings = []
+        if not benchmark_matches:
+            warnings.append("baseline_unavailable")
+        if not official_matches:
+            warnings.append("official_docs_unavailable")
+        if not decision_matches:
+            warnings.append("decision_history_unavailable")
+
+        return _envelope(
+            tool_name="retrieve_p1_vector_rag_evidence",
+            refs=refs,
+            found=bool(refs),
+            data={
+                "mayOverrideFacts": False,
+                "officialDocs": official_matches,
+                "benchmarkEvidence": benchmark_matches,
+                "riskEvidence": risk_matches,
+                "decisionHistory": decision_matches,
+            },
+            warnings=warnings,
+        )
+
+    @tool
     def retrieve_model_release_candidates(
         model_owner: str = "",
         serving_provider: str = "",
@@ -966,6 +1044,7 @@ def build_agent_tools(
         retrieve_operating_ledger,
         retrieve_official_source_registry,
         retrieve_official_source_snippets,
+        retrieve_p1_vector_rag_evidence,
         retrieve_model_release_candidates,
         retrieve_pricing_fact_candidates,
         retrieve_fx_rate_snapshot,

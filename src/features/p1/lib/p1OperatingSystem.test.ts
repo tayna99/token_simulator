@@ -1,16 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeVllmServingEconomics,
+  buildP1ActionApprovalGate,
+  buildP1OperatingContract,
   buildCustomerWorkspaceDashboard,
   buildRetentionAutomationPlan,
   draftBillingChange,
   draftP1Alert,
+  normalizeSdkLiteUsageEvent,
+  retrieveP1VectorRagEvidence,
   normalizeP1UsageAdapterExport,
   retrieveP1RagEvidence,
   selectBenchmarkBasis,
 } from './p1OperatingSystem'
 
 describe('p1OperatingSystem', () => {
+  it('builds a shared P1 operating contract for workspace, snapshot, agent run, approval, and ledger identity', () => {
+    const contract = buildP1OperatingContract({
+      workspaceId: ' SparkClaw/May ',
+      snapshotVersion: 'snapshot:cost:abc123',
+      agentRunId: 'agent-run-1',
+      approvalStatus: 'draft',
+      ledgerEntryId: 'ledger-1',
+    })
+
+    expect(contract.workspaceId).toBe('SparkClaw-May')
+    expect(contract.snapshotVersion).toBe('snapshot:cost:abc123')
+    expect(contract.agentRunId).toBe('agent-run-1')
+    expect(contract.approvalStatus).toBe('draft')
+    expect(contract.ledgerEntryId).toBe('ledger-1')
+    expect(contract.mutationPolicy).toEqual({
+      phaseOrder: ['draft', 'human_approval', 'execute', 'rollback_metadata', 'ledger'],
+      externalMutationAllowed: false,
+    })
+  })
+
   it('builds a customer-facing dashboard shell with sample, upload, workspace, and monthly review entrypoints', () => {
     const dashboard = buildCustomerWorkspaceDashboard({
       workspaceId: 'workspace-demo',
@@ -58,6 +82,30 @@ describe('p1OperatingSystem', () => {
     expect(benchmark.warnings).toContain('baseline_unavailable')
   })
 
+  it('keeps full vector RAG split by official docs, benchmarks, and decision history with typed refs', () => {
+    const result = retrieveP1VectorRagEvidence({
+      query: 'cache margin',
+      collections: {
+        official_docs: [
+          { id: 'google-pricing', text: 'Cache pricing is a fact table source.', sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing' },
+        ],
+        benchmark_evidence: [
+          { id: 'peer-cache', text: 'Peer teams report cache hit rate as a margin lever.' },
+        ],
+        decision_history: [
+          { id: 'decision-cache-policy', text: 'Held cache policy until quality review.', sourceUrl: 'decision:cache-policy' },
+        ],
+      },
+      structuredFactRefs: ['fact:gemini-3-5-flash'],
+    })
+
+    expect(result.mayOverrideFacts).toBe(false)
+    expect(result.results.official_docs.refs).toEqual(['source:google-pricing', 'fact:gemini-3-5-flash'])
+    expect(result.results.benchmark_evidence.refs).toEqual(['evidence:peer-cache'])
+    expect(result.results.decision_history.refs).toEqual(['decision:decision-cache-policy'])
+    expect(result.warnings).toEqual([])
+  })
+
   it('normalizes SDK and gateway exports through Trust inspection before snapshot use', () => {
     const normalized = normalizeP1UsageAdapterExport({
       source: 'vercel_ai_gateway',
@@ -75,6 +123,75 @@ describe('p1OperatingSystem', () => {
     expect(normalized.dimensions).toEqual(expect.arrayContaining(['customer', 'feature', 'model', 'plan']))
     expect(blocked.trustInspection.allowedForSnapshot).toBe(false)
     expect(blocked.snapshotAllowed).toBe(false)
+  })
+
+  it('accepts SDK-lite metadata events but blocks raw prompt, completion, API key, or PII fields', () => {
+    const accepted = normalizeSdkLiteUsageEvent({
+      source: 'application_gateway',
+      event: {
+        timestamp: '2026-05-24T12:00:00.000Z',
+        requestId: 'req_1',
+        customerId: 'cust_1',
+        feature: 'support_reply',
+        model: 'gpt-5-mini',
+        plan: 'pro',
+        sessionId: 'session_1',
+        agentRunId: 'agent_run_1',
+        inputTokens: 1200,
+        outputTokens: 240,
+        retryCount: 0,
+        cacheReadTokens: 800,
+        cacheWriteTokens: 100,
+        latencyMs: 920,
+        status: 'success',
+        deliverable: 'CS reply',
+        taskType: 'classification',
+        humanReview: false,
+      },
+    })
+    const blocked = normalizeSdkLiteUsageEvent({
+      source: 'openai',
+      event: {
+        timestamp: '2026-05-24T12:00:00.000Z',
+        requestId: 'req_2',
+        customerId: 'cust_2',
+        feature: 'support_reply',
+        model: 'gpt-5-mini',
+        plan: 'pro',
+        sessionId: 'session_2',
+        agentRunId: 'agent_run_2',
+        inputTokens: 100,
+        outputTokens: 20,
+        retryCount: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        latencyMs: 500,
+        status: 'success',
+        deliverable: 'CS reply',
+        taskType: 'classification',
+        humanReview: false,
+        rawPrompt: 'hello',
+        apiKey: 'sk-test',
+        userEmail: 'user@example.com',
+      },
+    })
+
+    expect(accepted.snapshotAllowed).toBe(true)
+    expect(accepted.normalizedEvent).toMatchObject({
+      customer: 'cust_1',
+      feature: 'support_reply',
+      model: 'gpt-5-mini',
+      plan: 'pro',
+      session: 'session_1',
+      agent_run: 'agent_run_1',
+    })
+    expect(blocked.snapshotAllowed).toBe(false)
+    expect(blocked.excludedFields).toEqual(expect.arrayContaining(['rawPrompt', 'apiKey', 'userEmail']))
+    expect(blocked.trustInspection.warnings).toEqual(expect.arrayContaining([
+      'raw_prompt_detected',
+      'api_key_candidate_detected',
+      'pii_candidate_detected',
+    ]))
   })
 
   it('classifies vLLM/GPU serving bottlenecks without mixing them into provider API cost math', () => {
@@ -119,6 +236,30 @@ describe('p1OperatingSystem', () => {
     expect(alert.requiresHumanApproval).toBe(true)
     expect(billing.status).toBe('draft')
     expect(billing.executionAllowed).toBe(false)
+  })
+
+  it('does not allow external alert or billing execution until human approval and rollback metadata are present', () => {
+    const alert = draftP1Alert({
+      type: 'budget_overrun',
+      thresholdRef: 'basis:rule:monthly_budget',
+      decisionRefs: ['decision:budget'],
+      destination: 'email',
+    })
+    const billing = draftBillingChange({
+      policy: 'credit_policy',
+      decisionRef: 'decision:pricing',
+      rollbackRef: 'rollback:pricing-v2',
+    })
+
+    expect(buildP1ActionApprovalGate({ draft: alert, approvalStatus: 'draft' })).toMatchObject({
+      executionAllowed: false,
+      nextRequiredStep: 'human_approval',
+    })
+    expect(buildP1ActionApprovalGate({ draft: billing, approvalStatus: 'approved' })).toMatchObject({
+      executionAllowed: true,
+      nextRequiredStep: 'execute',
+      ledgerRequired: true,
+    })
   })
 
   it('selects benchmark basis honestly and automates retention without storing sensitive raw data', () => {

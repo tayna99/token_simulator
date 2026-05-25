@@ -6,6 +6,8 @@ import {
   handleTeamCostCalibrationApi,
   handleReportsApi,
   handleRiskCardsApi,
+  handleP1RagEvidenceApi,
+  handleSdkLiteUsageApi,
   handleUsageImportApi,
 } from './p1ApiHandlers'
 import { createMemoryKvStore, createUnavailableKvStore } from './storage/kvStore'
@@ -146,6 +148,68 @@ describe('P1 API handlers', () => {
     })
   })
 
+  it('ingests SDK-lite events only after Trust pipeline approval', async () => {
+    const store = createMemoryKvStore()
+    const accepted = await handleSdkLiteUsageApi('POST', {
+      workspaceId: 'workspace-demo',
+      source: 'application_gateway',
+      event: {
+        timestamp: '2026-05-24T12:00:00.000Z',
+        requestId: 'req_1',
+        customerId: 'cust_1',
+        feature: 'support_reply',
+        model: 'gpt-5-mini',
+        plan: 'pro',
+        sessionId: 'session_1',
+        agentRunId: 'agent_run_1',
+        inputTokens: 1200,
+        outputTokens: 240,
+        retryCount: 0,
+        cacheReadTokens: 800,
+        cacheWriteTokens: 100,
+        latencyMs: 920,
+        status: 'success',
+        deliverable: 'CS reply',
+        taskType: 'classification',
+        humanReview: false,
+      },
+    }, { store })
+    const blocked = await handleSdkLiteUsageApi('POST', {
+      workspaceId: 'workspace-demo',
+      source: 'openai',
+      event: {
+        timestamp: '2026-05-24T12:00:00.000Z',
+        requestId: 'req_2',
+        customerId: 'cust_2',
+        feature: 'support_reply',
+        model: 'gpt-5-mini',
+        plan: 'pro',
+        sessionId: 'session_2',
+        agentRunId: 'agent_run_2',
+        inputTokens: 100,
+        outputTokens: 20,
+        retryCount: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        latencyMs: 500,
+        status: 'success',
+        deliverable: 'CS reply',
+        taskType: 'classification',
+        humanReview: false,
+        rawPrompt: 'hello',
+        apiKey: 'sk-test',
+      },
+    }, { store })
+
+    expect(accepted.status).toBe(202)
+    expect(accepted.body.snapshotAllowed).toBe(true)
+    expect(accepted.body.eventRef).toBe('sdk:p1:workspace-demo:req_1')
+    expect(accepted.body.history).toHaveLength(1)
+    expect(blocked.status).toBe(422)
+    expect(blocked.body.snapshotAllowed).toBe(false)
+    expect(blocked.body.error).toBe('trust_pipeline_blocked')
+  })
+
   it('stores weekly report runs with decision, usage, and config snapshot refs', async () => {
     const store = createMemoryKvStore()
     const response = await handleReportsApi('POST', {
@@ -176,5 +240,24 @@ describe('P1 API handlers', () => {
     expect(response.body.cards.some(card => card.id === 'risk-credit-confusion')).toBe(true)
     expect(response.body.retrieval).toBe('deterministic-tag-corpus')
     expect(response.body.metadata).toMatchObject({ workspaceId: 'workspace-demo', persistence: 'kv' })
+  })
+
+  it('serves P1 vector RAG evidence without letting RAG override fact ledger numbers', async () => {
+    const response = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cache margin',
+      structuredFactRefs: ['fact:gemini-3-5-flash'],
+      collections: {
+        official_docs: [{ id: 'google-pricing', text: 'Cache pricing source.' }],
+        benchmark_evidence: [{ id: 'peer-cache', text: 'Cache hit rate margin evidence.' }],
+        decision_history: [{ id: 'cache-policy', text: 'Held cache routing until QA.' }],
+      },
+    }, { store: createMemoryKvStore() })
+
+    expect(response.status).toBe(200)
+    expect(response.body.evidence.mayOverrideFacts).toBe(false)
+    expect(response.body.evidence.results.official_docs.refs).toEqual(['source:google-pricing', 'fact:gemini-3-5-flash'])
+    expect(response.body.evidence.results.benchmark_evidence.refs).toEqual(['evidence:peer-cache'])
+    expect(response.body.evidence.results.decision_history.refs).toEqual(['decision:cache-policy'])
   })
 })

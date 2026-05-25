@@ -17,6 +17,16 @@ import {
   isStorageNotConfigured,
   type JsonKvStore,
 } from './storage/kvStore'
+import {
+  normalizeSdkLiteUsageEvent,
+  retrieveP1VectorRagEvidence,
+  type NormalizedP1SdkLiteUsageEvent,
+  type P1RagEvidenceResult,
+  type P1SdkLiteUsageEvent,
+  type P1UsageAdapterSource,
+  type P1VectorRagEvidenceResult,
+  type P1VectorRagKind,
+} from '../features/p1/lib/p1OperatingSystem'
 
 export interface ApiResult<T> {
   status: number
@@ -102,6 +112,25 @@ export interface UsageImportApiResponse {
   error?: string
 }
 
+export interface SdkLiteUsageApiResponse {
+  persistence: PersistenceState
+  snapshotAllowed: boolean
+  eventRef: string | null
+  normalized: NormalizedP1SdkLiteUsageEvent | null
+  history: Array<{ eventRef: string; ingestedAt: string }>
+  error?: string
+}
+
+export interface P1RagEvidenceApiResponse {
+  persistence: PersistenceState
+  evidence: P1VectorRagEvidenceResult
+  metadata?: {
+    workspaceId: string
+    query: string
+  }
+  error?: string
+}
+
 export interface TeamCostCalibrationResult {
   plannedCallsPerDay: number
   actualCallsPerDay: number
@@ -129,6 +158,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter(item => typeof item === 'string') : []
+}
+
+function isP1UsageAdapterSource(value: unknown): value is P1UsageAdapterSource {
+  return value === 'openai'
+    || value === 'anthropic'
+    || value === 'vercel_ai_gateway'
+    || value === 'helicone'
+    || value === 'langfuse'
+    || value === 'application_gateway'
 }
 
 function queryValue(query: Record<string, string | string[] | undefined>, key: string): string | undefined {
@@ -171,6 +209,26 @@ function emptyUsageSummary(errors: string[] = []): UsageImportSummary {
     avgOutputTokensPerRequest: 0,
     p95OutputTokens: 0,
     topFeatureByCost: null,
+  }
+}
+
+function emptyRagEvidence(): P1VectorRagEvidenceResult {
+  const emptyResult = (kind: 'official_docs' | 'benchmark' | 'decision_history'): P1RagEvidenceResult => ({
+    kind,
+    found: false,
+    refs: [],
+    mayOverrideFacts: false,
+    records: [],
+    warnings: [],
+  })
+  return {
+    mayOverrideFacts: false,
+    results: {
+      official_docs: emptyResult('official_docs'),
+      benchmark_evidence: { ...emptyResult('benchmark'), warnings: ['baseline_unavailable'] },
+      decision_history: emptyResult('decision_history'),
+    },
+    warnings: ['baseline_unavailable'],
   }
 }
 
@@ -448,6 +506,130 @@ export async function handleUsageImportApi(
   } catch (error) {
     if (isStorageNotConfigured(error)) return storageErrorBody({ ...base, summary })
     return { status: 500, body: { ...base, summary, error: 'usage_import_failed' } }
+  }
+}
+
+export async function handleSdkLiteUsageApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<SdkLiteUsageApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const base: SdkLiteUsageApiResponse = {
+    persistence: 'not_configured',
+    snapshotAllowed: false,
+    eventRef: null,
+    normalized: null,
+    history: [],
+  }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  if (method !== 'POST') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  if (!isObject(body) || !isP1UsageAdapterSource(body.source) || !isObject(body.event)) {
+    return { status: 400, body: { ...base, error: 'invalid_sdk_lite_event' } }
+  }
+
+  const normalized = normalizeSdkLiteUsageEvent({
+    source: body.source,
+    event: body.event as unknown as P1SdkLiteUsageEvent,
+  })
+  const store = contextStore(context)
+  const requestId = normalized.normalizedEvent.request_id || new Date().getTime().toString(36)
+  const eventRef = `sdk:p1:${workspaceId}:${requestId}`
+
+  if (!normalized.snapshotAllowed) {
+    return {
+      status: 422,
+      body: {
+        ...base,
+        persistence: store.persistence,
+        normalized,
+        error: 'trust_pipeline_blocked',
+      },
+    }
+  }
+
+  try {
+    const historyKey = workspaceKey(workspaceId, 'sdk-lite-usage-history')
+    const ingestedAt = (context.now?.() ?? new Date()).toISOString()
+    const existing = await store.getJson<Array<{ eventRef: string; ingestedAt: string }>>(historyKey) ?? []
+    const history = [{ eventRef, ingestedAt }, ...existing]
+    await store.setJson(workspaceKey(workspaceId, `sdk-lite:${requestId}`), normalized)
+    await store.setJson(historyKey, history)
+
+    return {
+      status: 202,
+      body: {
+        persistence: store.persistence,
+        snapshotAllowed: true,
+        eventRef,
+        normalized,
+        history,
+      },
+    }
+  } catch (error) {
+    if (isStorageNotConfigured(error)) return storageErrorBody({ ...base, normalized, snapshotAllowed: true, eventRef })
+    return { status: 500, body: { ...base, normalized, eventRef, error: 'sdk_lite_ingestion_failed' } }
+  }
+}
+
+function ragCollections(value: unknown) {
+  const input = isObject(value) ? value : {}
+  const collections = ['official_docs', 'benchmark_evidence', 'decision_history'].reduce<Record<P1VectorRagKind, Array<{ id: string; text: string; sourceUrl?: string }>>>((result, kind) => {
+    const records = input[kind]
+    result[kind as P1VectorRagKind] = Array.isArray(records)
+      ? records.filter(isObject).map(record => ({
+        id: typeof record.id === 'string' ? record.id : '',
+        text: typeof record.text === 'string' ? record.text : '',
+        sourceUrl: typeof record.sourceUrl === 'string' ? record.sourceUrl : undefined,
+      })).filter(record => record.id && record.text)
+      : []
+    return result
+  }, {
+    official_docs: [],
+    benchmark_evidence: [],
+    decision_history: [],
+  })
+  return collections
+}
+
+export async function handleP1RagEvidenceApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<P1RagEvidenceApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const base: P1RagEvidenceApiResponse = {
+    persistence: 'not_configured',
+    evidence: emptyRagEvidence(),
+  }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  if (method !== 'POST') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  if (!isObject(body) || typeof body.query !== 'string') {
+    return { status: 400, body: { ...base, error: 'invalid_rag_query' } }
+  }
+
+  const evidence = retrieveP1VectorRagEvidence({
+    query: body.query,
+    collections: ragCollections(body.collections),
+    structuredFactRefs: stringArray(body.structuredFactRefs),
+  })
+  const store = contextStore(context)
+
+  if (store.persistence === 'kv') {
+    await store.setJson(workspaceKey(workspaceId, 'p1-rag-last-query'), {
+      query: body.query,
+      refs: Object.values(evidence.results).flatMap(result => result.refs),
+      retrievedAt: new Date().toISOString(),
+    })
+  }
+
+  return {
+    status: 200,
+    body: {
+      persistence: store.persistence,
+      evidence,
+      metadata: { workspaceId, query: body.query },
+    },
   }
 }
 

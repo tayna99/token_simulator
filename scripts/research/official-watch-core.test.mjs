@@ -3,6 +3,7 @@ import {
   buildCandidateFromDetectedModel,
   extractChinesePricingFacts,
   normalizeOfficialSourceText,
+  officialWatchExitCode,
   parseOfficialSourceFixture,
 } from './official-watch-core.mjs'
 
@@ -77,5 +78,26 @@ describe('official-watch-core', () => {
     expect(candidate.apiPricingAvailable).toBe(false)
     expect(candidate.requiresCustomPricing).toBe(true)
     expect(candidate.status).toBe('needs_pricing_review')
+  })
+
+  it('treats dry-run source changes as a reportable event unless fail-on-change is enabled', () => {
+    expect(officialWatchExitCode({
+      errorCount: 0,
+      changedSourceCount: 3,
+      dryRun: true,
+      failOnChange: false,
+    })).toBe(0)
+    expect(officialWatchExitCode({
+      errorCount: 0,
+      changedSourceCount: 3,
+      dryRun: true,
+      failOnChange: true,
+    })).toBe(1)
+    expect(officialWatchExitCode({
+      errorCount: 1,
+      changedSourceCount: 0,
+      dryRun: true,
+      failOnChange: false,
+    })).toBe(2)
   })
 })

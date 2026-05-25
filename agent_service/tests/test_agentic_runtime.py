@@ -99,6 +99,7 @@ def test_agent_tool_registry_is_read_only_and_extensible():
     assert "retrieve_front_operating_assets" in names
     assert "retrieve_front_operating_gate" in names
     assert "retrieve_learning_loop_records" in names
+    assert "retrieve_p1_vector_rag_evidence" in names
     assert names.isdisjoint(FORBIDDEN_AGENT_TOOL_NAMES)
 
 
@@ -130,6 +131,7 @@ def test_capability_tools_return_grounded_envelopes():
     benchmark = json.loads(tools["retrieve_benchmark_evidence"].invoke({"query": "missing", "tags": ["peer"]}))
     official_sources = json.loads(tools["retrieve_official_source_registry"].invoke({"provider_region": "global"}))
     official_snippets = json.loads(tools["retrieve_official_source_snippets"].invoke({"query": "GLM-5"}))
+    vector_rag = json.loads(tools["retrieve_p1_vector_rag_evidence"].invoke({"query": "GLM-5 routing"}))
     release_candidates = json.loads(tools["retrieve_model_release_candidates"].invoke({"model_owner": "zai_glm", "serving_provider": "z_ai", "status": "needs_pricing_review"}))
     fx_snapshot = json.loads(tools["retrieve_fx_rate_snapshot"].invoke({"currency": "CNY", "date": "2026-05-24"}))
 
@@ -148,6 +150,9 @@ def test_capability_tools_return_grounded_envelopes():
     assert "baseline_unavailable" in benchmark["warnings"]
     assert official_sources["refs"] == ["source:zai-pricing"]
     assert official_snippets["refs"] == ["source:zai-pricing#glm-5"]
+    assert vector_rag["toolName"] == "retrieve_p1_vector_rag_evidence"
+    assert vector_rag["refs"] == ["source:zai-pricing#glm-5", "risk:risk-model-routing-quality"]
+    assert vector_rag["data"]["mayOverrideFacts"] is False
     assert release_candidates["refs"] == ["candidate:zai:glm:z-ai:global"]
     assert "manual_review_required" in fx_snapshot["warnings"]
 
@@ -205,6 +210,8 @@ def test_agent_tool_permission_matrix_keeps_calculation_tools_out():
     assert "retrieve_front_operating_system" in AGENT_TOOL_PERMISSION_MATRIX["usage_data_ingestion"]
     assert "retrieve_front_operating_gate" in AGENT_TOOL_PERMISSION_MATRIX["trust_security_compliance"]
     assert "retrieve_learning_loop_records" in AGENT_TOOL_PERMISSION_MATRIX["knowledge_release_ops"]
+    assert "retrieve_p1_vector_rag_evidence" in AGENT_TOOL_PERMISSION_MATRIX["provider_api_intelligence"]
+    assert "retrieve_p1_vector_rag_evidence" in AGENT_TOOL_PERMISSION_MATRIX["knowledge_release_ops"]
 
 
 def test_stage_router_supports_committee_single_agent_and_all_hands():

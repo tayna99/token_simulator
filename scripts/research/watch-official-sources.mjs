@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   buildCandidateFromDetectedModel,
   hashOfficialSourceText,
+  officialWatchExitCode,
 } from './official-watch-core.mjs'
 import { extractOfficialFacts } from './extract-official-facts.mjs'
 import { partitionCandidateInbox } from './candidate-inbox.mjs'
@@ -22,6 +23,7 @@ const ARTIFACT_DIR = resolve(REPO_ROOT, 'artifacts', 'research', 'official-watch
 const args = new Set(process.argv.slice(2))
 const UPDATE_BASELINE = args.has('--update')
 const DRY_RUN = !UPDATE_BASELINE
+const FAIL_ON_CHANGE = args.has('--fail-on-change')
 
 function loadJson(file, fallback) {
   if (!existsSync(file)) return fallback
@@ -158,8 +160,13 @@ async function main() {
     errors: errors.length,
     artifact: 'artifacts/research/official-watch/latest-report.json',
   }, null, 2))
-  if (errors.length > 0) process.exit(2)
-  if (changedSources.length > 0 && DRY_RUN) process.exit(1)
+  const exitCode = officialWatchExitCode({
+    errorCount: errors.length,
+    changedSourceCount: changedSources.length,
+    dryRun: DRY_RUN,
+    failOnChange: FAIL_ON_CHANGE,
+  })
+  if (exitCode !== 0) process.exit(exitCode)
 }
 
 main().catch(error => {

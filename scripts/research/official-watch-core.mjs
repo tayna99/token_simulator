@@ -16,6 +16,12 @@ export function hashOfficialSourceText(text) {
   return createHash('sha256').update(normalizeOfficialSourceText(text)).digest('hex')
 }
 
+export function officialWatchExitCode({ errorCount, changedSourceCount, dryRun, failOnChange = false }) {
+  if (errorCount > 0) return 2
+  if (failOnChange && dryRun && changedSourceCount > 0) return 1
+  return 0
+}
+
 const KNOWN_MODEL_PATTERNS = [
   { re: /\bQwen(?:3|2\.5)?[\w .-]*/gi, owner: 'alibaba_qwen', family: 'qwen' },
   { re: /\bKimi\s*K?[\w .-]*/gi, owner: 'moonshot_kimi', family: 'kimi' },

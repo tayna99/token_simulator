@@ -40,6 +40,8 @@ export interface CustomerWorkspaceDashboard {
 }
 
 export type P1RagKind = 'official_docs' | 'benchmark' | 'decision_history'
+export type P1VectorRagKind = 'official_docs' | 'benchmark_evidence' | 'decision_history'
+export type P1ApprovalStatus = 'draft' | 'approved' | 'rejected' | 'executed'
 
 export interface P1RagRecord {
   id: string
@@ -54,6 +56,24 @@ export interface P1RagEvidenceResult {
   mayOverrideFacts: false
   records: P1RagRecord[]
   warnings: string[]
+}
+
+export interface P1VectorRagEvidenceResult {
+  mayOverrideFacts: false
+  results: Record<P1VectorRagKind, P1RagEvidenceResult>
+  warnings: string[]
+}
+
+export interface P1OperatingContract {
+  workspaceId: string
+  snapshotVersion: string
+  agentRunId: string
+  approvalStatus: P1ApprovalStatus
+  ledgerEntryId: string
+  mutationPolicy: {
+    phaseOrder: ['draft', 'human_approval', 'execute', 'rollback_metadata', 'ledger']
+    externalMutationAllowed: false
+  }
 }
 
 export type P1UsageAdapterSource =
@@ -81,6 +101,58 @@ export interface NormalizedP1UsageAdapterExport {
   source: P1UsageAdapterSource
   dimensions: NormalizedUsageDimension[]
   missingDimensions: NormalizedUsageDimension[]
+  trustInspection: TrustInspectionResult
+  snapshotAllowed: boolean
+}
+
+export interface P1SdkLiteUsageEvent {
+  timestamp: string
+  requestId: string
+  customerId: string
+  feature: string
+  model: string
+  plan: string
+  sessionId: string
+  agentRunId: string
+  inputTokens: number
+  outputTokens: number
+  retryCount: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  latencyMs: number
+  status: 'success' | 'failed' | 'error' | 'timeout' | 'retry'
+  deliverable: string
+  taskType: string
+  humanReview: boolean
+  rawPrompt?: string
+  rawCompletion?: string
+  apiKey?: string
+  userEmail?: string
+}
+
+export interface NormalizedP1SdkLiteUsageEvent {
+  source: P1UsageAdapterSource
+  normalizedEvent: {
+    timestamp: string
+    request_id: string
+    customer: string
+    feature: string
+    model: string
+    plan: string
+    session: string
+    agent_run: string
+    input_tokens: number
+    output_tokens: number
+    retry_count: number
+    cache_read_tokens: number
+    cache_write_tokens: number
+    latency_ms: number
+    status: P1SdkLiteUsageEvent['status']
+    deliverable: string
+    task_type: string
+    human_review: boolean
+  }
+  excludedFields: string[]
   trustInspection: TrustInspectionResult
   snapshotAllowed: boolean
 }
@@ -128,6 +200,14 @@ export interface P1AlertDraft {
   destination: 'slack' | 'email'
   requiresHumanApproval: true
   sourceRefs: string[]
+}
+
+export interface P1ActionApprovalGate {
+  executionAllowed: boolean
+  nextRequiredStep: 'human_approval' | 'execute' | 'ledger'
+  ledgerRequired: boolean
+  rollbackMetadataRequired: boolean
+  warnings: string[]
 }
 
 export interface BillingChangeDraft {
@@ -182,6 +262,77 @@ function csvHeaders(rawCsv: string): Set<string> {
 
 function hasAny(headers: Set<string>, names: string[]): boolean {
   return names.some(name => headers.has(name))
+}
+
+function workspaceId(value: string): string {
+  const normalized = value.trim().replace(/[^0-9A-Za-z_-]+/g, '-').replace(/^-+|-+$/g, '')
+  return normalized || 'workspace'
+}
+
+function unique<T>(items: T[]): T[] {
+  return Array.from(new Set(items))
+}
+
+function refWithPrefix(prefix: string, value: string): string {
+  return value.startsWith(`${prefix}:`) ? value : `${prefix}:${value}`
+}
+
+function recordMatches(record: P1RagRecord, queryTerms: string[]): boolean {
+  if (queryTerms.length === 0) return true
+  const haystack = `${record.id} ${record.text} ${record.sourceUrl ?? ''}`.toLowerCase()
+  return queryTerms.some(term => haystack.includes(term))
+}
+
+function sdkLiteCsvForTrust(event: P1SdkLiteUsageEvent): string {
+  const headers = [
+    'timestamp',
+    'customer_id',
+    'plan_id',
+    'feature',
+    'model',
+    'input_tokens',
+    'output_tokens',
+    'retry_count',
+    'status',
+    ...(event.rawPrompt || event.rawCompletion ? ['raw_prompt'] : []),
+    ...(event.apiKey ? ['api_key'] : []),
+    ...(event.userEmail ? ['user_email'] : []),
+  ]
+  const values = [
+    event.timestamp,
+    event.customerId,
+    event.plan,
+    event.feature,
+    event.model,
+    String(event.inputTokens),
+    String(event.outputTokens),
+    String(event.retryCount),
+    event.status,
+    ...(event.rawPrompt || event.rawCompletion ? [event.rawPrompt ?? event.rawCompletion ?? ''] : []),
+    ...(event.apiKey ? [event.apiKey] : []),
+    ...(event.userEmail ? [event.userEmail] : []),
+  ]
+  return `${headers.join(',')}\n${values.join(',')}`
+}
+
+export function buildP1OperatingContract(input: {
+  workspaceId: string
+  snapshotVersion: string
+  agentRunId: string
+  approvalStatus: P1ApprovalStatus
+  ledgerEntryId: string
+}): P1OperatingContract {
+  return {
+    workspaceId: workspaceId(input.workspaceId),
+    snapshotVersion: input.snapshotVersion,
+    agentRunId: input.agentRunId,
+    approvalStatus: input.approvalStatus,
+    ledgerEntryId: input.ledgerEntryId,
+    mutationPolicy: {
+      phaseOrder: ['draft', 'human_approval', 'execute', 'rollback_metadata', 'ledger'],
+      externalMutationAllowed: false,
+    },
+  }
 }
 
 export function buildCustomerWorkspaceDashboard(input: CustomerWorkspaceDashboardInput): CustomerWorkspaceDashboard {
@@ -263,6 +414,69 @@ export function retrieveP1RagEvidence(input: {
   }
 }
 
+function retrieveVectorCollection(input: {
+  kind: P1VectorRagKind
+  queryTerms: string[]
+  records: P1RagRecord[]
+  structuredFactRefs: string[]
+}): P1RagEvidenceResult {
+  const records = input.records.filter(record => recordMatches(record, input.queryTerms))
+  const prefix = input.kind === 'official_docs'
+    ? 'source'
+    : input.kind === 'benchmark_evidence'
+      ? 'evidence'
+      : 'decision'
+  const warnings = [
+    ...(input.kind === 'benchmark_evidence' && records.length === 0 ? ['baseline_unavailable'] : []),
+  ]
+
+  return {
+    kind: input.kind === 'benchmark_evidence' ? 'benchmark' : input.kind,
+    found: records.length > 0,
+    refs: [
+      ...records.map(record => refWithPrefix(prefix, record.id)),
+      ...(input.kind === 'official_docs' ? input.structuredFactRefs : []),
+    ],
+    mayOverrideFacts: false,
+    records,
+    warnings,
+  }
+}
+
+export function retrieveP1VectorRagEvidence(input: {
+  query: string
+  collections: Record<P1VectorRagKind, P1RagRecord[]>
+  structuredFactRefs: string[]
+}): P1VectorRagEvidenceResult {
+  const queryTerms = input.query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const results: Record<P1VectorRagKind, P1RagEvidenceResult> = {
+    official_docs: retrieveVectorCollection({
+      kind: 'official_docs',
+      queryTerms,
+      records: input.collections.official_docs,
+      structuredFactRefs: input.structuredFactRefs,
+    }),
+    benchmark_evidence: retrieveVectorCollection({
+      kind: 'benchmark_evidence',
+      queryTerms,
+      records: input.collections.benchmark_evidence,
+      structuredFactRefs: [],
+    }),
+    decision_history: retrieveVectorCollection({
+      kind: 'decision_history',
+      queryTerms,
+      records: input.collections.decision_history,
+      structuredFactRefs: [],
+    }),
+  }
+
+  return {
+    mayOverrideFacts: false,
+    results,
+    warnings: unique(Object.values(results).flatMap(result => result.warnings)),
+  }
+}
+
 export function normalizeP1UsageAdapterExport(input: {
   source: P1UsageAdapterSource
   rawCsv: string
@@ -292,6 +506,49 @@ export function normalizeP1UsageAdapterExport(input: {
     missingDimensions: REQUIRED_USAGE_DIMENSIONS.filter(dimension => !dimensions.includes(dimension)),
     trustInspection,
     snapshotAllowed: trustInspection.allowedForSnapshot,
+  }
+}
+
+export function normalizeSdkLiteUsageEvent(input: {
+  source: P1UsageAdapterSource
+  event: P1SdkLiteUsageEvent
+}): NormalizedP1SdkLiteUsageEvent {
+  const excludedFields = [
+    ...(input.event.rawPrompt !== undefined ? ['rawPrompt'] : []),
+    ...(input.event.rawCompletion !== undefined ? ['rawCompletion'] : []),
+    ...(input.event.apiKey !== undefined ? ['apiKey'] : []),
+    ...(input.event.userEmail !== undefined ? ['userEmail'] : []),
+  ]
+  const trustInspection = inspectUsageImportSecurity({
+    filename: `${input.source}-sdk-lite.csv`,
+    rawCsv: sdkLiteCsvForTrust(input.event),
+  })
+
+  return {
+    source: input.source,
+    normalizedEvent: {
+      timestamp: input.event.timestamp,
+      request_id: input.event.requestId,
+      customer: input.event.customerId,
+      feature: input.event.feature,
+      model: input.event.model,
+      plan: input.event.plan,
+      session: input.event.sessionId,
+      agent_run: input.event.agentRunId,
+      input_tokens: input.event.inputTokens,
+      output_tokens: input.event.outputTokens,
+      retry_count: input.event.retryCount,
+      cache_read_tokens: input.event.cacheReadTokens,
+      cache_write_tokens: input.event.cacheWriteTokens,
+      latency_ms: input.event.latencyMs,
+      status: input.event.status,
+      deliverable: input.event.deliverable,
+      task_type: input.event.taskType,
+      human_review: input.event.humanReview,
+    },
+    excludedFields,
+    trustInspection,
+    snapshotAllowed: trustInspection.allowedForSnapshot && excludedFields.length === 0,
   }
 }
 
@@ -350,6 +607,29 @@ export function draftBillingChange(input: {
     requiresHumanApproval: true,
     decisionRef: input.decisionRef,
     rollbackRef: input.rollbackRef,
+  }
+}
+
+export function buildP1ActionApprovalGate(input: {
+  draft: P1AlertDraft | BillingChangeDraft
+  approvalStatus: P1ApprovalStatus
+}): P1ActionApprovalGate {
+  const isBillingDraft = 'rollbackRef' in input.draft
+  const rollbackRef = 'rollbackRef' in input.draft ? input.draft.rollbackRef : ''
+  const hasRollbackMetadata = !isBillingDraft || Boolean(rollbackRef)
+  const approved = input.approvalStatus === 'approved'
+  const executionAllowed = approved && hasRollbackMetadata
+  const warnings = [
+    ...(!approved ? ['human_approval_required'] : []),
+    ...(isBillingDraft && !hasRollbackMetadata ? ['rollback_metadata_required'] : []),
+  ]
+
+  return {
+    executionAllowed,
+    nextRequiredStep: executionAllowed ? 'execute' : input.approvalStatus === 'rejected' ? 'ledger' : 'human_approval',
+    ledgerRequired: approved || input.approvalStatus === 'rejected',
+    rollbackMetadataRequired: isBillingDraft,
+    warnings,
   }
 }
 
