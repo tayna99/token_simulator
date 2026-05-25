@@ -7,6 +7,7 @@ import {
   handleReportsApi,
   handleRiskCardsApi,
   handleP1RagEvidenceApi,
+  handleRagIndexApi,
   handleP1ExternalActionsApi,
   handleOfficialUpdatesApi,
   handleSdkLiteUsageApi,
@@ -383,6 +384,45 @@ describe('P1 API handlers', () => {
       sourceUrl: source.url,
     })
     expect(response.body.contextBlocks?.[0].text).toContain('Cached input tokens')
+  })
+
+  it('indexes official RAG chunks once and retrieves evidence from workspace storage', async () => {
+    const store = createMemoryKvStore()
+    const officialDocChunks = chunkApiDoc(normalizeApiDoc({
+      source: {
+        id: 'openai-api-pricing',
+        modelOwner: 'openai',
+        servingProvider: 'first_party',
+        modelFamilies: ['gpt'],
+        sourceKind: 'pricing',
+        url: 'https://openai.com/api/pricing/',
+        pricingRegion: 'global',
+        sourceLanguage: 'en',
+        officialSourceTrust: 'official_pricing',
+      },
+      capturedAt: '2026-05-25T00:00:00.000Z',
+      rawText: '# OpenAI pricing\n\nCached input token pricing is discounted for repeated context.',
+    }))
+
+    const indexed = await handleRagIndexApi('POST', {
+      workspaceId: 'workspace-demo',
+      chunks: officialDocChunks,
+    }, { store })
+    const evidence = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cached input token pricing',
+      officialDocChunks: [{
+        ...officialDocChunks[0],
+        id: 'chunk:request-body-ignored',
+        text: 'Unrelated request-local body chunk.',
+        refs: ['source:request-body-ignored'],
+      }],
+    }, { store })
+
+    expect(indexed.status).toBe(202)
+    expect(indexed.body.stats.itemCount).toBe(officialDocChunks.length)
+    expect(evidence.body.evidence.results.official_docs.refs).toContain('source:openai-api-pricing')
+    expect(evidence.body.evidence.results.official_docs.refs).not.toContain('source:request-body-ignored')
   })
 
   it('keeps P1 RAG API benchmark gaps explicit instead of inventing peer averages', async () => {

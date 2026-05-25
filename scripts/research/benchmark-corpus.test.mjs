@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBenchmarkEvidenceRecords,
   parseArtificialAnalysis,
+  planBenchmarkFetches,
   serializeBenchmarkEvidenceJsonl,
 } from './benchmark-corpus.mjs'
 
@@ -80,5 +81,29 @@ describe('benchmark-corpus', () => {
       id: records[0].id,
       mayOverrideFacts: false,
     })
+  })
+
+  it('plans live collection only for URL-backed parser-supported sources', () => {
+    const planned = planBenchmarkFetches([
+      SOURCE,
+      {
+        ...SOURCE,
+        id: 'lmarena-leaderboard',
+        url: 'https://lmarena.ai/leaderboard',
+        parserStrategy: 'manual_review',
+      },
+      {
+        ...SOURCE,
+        id: 'provider-model-cards',
+        url: null,
+        parserStrategy: 'official_doc_manual_review',
+      },
+    ], [])
+
+    expect(planned.fetchableSources.map(source => source.id)).toEqual(['artificial-analysis-models'])
+    expect(planned.warnings).toEqual([
+      'lmarena-leaderboard:manual_review_parser_not_implemented',
+      'provider-model-cards:source_url_unavailable',
+    ])
   })
 })

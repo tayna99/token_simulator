@@ -157,26 +157,39 @@ function selectedSources(registry, args) {
   return registry.filter(source => source.active && (!selectedId || source.id === selectedId))
 }
 
+export function planBenchmarkFetches(registry, args) {
+  const warnings = []
+  const fetchableSources = []
+  for (const source of selectedSources(registry, args)) {
+    if (!source.url) {
+      warnings.push(`${source.id}:source_url_unavailable`)
+      continue
+    }
+    if (source.parserStrategy !== 'parseArtificialAnalysis') {
+      warnings.push(`${source.id}:manual_review_parser_not_implemented`)
+      continue
+    }
+    fetchableSources.push(source)
+  }
+  return { fetchableSources, warnings }
+}
+
 async function main() {
   const args = process.argv.slice(2)
-  const registry = selectedSources(loadJson(REGISTRY_FILE, []), args)
+  const plannedFetches = planBenchmarkFetches(loadJson(REGISTRY_FILE, []), args)
   const capturedAt = new Date().toISOString()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 45_000)
   const parsedRecords = []
   const errors = []
-  const warnings = []
+  const warnings = [...plannedFetches.warnings]
 
-  for (const source of registry) {
+  for (const source of plannedFetches.fetchableSources) {
     try {
       const text = await fetchText(source.url, controller.signal)
-      if (source.parserStrategy === 'parseArtificialAnalysis') {
-        const parsed = parseArtificialAnalysis({ source, text, capturedAt })
-        parsedRecords.push(...parsed.records)
-        warnings.push(...parsed.warnings.map(warning => `${source.id}:${warning}`))
-      } else {
-        warnings.push(`${source.id}:manual_review_parser_not_implemented`)
-      }
+      const parsed = parseArtificialAnalysis({ source, text, capturedAt })
+      parsedRecords.push(...parsed.records)
+      warnings.push(...parsed.warnings.map(warning => `${source.id}:${warning}`))
     } catch (error) {
       errors.push({
         id: source.id,
@@ -194,7 +207,7 @@ async function main() {
     resolve(ARTIFACT_DIR, 'latest-report.json'),
     `${JSON.stringify({
       generatedAt: capturedAt,
-      sourceCount: registry.length,
+      sourceCount: plannedFetches.fetchableSources.length,
       parsedMetricCount: parsedRecords.length,
       evidenceRecordCount: evidenceRecords.length,
       warnings,
@@ -209,7 +222,7 @@ async function main() {
       '# Benchmark Corpus Report',
       '',
       `- Generated: ${capturedAt}`,
-      `- Sources checked: ${registry.length}`,
+      `- Sources checked: ${plannedFetches.fetchableSources.length}`,
       `- Parsed metrics: ${parsedRecords.length}`,
       `- Evidence records: ${evidenceRecords.length}`,
       `- Warnings: ${warnings.length}`,
@@ -222,7 +235,7 @@ async function main() {
     'utf8',
   )
   console.log(JSON.stringify({
-    sources: registry.length,
+    sources: plannedFetches.fetchableSources.length,
     parsedMetrics: parsedRecords.length,
     evidenceRecords: evidenceRecords.length,
     warnings: warnings.length,

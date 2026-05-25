@@ -147,4 +147,23 @@ describe('apiDocRag', () => {
     })
     expect(results[0].chunk.metadata.headingPath).toContain('Pricing')
   })
+
+  it('deletes stored official doc chunks by source id', async () => {
+    const chunks = chunkApiDoc(normalizeApiDoc({
+      source: SOURCE,
+      rawText: '# Gemini API\n\n## Pricing\nCached input tokens receive a discount.',
+      capturedAt: CAPTURED_AT,
+    }))
+    const store = createMemoryVectorStore({
+      collection: 'official_docs',
+      embeddingProvider: createHashEmbeddingProvider({ dimensions: 32 }),
+    })
+
+    await store.upsertChunks(chunks)
+    await store.deleteBySource(SOURCE.id)
+    const results = await store.search({ query: 'cached input discount pricing' })
+
+    expect(await store.stats()).toMatchObject({ itemCount: 0 })
+    expect(results).toEqual([])
+  })
 })

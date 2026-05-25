@@ -15,6 +15,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     testTimeout: 60000,
+    pool: 'threads',
     maxWorkers: 4,
     exclude: [...configDefaults.exclude, '.worktrees/**'],
   },

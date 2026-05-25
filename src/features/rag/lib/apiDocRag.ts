@@ -95,6 +95,7 @@ export interface VectorStore {
     topK?: number
     filter?: Partial<ApiDocChunkMetadata>
   }): Promise<VectorSearchResult[]>
+  deleteBySource(sourceId: string): Promise<void>
   stats(): Promise<VectorStoreStats>
 }
 
@@ -486,6 +487,12 @@ export function createMemoryVectorStore(input: {
         filter: searchInput.filter,
         embeddingProvider: input.embeddingProvider,
       })
+    },
+    async deleteBySource(sourceId) {
+      index = {
+        ...index,
+        items: index.items.filter(item => item.chunk.metadata.sourceId !== sourceId),
+      }
     },
     async stats() {
       return {

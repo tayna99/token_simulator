@@ -39,10 +39,12 @@ import {
 import {
   buildRagContextBlocks,
   buildVectorIndex,
+  createMemoryVectorStore,
   createHashEmbeddingProvider,
   searchVectorIndex,
   type ApiDocChunk,
   type RagContextBlock,
+  type VectorStoreStats,
 } from '../features/rag/lib/apiDocRag'
 import {
   buildOfficialUpdatesReviewInbox,
@@ -164,6 +166,13 @@ export interface P1RagEvidenceApiResponse {
   error?: string
 }
 
+export interface RagIndexApiResponse {
+  persistence: PersistenceState
+  indexedCount: number
+  stats: VectorStoreStats
+  error?: string
+}
+
 export interface P1ExternalActionsApiResponse {
   persistence: PersistenceState
   actions: P1ExternalAction[]
@@ -263,6 +272,10 @@ function normalizedWorkspaceId(body: unknown, query: Record<string, string | str
 
 function workspaceKey(workspaceId: string, name: string): string {
   return `workspace:${workspaceId}:${name}`
+}
+
+function ragIndexKey(workspaceId: string): string {
+  return workspaceKey(workspaceId, 'p1-rag-official-doc-chunks')
 }
 
 function emptyUsageSummary(errors: string[] = []): UsageImportSummary {
@@ -679,6 +692,21 @@ function apiDocChunks(value: unknown): ApiDocChunk[] {
   return Array.isArray(value) ? value.filter(isApiDocChunk) : []
 }
 
+function uniqueApiDocChunks(chunks: ApiDocChunk[]): ApiDocChunk[] {
+  const byId = new Map<string, ApiDocChunk>()
+  for (const chunk of chunks) byId.set(chunk.id, chunk)
+  return Array.from(byId.values()).sort((left, right) => left.id.localeCompare(right.id))
+}
+
+async function officialDocsVectorStats(chunks: ApiDocChunk[]): Promise<VectorStoreStats> {
+  const vectorStore = createMemoryVectorStore({
+    collection: 'official_docs',
+    embeddingProvider: createHashEmbeddingProvider(),
+  })
+  await vectorStore.upsertChunks(chunks)
+  return vectorStore.stats()
+}
+
 function corpusCollections(value: unknown): CorpusCollectionsInput {
   const input = isObject(value) ? value : {}
   return CORPUS_IDS.reduce<CorpusCollectionsInput>((result, corpusId) => {
@@ -822,6 +850,7 @@ export async function handleP1RagEvidenceApi(
   }
 
   const structuredFactRefs = stringArray(body.structuredFactRefs)
+  const store = contextStore(context)
   const evidence = retrieveP1VectorRagEvidence({
     query: body.query,
     collections: ragCollections(body.collections),
@@ -840,8 +869,13 @@ export async function handleP1RagEvidenceApi(
   if (corpusEvidence) {
     applyCorpusEvidenceToLegacyP1({ evidence, corpusEvidence, structuredFactRefs })
   }
+  const storedOfficialDocChunks = store.persistence === 'kv'
+    ? apiDocChunks(await store.getJson<unknown[]>(ragIndexKey(workspaceId)))
+    : []
   let contextBlocks: RagContextBlock[] = []
-  const officialDocChunks = apiDocChunks(body.officialDocChunks)
+  const officialDocChunks = storedOfficialDocChunks.length > 0
+    ? storedOfficialDocChunks
+    : apiDocChunks(body.officialDocChunks)
   if (officialDocChunks.length > 0) {
     const officialDocs = await retrieveOfficialDocsVectorEvidence({
       query: body.query,
@@ -853,7 +887,6 @@ export async function handleP1RagEvidenceApi(
     evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
     contextBlocks = officialDocs.contextBlocks
   }
-  const store = contextStore(context)
 
   if (store.persistence === 'kv') {
     await store.setJson(workspaceKey(workspaceId, 'p1-rag-last-query'), {
@@ -875,6 +908,65 @@ export async function handleP1RagEvidenceApi(
       contextBlocks,
       metadata: { workspaceId, query: body.query },
     },
+  }
+}
+
+export async function handleRagIndexApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<RagIndexApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const emptyStats: VectorStoreStats = { collection: 'official_docs', dimensions: 64, itemCount: 0 }
+  const base: RagIndexApiResponse = {
+    persistence: 'not_configured',
+    indexedCount: 0,
+    stats: emptyStats,
+  }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  if (method !== 'POST' && method !== 'GET') {
+    return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  }
+
+  const store = contextStore(context)
+  if (store.persistence !== 'kv') {
+    return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+  }
+
+  try {
+    const key = ragIndexKey(workspaceId)
+    const existing = apiDocChunks(await store.getJson<unknown[]>(key))
+    if (method === 'GET') {
+      return {
+        status: 200,
+        body: {
+          persistence: store.persistence,
+          indexedCount: existing.length,
+          stats: await officialDocsVectorStats(existing),
+        },
+      }
+    }
+
+    if (!isObject(body)) return { status: 400, body: { ...base, persistence: store.persistence, error: 'invalid_rag_index_request' } }
+    const chunks = apiDocChunks(body.chunks)
+    if (chunks.length === 0) {
+      return { status: 400, body: { ...base, persistence: store.persistence, error: 'invalid_rag_chunks' } }
+    }
+    const indexedChunks = uniqueApiDocChunks([...existing, ...chunks])
+    await store.setJson(key, indexedChunks)
+    return {
+      status: 202,
+      body: {
+        persistence: store.persistence,
+        indexedCount: chunks.length,
+        stats: await officialDocsVectorStats(indexedChunks),
+      },
+    }
+  } catch (error) {
+    if (isStorageNotConfigured(error)) {
+      return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+    }
+    return { status: 500, body: { ...base, persistence: store.persistence, error: 'rag_index_failed' } }
   }
 }
 

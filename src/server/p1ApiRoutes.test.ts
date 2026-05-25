@@ -109,4 +109,59 @@ describe('P1 Vercel API routes', () => {
       },
     })
   })
+
+  it('routes official doc indexing through /api/rag/index', async () => {
+    vi.doMock('./storage/kvStore', () => ({
+      createKvStoreFromEnv: () => ({
+        persistence: 'kv',
+        values: new Map<string, unknown>(),
+        async getJson<T>(key: string) {
+          return this.values.get(key) as T | undefined
+        },
+        async setJson(key: string, value: unknown) {
+          this.values.set(key, value)
+        },
+      }),
+      isStorageNotConfigured: () => false,
+    }))
+
+    const { default: handler } = await import('../../api/rag/index')
+    const { result, response } = responseCollector()
+
+    await handler({
+      method: 'POST',
+      body: {
+        workspaceId: 'workspace-demo',
+        chunks: [{
+          id: 'source:openai-api-pricing#pricing',
+          collection: 'official_docs',
+          text: 'Cached input tokens receive discounted pricing.',
+          sourceUrl: 'https://openai.com/api/pricing/',
+          refs: ['source:openai-api-pricing'],
+          metadata: {
+            sourceId: 'openai-api-pricing',
+            provider: 'openai',
+            servingProvider: 'first_party',
+            modelFamilies: ['gpt'],
+            sourceKind: 'pricing',
+            sourceLanguage: 'en',
+            pricingRegion: 'global',
+            officialSourceTrust: 'official_pricing',
+            capturedAt: '2026-05-25T00:00:00.000Z',
+            headingPath: ['OpenAI pricing'],
+            sectionType: 'pricing',
+            contentHash: 'cached-pricing',
+          },
+        }],
+      },
+      query: {},
+    }, response)
+
+    expect(result.statusCode).toBe(202)
+    expect(result.body).toMatchObject({
+      persistence: 'kv',
+      indexedCount: 1,
+      stats: { collection: 'official_docs', itemCount: 1 },
+    })
+  }, 30000)
 })
