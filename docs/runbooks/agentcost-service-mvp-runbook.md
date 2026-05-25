@@ -31,3 +31,8 @@
 ## P1 Queue Link
 
 Keep the P1 queue in `docs/superpowers/plans/2026-05-24-complete-service-mvp-trust-runtime.md` as the authority for the next build pass: supervisor agent-as-tool orchestration, full vector RAG, official docs change monitoring, SDK/gateway collection, vLLM/GPU economics, alerts, billing execution, benchmark marketplace, SaaS dashboard, and retention automation.
+
+## Smoke Runbook
+
+Use `docs/runbooks/agent-runtime-smoke.md` to verify `/api/agent/run`, provider
+grounding, all-hands fallback routing, and the local browser SparkClaw flow.

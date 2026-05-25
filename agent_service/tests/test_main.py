@@ -105,7 +105,8 @@ def test_team_cost_agent_endpoint_contract(monkeypatch):
     assert "API team report" in body["events"][-1]["message"]
 
 
-def test_agent_run_endpoint_contract():
+def test_agent_run_endpoint_contract(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = TestClient(main.app)
 
     response = client.post(
