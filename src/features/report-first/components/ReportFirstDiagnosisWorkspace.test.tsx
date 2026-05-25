@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ReportFirstDiagnosisWorkspace } from './ReportFirstDiagnosisWorkspace'
@@ -21,7 +21,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.getAllByRole('button', { name: /Stripe\/매출 CSV 업로드/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /샘플로 보기/ }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Summary JSON/ })).toBeInTheDocument()
-    expect(screen.queryByText(/RAG|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/RAG evidence|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ })[0]).toBeDisabled()
   })
@@ -107,6 +107,20 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(fetcher).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }))
   })
 
+  it('keeps internal refs hidden until the user opens evidence details', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+
+    expect(screen.queryByText(/tool:diagnosis/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/source:|evidence:|Watchtower|RAG evidence|agent route/i)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /근거 보기/ }))
+
+    expect(screen.getByText(/tool:diagnosis.loss_customers/)).toBeInTheDocument()
+    expect(screen.getByText(/usage:p1|diagnosis_preview/)).toBeInTheDocument()
+  })
+
   it('requires explicit Adopt Reject or Hold before creating a PDF report', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -132,10 +146,13 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
 
+    expect(screen.getByTestId('pdf-disabled-reason')).toHaveTextContent(/결정 후보를 먼저 선택하세요/)
     expect(screen.getByText(/Adopt\/Reject\/Hold 선택이 필요합니다/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))).toBeUndefined()
 
     fireEvent.click(screen.getByLabelText(/요금제\/credit 정책 변경 후보/))
+
+    expect(screen.getByTestId('pdf-disabled-reason')).toHaveTextContent(/Adopt\/Reject\/Hold 선택이 필요합니다/)
     fireEvent.click(screen.getByRole('button', { name: /Adopt/ }))
 
     const enabledPdfButton = screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))
@@ -148,5 +165,78 @@ describe('ReportFirstDiagnosisWorkspace', () => {
       decisionRefs: ['decision:diagnosis:pricing-policy'],
       decisionChoice: 'adopt',
     })
+  })
+
+  it('clears the decision choice and persisted PDF artifact when the CSV source changes', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/usage/import')) {
+        return new Response(JSON.stringify({ snapshotRef: 'usage:p1:workspace-demo:2026-05' }), { status: 202 })
+      }
+      if (url.includes('/api/reports')) {
+        return new Response(JSON.stringify({
+          reportRun: {
+            id: 'report-run-2026-05',
+            artifacts: [{
+              id: 'report-artifact:report-run-2026-05:pdf',
+              format: 'pdf',
+              downloadPath: '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:pdf',
+            }],
+          },
+        }), { status: 202 })
+      }
+      return new Response('{}', { status: 404 })
+    })
+
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" fetcher={fetcher} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByLabelText(/요금제\/credit 정책 변경 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Adopt/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))!)
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /PDF 리포트 다운로드/ })).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText(/사용량 CSV/i), {
+      target: { value: csvFor('agent_workflow', 77) },
+    })
+
+    expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))).toBeUndefined()
+  })
+
+  it('ignores stale snapshot refs from an older delayed CSV import', async () => {
+    let resolveFirstImport!: (response: Response) => void
+    const firstImport = new Promise<Response>(resolve => {
+      resolveFirstImport = resolve
+    })
+    let importCount = 0
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/usage/import')) {
+        importCount += 1
+        if (importCount === 1) return firstImport
+        return new Response(JSON.stringify({ snapshotRef: 'usage:p1:newer-run' }), { status: 202 })
+      }
+      return new Response('{}', { status: 404 })
+    })
+
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" fetcher={fetcher} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.change(screen.getByLabelText(/사용량 CSV/i), {
+      target: { value: csvFor('agent_workflow', 77) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /분석 시작/ }))
+    fireEvent.click(screen.getByRole('button', { name: /근거 보기/ }))
+
+    await waitFor(() => expect(screen.getByText('usage:p1:newer-run')).toBeInTheDocument())
+
+    await act(async () => {
+      resolveFirstImport(new Response(JSON.stringify({ snapshotRef: 'usage:p1:older-run' }), { status: 202 }))
+      await firstImport
+    })
+
+    expect(screen.queryByText('usage:p1:older-run')).not.toBeInTheDocument()
   })
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { MODELS } from '../../../data/models'
 import { Badge, Button, Field, MetricTile, Surface } from '../../../shared/ui/primitives'
@@ -103,6 +103,7 @@ function MoneyLeakStepRail({ states }: { states: Record<MoneyLeakStepId, MoneyLe
 }
 
 export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, fetcher }: Props) {
+  const importGenerationRef = useRef(0)
   const [inputMode, setInputMode] = useState<InputMode>('csv')
   const [rawCsv, setRawCsv] = useState('')
   const [summaryJson, setSummaryJson] = useState('')
@@ -114,11 +115,43 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
   const [message, setMessage] = useState('')
   const [pdfArtifact, setPdfArtifact] = useState<PdfArtifact | null>(null)
   const [reportError, setReportError] = useState('')
+  const [showEvidence, setShowEvidence] = useState(false)
 
   const request = useMemo(() => safeFetcher(fetcher), [fetcher])
   const selectedDecision = snapshot?.decisionCandidates.find(item => item.id === selectedDecisionId)
   const roleView = snapshot?.roleViews[activeRole]
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
+
+  function nextImportGeneration() {
+    importGenerationRef.current += 1
+    return importGenerationRef.current
+  }
+
+  function invalidatePendingImports() {
+    importGenerationRef.current += 1
+  }
+
+  function resetDerivedReportState() {
+    invalidatePendingImports()
+    setSnapshot(null)
+    setSelectedDecisionId('')
+    setDecisionChoice('')
+    setTrustResult(null)
+    setMessage('')
+    setPdfArtifact(null)
+    setReportError('')
+    setShowEvidence(false)
+  }
+
+  function updateRawCsv(value: string) {
+    setRawCsv(value)
+    resetDerivedReportState()
+  }
+
+  function updateSummaryJson(value: string) {
+    setSummaryJson(value)
+    resetDerivedReportState()
+  }
 
   async function persistCsvImport(csv: string) {
     if (!request) return null
@@ -141,6 +174,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
     snapshotRef: string | null = null,
     options: { useSampleRevenue?: boolean } = {},
   ) {
+    const importGeneration = nextImportGeneration()
     const next = buildDiagnosisSnapshot({
       workspaceId,
       summary,
@@ -154,46 +188,53 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
     setTrustResult(summary.trustInspection ?? null)
     setPdfArtifact(null)
     setReportError('')
+    setShowEvidence(false)
     setMessage(next.reportGate.status === 'blocked' ? next.reportGate.reason : '')
-    return next
+    return importGeneration
   }
 
-  function attachRemoteSnapshotRef(csv: string) {
+  function attachRemoteSnapshotRef(csv: string, importGeneration: number) {
     void persistCsvImport(csv).then(remoteSnapshotRef => {
-      if (!remoteSnapshotRef) return
+      if (!remoteSnapshotRef || importGeneration !== importGenerationRef.current) return
       setSnapshot(current => current ? addSnapshotRef(current, remoteSnapshotRef) : current)
     })
   }
 
   function handleStartCsv() {
     const summary = parseUsageCsv(rawCsv, MODELS)
-    applySnapshot(summary)
-    attachRemoteSnapshotRef(rawCsv)
+    const importGeneration = applySnapshot(summary)
+    attachRemoteSnapshotRef(rawCsv, importGeneration)
   }
 
   function handleSample() {
     setRawCsv(SPARK_CLAW_SAMPLE_CSV)
     const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
-    applySnapshot(summary, null, { useSampleRevenue: true })
-    attachRemoteSnapshotRef(SPARK_CLAW_SAMPLE_CSV)
+    const importGeneration = applySnapshot(summary, null, { useSampleRevenue: true })
+    attachRemoteSnapshotRef(SPARK_CLAW_SAMPLE_CSV, importGeneration)
   }
 
   function handleSummary() {
     try {
       const parsed = JSON.parse(summaryJson) as unknown
       if (!isUsageSummary(parsed) || !parsed.trustInspection) {
+        invalidatePendingImports()
         setMessage('summary_trust_inspection_missing')
         setSnapshot(null)
         setTrustResult(null)
         setPdfArtifact(null)
+        setReportError('')
+        setShowEvidence(false)
         return
       }
       applySnapshot(parsed)
     } catch {
+      invalidatePendingImports()
       setMessage('summary_json_invalid')
       setSnapshot(null)
       setTrustResult(null)
       setPdfArtifact(null)
+      setReportError('')
+      setShowEvidence(false)
     }
   }
 
@@ -228,7 +269,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
     }
   }
 
-  const canCreatePdf = Boolean(snapshot?.reportGate.canCreateArtifact && selectedDecisionId && decisionChoice)
+  const pdfDisabledReason = !snapshot
+    ? '진단 snapshot이 필요합니다.'
+    : !snapshot.reportGate.canCreateArtifact
+      ? `PDF gate: ${snapshot.reportGate.reason}`
+      : !selectedDecisionId
+        ? '결정 후보를 먼저 선택하세요.'
+        : !decisionChoice
+          ? 'Adopt/Reject/Hold 선택이 필요합니다.'
+          : !request
+            ? 'production_report_unavailable'
+            : ''
+  const canCreatePdf = pdfDisabledReason === ''
   const stepStates = deriveMoneyLeakStepStates({
     hasInput: Boolean(rawCsv.trim() || summaryJson.trim()),
     trustStatus: trustResult?.status ?? (snapshot?.reportGate.status === 'blocked' ? 'blocked' : 'waiting_for_upload'),
@@ -287,7 +339,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
               <textarea
                 id="report-first-csv"
                 value={rawCsv}
-                onChange={event => setRawCsv(event.currentTarget.value)}
+                onChange={event => updateRawCsv(event.currentTarget.value)}
                 rows={7}
                 className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
               />
@@ -303,7 +355,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
               <textarea
                 id="report-first-summary"
                 value={summaryJson}
-                onChange={event => setSummaryJson(event.currentTarget.value)}
+                onChange={event => updateSummaryJson(event.currentTarget.value)}
                 rows={7}
                 className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
               />
@@ -360,6 +412,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
                         setSelectedDecisionId(candidate.id)
                         setDecisionChoice('')
                         setPdfArtifact(null)
+                        setShowEvidence(false)
                       }}
                     />
                     <span>
@@ -431,7 +484,30 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, f
                 저장된 artifact가 아직 없어서 PDF 다운로드는 열리지 않았습니다.
               </p>
             )}
+            {pdfDisabledReason && (
+              <p className="mt-2 text-xs font-semibold text-status-cautionary" data-testid="pdf-disabled-reason">
+                {pdfDisabledReason}
+              </p>
+            )}
             {reportError && <p className="mt-2 text-xs font-semibold text-status-negative" translate="no">{reportError}</p>}
+            <div className="mt-3">
+              <Button type="button" variant="secondary" size="sm" onClick={() => setShowEvidence(value => !value)}>
+                {showEvidence ? '근거 닫기' : '근거 보기'}
+              </Button>
+              {showEvidence && (
+                <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+                  <p className="text-sm font-semibold">Evidence refs</p>
+                  <ul className="mt-2 grid gap-1 text-xs text-label-alternative">
+                    {snapshot.refs.map(ref => (
+                      <li key={ref} translate="no">{ref}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-label-alternative">
+                    RAG, Watchtower, source review, and agent route details stay in expert/admin views unless needed for inspection.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </Surface>
       )}
