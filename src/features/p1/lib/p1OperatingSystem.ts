@@ -261,6 +261,35 @@ export interface VllmServingReview extends VllmServingAnalysis {
   }>
 }
 
+export interface VllmServingCostInput {
+  gpuHourlyUsd: number
+  gpuCount: number
+  activeHoursPerMonth: number
+  monthlyInputTokens: number
+  monthlyOutputTokens: number
+  monthlyRequestCount?: number
+  monthlyCustomerCount?: number
+  gpuUtilizationPct: number
+  throughputTokensPerSecond: number
+  infraOverheadPct?: number
+}
+
+export interface VllmServingCostSummary {
+  costAuthority: 'self_hosted_serving_economics_only'
+  providerApiCostExcluded: true
+  monthlyGpuCostUsd: number
+  monthlyInfraOverheadUsd: number
+  monthlyServingCostUsd: number
+  monthlyServedTokens: number
+  effectiveThroughputTokensPerSecond: number
+  costPerMillionTokensUsd: number | null
+  costPerRequestUsd: number | null
+  costPerCustomerUsd: number | null
+  idleWasteUsd: number
+  utilizationWasteShare: number
+  caveats: string[]
+}
+
 export type P1AlertType =
   | 'margin_breach'
   | 'retry_spike'
@@ -398,6 +427,10 @@ function refWithPrefix(prefix: string, value: string): string {
 
 function slug(value: string): string {
   return value.trim().toLowerCase().replace(/[^0-9a-z_-]+/g, '-').replace(/^-+|-+$/g, '') || 'item'
+}
+
+function positiveNumber(value: number | undefined): number {
+  return Number.isFinite(value) && value && value > 0 ? value : 0
 }
 
 function recordMatches(record: P1RagRecord, queryTerms: string[]): boolean {
@@ -861,6 +894,46 @@ export function analyzeVllmServingEconomics(input: VllmServingInput): VllmServin
     caveats: [
       'provider API cost math와 self-hosted serving economics는 별도 모듈로 유지합니다.',
       'throughput과 품질 검증 전에는 절감액을 확정하지 않습니다.',
+    ],
+  }
+}
+
+export function calculateVllmServingCost(input: VllmServingCostInput): VllmServingCostSummary {
+  const gpuHourlyUsd = positiveNumber(input.gpuHourlyUsd)
+  const gpuCount = positiveNumber(input.gpuCount)
+  const activeHoursPerMonth = positiveNumber(input.activeHoursPerMonth)
+  const infraOverheadPct = Math.min(1, positiveNumber(input.infraOverheadPct))
+  const monthlyInputTokens = positiveNumber(input.monthlyInputTokens)
+  const monthlyOutputTokens = positiveNumber(input.monthlyOutputTokens)
+  const monthlyServedTokens = monthlyInputTokens + monthlyOutputTokens
+  const monthlyRequestCount = positiveNumber(input.monthlyRequestCount)
+  const monthlyCustomerCount = positiveNumber(input.monthlyCustomerCount)
+  const gpuUtilizationPct = Math.min(1, positiveNumber(input.gpuUtilizationPct))
+  const throughputTokensPerSecond = positiveNumber(input.throughputTokensPerSecond)
+
+  const monthlyGpuCostUsd = gpuHourlyUsd * gpuCount * activeHoursPerMonth
+  const monthlyInfraOverheadUsd = monthlyGpuCostUsd * infraOverheadPct
+  const monthlyServingCostUsd = monthlyGpuCostUsd + monthlyInfraOverheadUsd
+  const effectiveThroughputTokensPerSecond = throughputTokensPerSecond * gpuUtilizationPct
+  const utilizationWasteShare = Math.max(0, 1 - gpuUtilizationPct)
+
+  return {
+    costAuthority: 'self_hosted_serving_economics_only',
+    providerApiCostExcluded: true,
+    monthlyGpuCostUsd,
+    monthlyInfraOverheadUsd,
+    monthlyServingCostUsd,
+    monthlyServedTokens,
+    effectiveThroughputTokensPerSecond,
+    costPerMillionTokensUsd: monthlyServedTokens > 0 ? monthlyServingCostUsd / (monthlyServedTokens / 1_000_000) : null,
+    costPerRequestUsd: monthlyRequestCount > 0 ? monthlyServingCostUsd / monthlyRequestCount : null,
+    costPerCustomerUsd: monthlyCustomerCount > 0 ? monthlyServingCostUsd / monthlyCustomerCount : null,
+    idleWasteUsd: monthlyServingCostUsd * utilizationWasteShare,
+    utilizationWasteShare,
+    caveats: [
+      'self-hosted serving economics only',
+      'provider API COGS excluded',
+      'quality and throughput validation required before savings are confirmed',
     ],
   }
 }

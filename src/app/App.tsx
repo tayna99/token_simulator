@@ -83,6 +83,7 @@ import {
   buildDataRoomWorkspace,
   buildExternalActionDraft,
   buildVllmServingReview,
+  calculateVllmServingCost,
   executeExternalAction,
   normalizeSdkLiteUsageEvent,
   retrieveP1VectorRagEvidence,
@@ -96,6 +97,7 @@ import {
   type P1SdkLiteUsageEvent,
   type P1UsageAdapterSource,
   type P1VectorRagEvidenceResult,
+  type VllmServingCostSummary,
 } from '../features/p1/lib/p1OperatingSystem'
 import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../features/front-operating/lib/frontOperatingContext'
 import {
@@ -104,7 +106,9 @@ import {
   DEMO_MODEL_RELEASE_CANDIDATES,
   DEMO_PRICING_FACT_CANDIDATES,
   OFFICIAL_SOURCE_REGISTRY,
+  buildOfficialUpdatesReviewInbox,
   officialWatchtowerCoverageSummary,
+  type OfficialUpdatesReviewInbox,
 } from '../features/research/lib/officialWatchtower'
 import {
   chunkApiDoc,
@@ -225,6 +229,23 @@ interface P1RagEvidenceApiBody {
     workspaceId: string
     query: string
   }
+  error?: string
+}
+
+interface OfficialUpdatesPanelState {
+  status: 'idle' | 'loaded' | 'error'
+  persistence: string
+  inbox: OfficialUpdatesReviewInbox
+  latestRun?: Record<string, unknown>
+  acceptedFacts?: Array<Record<string, unknown>>
+  error?: string
+}
+
+interface OfficialUpdatesApiBody {
+  persistence?: string
+  inbox?: OfficialUpdatesReviewInbox
+  latestRun?: Record<string, unknown>
+  acceptedFacts?: Array<Record<string, unknown>>
   error?: string
 }
 
@@ -378,6 +399,21 @@ const EMPTY_P1_RAG_EVIDENCE_STATE: P1RagEvidencePanelState = {
   evidence: null,
 }
 
+const EMPTY_OFFICIAL_UPDATES_INBOX: OfficialUpdatesReviewInbox = {
+  reviewCandidates: [],
+  needsFxReview: [],
+  needsRegionReview: [],
+  noisyCandidates: [],
+  ragRecordCount: 0,
+  sourceChangedCount: 0,
+}
+
+const EMPTY_OFFICIAL_UPDATES_PANEL_STATE: OfficialUpdatesPanelState = {
+  status: 'idle',
+  persistence: DEMO_SEED_ENABLED ? 'demo_fallback' : 'production_fact_ledger_required',
+  inbox: EMPTY_OFFICIAL_UPDATES_INBOX,
+}
+
 function corpusTrustFromOfficialSource(sourceTrust: string): CorpusChunk['metadata']['corpusTrust'] {
   if (sourceTrust === 'official_pricing'
     || sourceTrust === 'official_docs'
@@ -522,6 +558,21 @@ function sdkLiteStatusCopy(state: SdkLitePanelState): string {
   if (state.status === 'blocked') return 'Blocked by Trust check'
   if (state.status === 'error') return 'SDK-lite ingest failed'
   return 'Waiting for SDK-lite event'
+}
+
+function buildLocalOfficialUpdatesPanelState(error?: string): OfficialUpdatesPanelState {
+  return {
+    status: error ? 'error' : 'loaded',
+    persistence: DEMO_SEED_ENABLED ? 'demo_fallback' : 'production_fact_ledger_required',
+    inbox: buildOfficialUpdatesReviewInbox({
+      candidates: DEMO_SEED_ENABLED ? DEMO_MODEL_RELEASE_CANDIDATES : [],
+      snippets: DEMO_SEED_ENABLED ? DEMO_OFFICIAL_SOURCE_SNIPPETS : [],
+      noisyCandidates: [],
+      sourceChangedCount: 0,
+    }),
+    acceptedFacts: [],
+    error,
+  }
 }
 
 function allRagRefs(evidence: P1VectorRagEvidenceResult | null): string[] {
@@ -1596,6 +1647,121 @@ function P1RagEvidencePanel({
   )
 }
 
+function SelfHostedServingCostPanel({ costSummary }: { costSummary: VllmServingCostSummary }) {
+  const valueOrDash = (value: number | null, formatter: (numberValue: number) => string) => (
+    value === null ? '—' : formatter(value)
+  )
+
+  return (
+    <section data-testid="self-hosted-serving-cost-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">Self-hosted serving cost</p>
+          <h2 className="mt-1 text-base font-semibold text-label-normal">vLLM/GPU cost is separate from provider API COGS</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
+            This view estimates GPU serving spend for self-hosted inference. It is not merged into provider API COGS.
+          </p>
+        </div>
+        <Badge tone="primary">not merged into provider API COGS</Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <MetricTile label="Monthly serving cost" value={fmtCurrency(costSummary.monthlyServingCostUsd)} />
+        <MetricTile label="Cost / 1M tokens" value={valueOrDash(costSummary.costPerMillionTokensUsd, fmtCurrency)} />
+        <MetricTile label="Cost / request" value={valueOrDash(costSummary.costPerRequestUsd, fmtCurrency)} />
+        <MetricTile label="Cost / customer" value={valueOrDash(costSummary.costPerCustomerUsd, fmtCurrency)} />
+        <MetricTile label="GPU idle waste" value={fmtCurrency(costSummary.idleWasteUsd)} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Badge tone="neutral">{fmtTokens(costSummary.monthlyServedTokens)} served tokens</Badge>
+        <Badge tone="caution">{fmtPercent(costSummary.utilizationWasteShare)} utilization waste share</Badge>
+        <Badge tone="neutral">{fmtTokens(costSummary.effectiveThroughputTokensPerSecond)} effective tok/s</Badge>
+      </div>
+    </section>
+  )
+}
+
+function OfficialUpdatesReviewInboxPanel({
+  state,
+  summary,
+}: {
+  state: OfficialUpdatesPanelState
+  summary: ReturnType<typeof officialWatchtowerCoverageSummary>
+}) {
+  const renderCandidateList = (
+    title: string,
+    candidates: Array<{ candidateId?: string; title?: string; modelNames?: string[]; status?: string }>,
+    emptyLabel: string,
+  ) => (
+    <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-label-normal">{title}</p>
+        <Badge tone={candidates.length > 0 ? 'caution' : 'neutral'}>{candidates.length}</Badge>
+      </div>
+      {candidates.length === 0 ? (
+        <p className="mt-2 text-xs text-label-alternative">{emptyLabel}</p>
+      ) : (
+        <ul className="mt-2 grid gap-2 text-xs text-label-neutral">
+          {candidates.slice(0, 4).map(candidate => (
+            <li key={candidate.candidateId ?? candidate.title} className="rounded-wds bg-surface-normal p-2">
+              <span className="font-medium text-label-normal">{candidate.title ?? candidate.candidateId}</span>
+              <span className="ml-2 text-label-alternative" translate="no">
+                {(candidate.modelNames ?? []).join(', ')}
+                {candidate.status ? ` / ${candidate.status}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+  const noisyCandidates = state.inbox.noisyCandidates.map(item => ({
+    candidateId: typeof item.candidateId === 'string' ? item.candidateId : undefined,
+    title: typeof item.title === 'string' ? item.title : 'Noisy candidate',
+    status: typeof item.reason === 'string' ? item.reason : 'quarantined',
+  }))
+
+  return (
+    <div data-testid="official-updates-panel" className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">Official Updates Review Inbox</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            Admin-only queue for official announcements, pricing review, FX review, and region review before Fact Ledger changes.
+          </p>
+        </div>
+        <Badge tone={state.status === 'error' ? 'caution' : 'primary'}>
+          {state.persistence}
+        </Badge>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Badge tone="primary">{summary.activeSourceCount} official sources</Badge>
+        <Badge tone="caution">{summary.activeChineseProviderGroupCount} China provider groups</Badge>
+        <Badge tone={state.inbox.needsFxReview.length > 0 ? 'caution' : 'neutral'}>FX review required</Badge>
+        <Badge tone={state.inbox.needsRegionReview.length > 0 ? 'caution' : 'neutral'}>region review required</Badge>
+        <Badge tone="neutral">{state.inbox.ragRecordCount} Official docs RAG records</Badge>
+        <Badge tone="neutral">{state.inbox.sourceChangedCount} changed sources</Badge>
+        <Badge tone="neutral">accepted facts: {state.acceptedFacts?.length ?? 0}</Badge>
+        {state.persistence === 'production_fact_ledger_required' && <Badge tone="caution">production fact ledger required</Badge>}
+      </div>
+
+      <div className="mt-3 grid gap-3 xl:grid-cols-2">
+        {renderCandidateList('Review candidates', state.inbox.reviewCandidates, 'No review candidates from the current official source ledger.')}
+        {renderCandidateList('Noisy quarantine', noisyCandidates, 'No noisy candidates quarantined.')}
+        {renderCandidateList('FX review required', state.inbox.needsFxReview, 'No FX review required.')}
+        {renderCandidateList('Region review required', state.inbox.needsRegionReview, 'No region review required.')}
+      </div>
+
+      <p className="mt-3 text-xs text-label-alternative" translate="no">
+        latest run: {String(state.latestRun?.id ?? 'not connected')} / status: {state.status}
+        {state.error ? ` / ${state.error}` : ''}
+      </p>
+    </div>
+  )
+}
+
 function P1ExternalAutomationPanel({
   dataRoom,
   alertAction,
@@ -1603,6 +1769,7 @@ function P1ExternalAutomationPanel({
   billingAction,
   billingExecution,
   vllmReview,
+  vllmCost,
   benchmark,
   onApproveAlert,
   onExecuteAlert,
@@ -1615,6 +1782,7 @@ function P1ExternalAutomationPanel({
   billingAction: P1ExternalAction
   billingExecution: P1ExternalActionExecutionResult | null
   vllmReview: ReturnType<typeof buildVllmServingReview>
+  vllmCost: VllmServingCostSummary
   benchmark: BenchmarkMarketplace
   onApproveAlert: () => void
   onExecuteAlert: () => void
@@ -1700,6 +1868,11 @@ function P1ExternalAutomationPanel({
           <p className="mt-1 text-xs text-label-alternative">
             vLLM/GPU economics stay separate from provider API cost. Every savings item is validation-required.
           </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <MetricTile label="monthly serving cost" value={fmtCurrency(vllmCost.monthlyServingCostUsd)} />
+            <MetricTile label="cost / 1M tokens" value={vllmCost.costPerMillionTokensUsd === null ? '—' : fmtCurrency(vllmCost.costPerMillionTokensUsd)} />
+            <MetricTile label="GPU idle waste" value={fmtCurrency(vllmCost.idleWasteUsd)} />
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Badge tone="primary">{vllmReview.costAuthority}</Badge>
             <Badge tone="positive">provider API cost excluded</Badge>
@@ -2226,6 +2399,7 @@ function App() {
   const [remoteBackendMessage, setRemoteBackendMessage] = useState('Checking P1 backend persistence')
   const [sdkLitePanel, setSdkLitePanel] = useState<SdkLitePanelState>(EMPTY_SDK_LITE_PANEL_STATE)
   const [p1RagEvidencePanel, setP1RagEvidencePanel] = useState<P1RagEvidencePanelState>(EMPTY_P1_RAG_EVIDENCE_STATE)
+  const [officialUpdatesPanel, setOfficialUpdatesPanel] = useState<OfficialUpdatesPanelState>(EMPTY_OFFICIAL_UPDATES_PANEL_STATE)
   const [p1AlertAction, setP1AlertAction] = useState<P1ExternalAction>(() => buildExternalActionDraft({
     workspaceId,
     kind: 'slack_alert',
@@ -2576,6 +2750,18 @@ function App() {
     prefixCacheHitRate: 0.2,
     batchingEfficiency: 0.35,
     p95ContextTokens: 48000,
+  }), [])
+  const p1VllmCost = useMemo(() => calculateVllmServingCost({
+    gpuHourlyUsd: 3,
+    gpuCount: 2,
+    activeHoursPerMonth: 720,
+    monthlyInputTokens: 120_000_000,
+    monthlyOutputTokens: 30_000_000,
+    monthlyRequestCount: 300_000,
+    monthlyCustomerCount: 120,
+    gpuUtilizationPct: 0.4,
+    throughputTokensPerSecond: 180,
+    infraOverheadPct: 0.15,
   }), [])
   const p1BenchmarkMarketplace = useMemo(() => buildBenchmarkMarketplace({
     selfBaselineCount: 0,
@@ -2930,6 +3116,37 @@ function App() {
       cancelled = true
     }
   }, [remoteDecisionStore])
+
+  useEffect(() => {
+    if (!showInternal) {
+      setOfficialUpdatesPanel(EMPTY_OFFICIAL_UPDATES_PANEL_STATE)
+      return
+    }
+    let cancelled = false
+    void fetch(`/api/research/official-updates?workspaceId=${encodeURIComponent(workspaceId)}`)
+      .then(async response => {
+        const body = await response.json().catch(() => ({})) as OfficialUpdatesApiBody
+        if (cancelled) return
+        if (!response.ok || !body.inbox) {
+          setOfficialUpdatesPanel(buildLocalOfficialUpdatesPanelState(body.error ?? `http_${response.status}`))
+          return
+        }
+        setOfficialUpdatesPanel({
+          status: 'loaded',
+          persistence: body.persistence ?? 'unknown',
+          inbox: body.inbox,
+          latestRun: body.latestRun,
+          acceptedFacts: body.acceptedFacts ?? [],
+        })
+      })
+      .catch(error => {
+        if (cancelled) return
+        setOfficialUpdatesPanel(buildLocalOfficialUpdatesPanelState(error instanceof Error ? error.message : 'official_updates_fetch_failed'))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showInternal, workspaceId])
 
   useEffect(() => {
     const topFeature = attribution.feature?.rows[0]?.label ?? 'unknown'
@@ -3959,6 +4176,8 @@ function App() {
             onRun={() => void handleRunP1RagEvidenceCheck()}
           />
 
+          <SelfHostedServingCostPanel costSummary={p1VllmCost} />
+
           {showInternal && (
             <P1ExternalAutomationPanel
               dataRoom={p1DataRoom}
@@ -3967,6 +4186,7 @@ function App() {
               billingAction={p1BillingAction}
               billingExecution={p1BillingExecution}
               vllmReview={p1VllmReview}
+              vllmCost={p1VllmCost}
               benchmark={p1BenchmarkMarketplace}
               onApproveAlert={handleApproveP1Alert}
               onExecuteAlert={handleExecuteP1Alert}
@@ -4004,17 +4224,10 @@ function App() {
                 </Badge>
               ))}
             </div>
-            <div data-testid="official-updates-panel" className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-              <p className="text-xs font-semibold uppercase text-primary-normal">Official Research Watchtower</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge tone="primary">{officialWatchtowerSummary.activeSourceCount} official sources</Badge>
-                <Badge tone="caution">{officialWatchtowerSummary.activeChineseProviderGroupCount} China provider groups</Badge>
-                <Badge tone={DEMO_SEED_ENABLED ? 'neutral' : 'caution'}>
-                  {DEMO_SEED_ENABLED ? `${DEMO_MODEL_RELEASE_CANDIDATES.length} demo model release candidates` : 'production fact ledger required'}
-                </Badge>
-                <Badge tone="neutral">FX review required for CNY pricing</Badge>
-              </div>
-            </div>
+            <OfficialUpdatesReviewInboxPanel
+              state={officialUpdatesPanel}
+              summary={officialWatchtowerSummary}
+            />
           </div>
           )}
 

@@ -181,11 +181,14 @@ describe('P1 Vercel API routes', () => {
   it('routes watchtower runs and review through Supabase-backed official update handlers', async () => {
     const { default: runsHandler } = await import('../../api/watchtower/runs')
     const { default: reviewHandler } = await import('../../api/watchtower/review')
+    const { default: officialUpdatesHandler } = await import('../../api/research/official-updates')
     const runs = responseCollector()
     const review = responseCollector()
+    const officialUpdates = responseCollector()
 
     await runsHandler({ method: 'GET', body: undefined, query: { workspaceId: 'workspace-demo' } }, runs.response)
     await reviewHandler({ method: 'GET', body: undefined, query: { workspaceId: 'workspace-demo' } }, review.response)
+    await officialUpdatesHandler({ method: 'GET', body: undefined, query: { workspaceId: 'workspace-demo' } }, officialUpdates.response)
 
     expect(runs.result.statusCode).toBe(503)
     expect(runs.result.body).toMatchObject({
@@ -194,6 +197,11 @@ describe('P1 Vercel API routes', () => {
     })
     expect(review.result.statusCode).toBe(503)
     expect(review.result.body).toMatchObject({
+      inbox: { reviewCandidates: [] },
+      error: 'storage_not_configured',
+    })
+    expect(officialUpdates.result.statusCode).toBe(503)
+    expect(officialUpdates.result.body).toMatchObject({
       inbox: { reviewCandidates: [] },
       error: 'storage_not_configured',
     })

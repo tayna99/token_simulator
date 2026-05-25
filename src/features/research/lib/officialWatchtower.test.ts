@@ -177,7 +177,11 @@ describe('officialWatchtower', () => {
     })
 
     const inbox = buildOfficialUpdatesReviewInbox({
-      candidates: [...DEMO_MODEL_RELEASE_CANDIDATES, fxCandidate],
+      candidates: [
+        ...DEMO_MODEL_RELEASE_CANDIDATES,
+        fxCandidate,
+        { ...DEMO_MODEL_RELEASE_CANDIDATES[0], candidateId: 'accepted:kimi-k2-6', status: 'accepted' },
+      ],
       snippets: DEMO_OFFICIAL_SOURCE_SNIPPETS,
       noisyCandidates: [{ candidateId: 'noisy:generic-model', title: 'Generic model mention', reason: 'source_candidate_limit_exceeded' }],
       sourceChangedCount: 2,
@@ -187,6 +191,7 @@ describe('officialWatchtower', () => {
       'moonshot-kimi:kimi:kimi-platform:global:kimi-pricing-chat:kimi-k2-6',
       'zai-glm:glm:baidu-qianfan:international-singapore:baidu-qianfan-pricing:glm-5',
     ]))
+    expect(inbox.reviewCandidates.map(candidate => candidate.status)).not.toContain('accepted')
     expect(inbox.needsRegionReview.map(candidate => candidate.modelOwner)).toContain('01ai_yi')
     expect(inbox.needsFxReview.map(candidate => candidate.modelOwner)).toContain('alibaba_qwen')
     expect(inbox.noisyCandidates).toEqual([expect.objectContaining({ reason: 'source_candidate_limit_exceeded' })])

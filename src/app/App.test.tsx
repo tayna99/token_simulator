@@ -104,9 +104,12 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByText(/Knowledge & Release Ops Agent/i)).toBeInTheDocument()
     expect(screen.getByTestId('operating-asset-health')).toHaveTextContent(/11 active operating agents/i)
     expect(screen.getByTestId('operating-asset-health')).toHaveTextContent(/Official docs change monitor: automation_ready/i)
-    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Official Research Watchtower/i)
+    await waitFor(() => expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/production fact ledger required/i))
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Official Updates Review Inbox/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Review candidates/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Noisy quarantine/i)
+    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Official docs RAG records/i)
     expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/China provider groups/i)
-    expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/production fact ledger required/i)
     expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/FX review required/i)
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Called agents/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Usage Data Ingestion Agent/i)
@@ -121,7 +124,8 @@ describe('App AI team operations workspace', () => {
     expect(screen.queryByTestId('p1-external-automation-panel')).not.toBeInTheDocument()
     expect(screen.queryByText(/Slack\/Email alert/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Stripe\/Metronome dry-run/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/self-hosted serving economics/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('self-hosted-serving-cost-panel')).toHaveTextContent(/Self-hosted serving cost/i)
+    expect(screen.getByTestId('self-hosted-serving-cost-panel')).toHaveTextContent(/not merged into provider API COGS/i)
   })
 
   it('shows P1 external automation controls in admin mode and blocks execution before approval', async () => {
@@ -134,6 +138,8 @@ describe('App AI team operations workspace', () => {
     expect(panel).toHaveTextContent(/Slack\/Email alert/i)
     expect(panel).toHaveTextContent(/Stripe\/Metronome dry-run/i)
     expect(panel).toHaveTextContent(/self-hosted serving economics/i)
+    expect(panel).toHaveTextContent(/monthly serving cost/i)
+    expect(panel).toHaveTextContent(/cost \/ 1M tokens/i)
     expect(panel).toHaveTextContent(/Benchmark Marketplace/i)
     expect(panel).toHaveTextContent(/baseline unavailable/i)
 
@@ -145,6 +151,49 @@ describe('App AI team operations workspace', () => {
 
     expect(panel).toHaveTextContent(/dry_run/i)
     expect(panel).toHaveTextContent(/ledgered/i)
+  })
+
+  it('loads official update candidates into the admin review inbox without exposing them to customers', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith('/api/research/official-updates')) {
+        return new Response(JSON.stringify({
+          persistence: 'supabase',
+          inbox: {
+            reviewCandidates: [{
+              candidateId: 'candidate:gemini-omni',
+              title: 'Gemini Omni official announcement',
+              modelNames: ['Gemini Omni'],
+              status: 'needs_pricing_review',
+              sourceUrl: 'https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-omni/',
+            }],
+            noisyCandidates: [{ candidateId: 'noisy:generic', title: 'generic model mention', reason: 'source_candidate_limit_exceeded' }],
+            needsFxReview: [{ candidateId: 'candidate:qwen-cny', title: 'Qwen CNY pricing', modelNames: ['Qwen'], status: 'needs_fx_review' }],
+            needsRegionReview: [{ candidateId: 'candidate:yi-region', title: 'Yi regional availability', modelNames: ['Yi'], status: 'needs_region_review' }],
+            ragRecordCount: 7,
+            sourceChangedCount: 3,
+          },
+          latestRun: { id: 'run:watchtower:latest', capturedAt: '2026-05-25T00:00:00.000Z' },
+          acceptedFacts: [{ id: 'fact:gemini-3-5-flash', status: 'accepted' }],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    }))
+
+    render(<App />)
+    expect(screen.queryByTestId('official-updates-panel')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Gemini Omni official announcement/i)).not.toBeInTheDocument()
+
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    const panel = await screen.findByTestId('official-updates-panel')
+    expect(panel).toHaveTextContent(/Gemini Omni official announcement/i)
+    expect(panel).toHaveTextContent(/Noisy quarantine/i)
+    expect(panel).toHaveTextContent(/Qwen CNY pricing/i)
+    expect(panel).toHaveTextContent(/Yi regional availability/i)
+    expect(panel).toHaveTextContent(/7 Official docs RAG records/i)
+    expect(panel).toHaveTextContent(/accepted facts: 1/i)
   })
 
   it('lets a customer ingest a clean SDK-lite event and see Trust status without internal metadata', async () => {

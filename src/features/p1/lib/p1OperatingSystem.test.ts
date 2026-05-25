@@ -10,6 +10,7 @@ import {
   buildCustomerWorkspaceDashboard,
   buildRetentionAutomationPlan,
   buildVllmServingReview,
+  calculateVllmServingCost,
   draftBillingChange,
   draftP1Alert,
   executeExternalAction,
@@ -270,6 +271,33 @@ describe('p1OperatingSystem', () => {
       'oversized_context',
     ]))
     expect(analysis.recommendations).toContain('prefix caching what-if')
+  })
+
+  it('calculates self-hosted vLLM/GPU serving cost separately from provider API COGS', () => {
+    const cost = calculateVllmServingCost({
+      gpuHourlyUsd: 3,
+      gpuCount: 2,
+      activeHoursPerMonth: 720,
+      monthlyInputTokens: 120_000_000,
+      monthlyOutputTokens: 30_000_000,
+      monthlyRequestCount: 300_000,
+      monthlyCustomerCount: 120,
+      gpuUtilizationPct: 0.4,
+      throughputTokensPerSecond: 180,
+      infraOverheadPct: 0.15,
+    })
+
+    expect(cost.costAuthority).toBe('self_hosted_serving_economics_only')
+    expect(cost.providerApiCostExcluded).toBe(true)
+    expect(cost.monthlyGpuCostUsd).toBe(4320)
+    expect(cost.monthlyInfraOverheadUsd).toBe(648)
+    expect(cost.monthlyServingCostUsd).toBe(4968)
+    expect(cost.monthlyServedTokens).toBe(150_000_000)
+    expect(cost.costPerMillionTokensUsd).toBeCloseTo(33.12, 2)
+    expect(cost.costPerRequestUsd).toBeCloseTo(0.01656, 5)
+    expect(cost.costPerCustomerUsd).toBeCloseTo(41.4, 2)
+    expect(cost.idleWasteUsd).toBeCloseTo(2980.8, 2)
+    expect(JSON.stringify(cost)).not.toMatch(/providerApiCostUsd|providerApiMonthlyCostUsd/i)
   })
 
   it('keeps alert and billing actions as approval-gated drafts', () => {

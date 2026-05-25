@@ -337,7 +337,11 @@ export function buildOfficialUpdatesReviewInbox(input: {
   const needsFxReview = candidates.filter(candidate => candidate.status === 'needs_fx_review')
   const needsRegionReview = candidates.filter(candidate => candidate.status === 'needs_region_review')
   const reviewCandidates = candidates.filter(candidate => (
-    candidate.status !== 'needs_fx_review' && candidate.status !== 'needs_region_review'
+    candidate.status !== 'needs_fx_review'
+    && candidate.status !== 'needs_region_review'
+    && candidate.status !== 'accepted'
+    && candidate.status !== 'rejected'
+    && candidate.status !== 'superseded'
   ))
 
   return {
