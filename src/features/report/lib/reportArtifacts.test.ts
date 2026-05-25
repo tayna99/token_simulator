@@ -119,6 +119,10 @@ describe('buildReportArtifact', () => {
 
     expect(report.markdown).toContain('Decision choice: hold')
     expect(report.markdown).toContain('Rate-card draft')
+    expect(report.markdown).toContain('Included credits: 2.5K')
+    expect(report.markdown).toContain('Overage price per request: $0.08')
+    expect(report.markdown).toContain('Customer cap: $149')
+    expect(report.markdown).toContain('Affected customers: 7')
     expect(report.markdown).toContain('draft')
     expect(report.markdown).toContain('Source Changed')
   })
