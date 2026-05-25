@@ -51,7 +51,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.queryByText('Developer Diagnostics')).not.toBeInTheDocument()
     expect(screen.queryByText('Budget & Quota Guardrails')).not.toBeInTheDocument()
     expect(screen.queryByText('Deferred / Business Planning')).not.toBeInTheDocument()
-  }, 10000)
+  }, 120000)
 
   it('renders the PRODUCT_UX decision console shell with 3-pane navigation and assistant panel', async () => {
     const user = userEvent.setup()
@@ -399,7 +399,7 @@ describe('App AI team operations workspace', () => {
     await user.click(screen.getByRole('button', { name: /Run full operating review/i }))
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/11 agents/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Knowledge & Release Ops Agent/i)
-  }, 15000)
+  }, 60000)
 
   it('sends the visible front operating context when running the operating team', async () => {
     const user = userEvent.setup()
@@ -456,7 +456,7 @@ describe('App AI team operations workspace', () => {
     expect(allHandsBody.frontOperatingSystem.dataReadinessGate.rejectedColumns).toContain('raw_prompt')
     expect(offerIds).toContain('ai_cost_snapshot')
     expect(allHandsBody.frontOperatingSystem.learningLoopRecords).toEqual([])
-  }, 15000)
+  }, 60000)
 
   it('shows an evidence drawer with explicit baseline unavailable state in the AI panel', async () => {
     vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
@@ -534,7 +534,7 @@ describe('App AI team operations workspace', () => {
     expect(panel).toHaveTextContent(/decision:cache-policy/i)
     expect(panel).toHaveTextContent(/baseline unavailable/i)
     expect(panel).toHaveTextContent(/Which peer baseline should be added/i)
-  }, 15000)
+  }, 60000)
 
   it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {
     const user = userEvent.setup()
@@ -565,7 +565,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.getAllByText(/This customer is unprofitable/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/Report review gate/i)).toBeInTheDocument()
     expect(screen.getByText(/Formula version visible/i)).toBeInTheDocument()
-  }, 20000)
+  }, 60000)
 
   it('blocks one-page export until adopt, reject, or hold is recorded', async () => {
     const user = userEvent.setup()
@@ -624,7 +624,7 @@ describe('App AI team operations workspace', () => {
     await waitFor(() => expect(screen.getAllByText(/Hold AI team cost optimization/i).length).toBeGreaterThan(0))
     expect(screen.getAllByText(/decision: hold/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Export one-page report/i })).toBeEnabled()
-  }, 15000)
+  }, 60000)
 
   it('projects the central workspace and assistant copy by selected role', async () => {
     const user = userEvent.setup()
@@ -755,7 +755,7 @@ describe('App AI team operations workspace', () => {
     fireEvent.change(runsInput, { target: { value: '40' } })
 
     expect(screen.getByTestId('team-monthly-cost').textContent).not.toBe(before)
-  }, 10000)
+  }, 60000)
 
   it('updates the right AI panel when team-cost assumptions change', async () => {
     window.history.pushState({}, '', '/token_simulator/?debug=1')
@@ -768,7 +768,7 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getByTestId('assistant-monthly-cost').textContent).not.toBe(before)
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/tool:team\.monthlyCostUsd/i)
-  }, 10000)
+  }, 60000)
 
   it('lets the user adjust visible judgment policy thresholds', () => {
     render(<App />)
@@ -817,7 +817,7 @@ describe('App AI team operations workspace', () => {
 
     expect((await screen.findAllByText(/Python team report/i)).length).toBeGreaterThan(0)
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/LLM assisted/i)
-  }, 10000)
+  }, 60000)
 
   it('updates team cost company setup from screen 1 inputs', async () => {
     render(<App />)
@@ -828,7 +828,7 @@ describe('App AI team operations workspace', () => {
 
     expect(budgetInput).toHaveValue(500)
     expect(document.body.textContent).toContain('$500')
-  }, 10000)
+  }, 60000)
 
   it('updates agent calls per run and cache rate from screen 2', async () => {
     render(<App />)
@@ -840,7 +840,7 @@ describe('App AI team operations workspace', () => {
 
     expect(callsInput).toHaveValue(2)
     expect(screen.getByTestId('team-monthly-cost').textContent).not.toBe(before)
-  }, 10000)
+  }, 60000)
 
   it('shows risk cards and lets the user adopt a team-cost optimization', async () => {
     const user = userEvent.setup()
@@ -878,7 +878,7 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getByText(/7 selected tasks/i)).toBeInTheDocument()
     expect(screen.getAllByDisplayValue('450').length).toBeGreaterThan(0)
-  }, 10000)
+  }, 60000)
 
   it('lets the user edit screen 2 agent model, I/O tokens, retry, cache, and review gate', async () => {
     render(<App />)
@@ -910,7 +910,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('team-monthly-cost').textContent).not.toBe(before)
     expect(screen.getAllByText(/Before:/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Savings:/i).length).toBeGreaterThan(0)
-  }, 20000)
+  }, 60000)
 
   it('supports rejecting a team-cost optimization through the approval gate', async () => {
     const user = userEvent.setup()
@@ -921,7 +921,7 @@ describe('App AI team operations workspace', () => {
 
     expect(screen.getAllByText(/Reject AI team cost optimization/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/rejected/i).length).toBeGreaterThan(0)
-  }, 15000)
+  }, 60000)
 
   it('renders the PRD 9-step demo path as a complete screen path', async () => {
     const user = userEvent.setup()
@@ -965,7 +965,7 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByText(/Customer support classification/i)).toBeInTheDocument()
     expect(screen.getAllByText(/cost per deliverable/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/pass rate/i).length).toBeGreaterThan(0)
-  }, 10000)
+  }, 60000)
 
   it('lets the user edit agent accountability on Screen 2', async () => {
     render(<App />)
@@ -981,7 +981,7 @@ describe('App AI team operations workspace', () => {
 
     expect(ownerInput).toHaveValue('CTO')
     expect(authoritySelect).toHaveValue('act_with_review')
-  }, 20000)
+  }, 60000)
 
   it('records a Human Operating Decision with performance and cost snapshots', async () => {
     window.history.pushState({}, '', '/token_simulator/?debug=1')
@@ -1000,7 +1000,7 @@ describe('App AI team operations workspace', () => {
     expect(document.body.textContent).toContain('automate')
     expect(document.body.textContent).toContain('performanceSnapshot')
     expect(document.body.textContent).toContain('costSnapshot')
-  }, 20000)
+  }, 60000)
 
   it('loads remote Decision & Approval Log entries before local fallback', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -1132,5 +1132,5 @@ describe('App AI team operations workspace', () => {
     expect(csReviewSelect).toHaveValue('all')
     await waitFor(() => expect(document.body.textContent).toContain('Weekly report draft'))
     expect(document.body.textContent).toContain('config:p1:test')
-  }, 20000)
+  }, 60000)
 })

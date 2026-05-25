@@ -149,6 +149,15 @@ function confidenceFor({ detectedModels, pricingFacts }) {
   return 'low'
 }
 
+export function canAutoAcceptExtractedFacts(facts) {
+  return facts?.confidence === 'high'
+    && Array.isArray(facts.pricingFacts)
+    && facts.pricingFacts.length > 0
+    && Array.isArray(facts.detectedModels)
+    && facts.detectedModels.length > 0
+    && !(facts.warnings ?? []).includes('hosted_third_party_prices_must_not_override_first_party_facts')
+}
+
 export function extractOfficialFacts({ source, text, capturedAt }) {
   const detectedModels = detectedModelsFrom(text, source)
   const pricingFacts = pricingFactsFrom(text, source)

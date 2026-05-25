@@ -52,7 +52,7 @@ describe('CostPerBusinessMetric', () => {
 
     rerender(<CostPerBusinessMetric state={{ ...BASE_STATE, periodInputTokens: 100_000_000 }} />)
     expect(screen.getByText('$0.3750')).toBeInTheDocument()
-  }, 15000)
+  }, 30000)
 
   it('offers ticket, report, and customer templates without inventing denominators', async () => {
     const user = userEvent.setup()

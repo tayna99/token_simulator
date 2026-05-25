@@ -99,10 +99,10 @@ import {
 } from '../features/p1/lib/p1OperatingSystem'
 import { AGENTCOST_FRONT_OPERATING_SYSTEM } from '../features/front-operating/lib/frontOperatingContext'
 import {
-  INITIAL_FX_RATE_SNAPSHOTS,
-  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
-  INITIAL_MODEL_RELEASE_CANDIDATES,
-  INITIAL_PRICING_FACT_CANDIDATES,
+  DEMO_FX_RATE_SNAPSHOTS,
+  DEMO_OFFICIAL_SOURCE_SNIPPETS,
+  DEMO_MODEL_RELEASE_CANDIDATES,
+  DEMO_PRICING_FACT_CANDIDATES,
   OFFICIAL_SOURCE_REGISTRY,
   officialWatchtowerCoverageSummary,
 } from '../features/research/lib/officialWatchtower'
@@ -439,7 +439,7 @@ function sectionTitleForOfficialSource(sourceKind: string): string {
 }
 
 function officialDocChunksFromInitialSnippets(): ApiDocChunk[] {
-  return INITIAL_OFFICIAL_SOURCE_SNIPPETS.flatMap(snippet => {
+  return DEMO_OFFICIAL_SOURCE_SNIPPETS.flatMap(snippet => {
     const source = OFFICIAL_SOURCE_REGISTRY.find(item => item.id === snippet.sourceId)
     if (!source) return []
     return chunkApiDoc(normalizeApiDoc({
@@ -2618,10 +2618,10 @@ function App() {
       modelPerfMatrix: MODEL_PERF_MATRIX.map(row => ({ ...row })),
       operatingLedger: operatingLedgerRows,
       officialSourceRegistry: OFFICIAL_SOURCE_REGISTRY.map(source => ({ ...source })),
-      officialSourceSnippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS.map(snippet => ({ ...snippet })),
-      modelReleaseCandidates: INITIAL_MODEL_RELEASE_CANDIDATES.map(candidate => ({ ...candidate })),
-      pricingFactCandidates: INITIAL_PRICING_FACT_CANDIDATES.map(candidate => ({ ...candidate })),
-      fxRateSnapshots: INITIAL_FX_RATE_SNAPSHOTS.map(snapshot => ({ ...snapshot })),
+      officialSourceSnippets: DEMO_OFFICIAL_SOURCE_SNIPPETS.map(snippet => ({ ...snippet })),
+      modelReleaseCandidates: DEMO_MODEL_RELEASE_CANDIDATES.map(candidate => ({ ...candidate })),
+      pricingFactCandidates: DEMO_PRICING_FACT_CANDIDATES.map(candidate => ({ ...candidate })),
+      fxRateSnapshots: DEMO_FX_RATE_SNAPSHOTS.map(snapshot => ({ ...snapshot })),
       corpusRegistryVersion: 'corpus_registry_v0.1',
       ragEvidenceCoverage: p1RagEvidencePanel.evidence?.results ?? null,
       benchmarkEvidenceRefs: MODEL_BENCHMARK_RECORDS.flatMap(record => record.sourceRefs),
@@ -4005,7 +4005,7 @@ function App() {
               <div className="mt-2 flex flex-wrap gap-2">
                 <Badge tone="primary">{officialWatchtowerSummary.activeSourceCount} official sources</Badge>
                 <Badge tone="caution">{officialWatchtowerSummary.activeChineseProviderGroupCount} China provider groups</Badge>
-                <Badge tone="neutral">{INITIAL_MODEL_RELEASE_CANDIDATES.length} model release candidates</Badge>
+                <Badge tone="neutral">{DEMO_MODEL_RELEASE_CANDIDATES.length} demo model release candidates</Badge>
                 <Badge tone="neutral">FX review required for CNY pricing</Badge>
               </div>
             </div>

@@ -46,8 +46,8 @@ import {
 } from '../features/rag/lib/apiDocRag'
 import {
   buildOfficialUpdatesReviewInbox,
-  INITIAL_MODEL_RELEASE_CANDIDATES,
-  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+  DEMO_MODEL_RELEASE_CANDIDATES,
+  DEMO_OFFICIAL_SOURCE_SNIPPETS,
   type OfficialUpdatesReviewInbox,
 } from '../features/research/lib/officialWatchtower'
 import {
@@ -885,9 +885,9 @@ export async function handleOfficialUpdatesApi(
 ): Promise<ApiResult<OfficialUpdatesApiResponse>> {
   const workspaceId = normalizedWorkspaceId(_body, context.query)
   const inbox = buildOfficialUpdatesReviewInbox({
-    candidates: INITIAL_MODEL_RELEASE_CANDIDATES,
-    snippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS,
-    sourceChangedCount: INITIAL_OFFICIAL_SOURCE_SNIPPETS.length,
+    candidates: DEMO_MODEL_RELEASE_CANDIDATES,
+    snippets: DEMO_OFFICIAL_SOURCE_SNIPPETS,
+    sourceChangedCount: DEMO_OFFICIAL_SOURCE_SNIPPETS.length,
   })
   const base: OfficialUpdatesApiResponse = {
     persistence: contextStore(context).persistence,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   OFFICIAL_SOURCE_REGISTRY,
-  INITIAL_MODEL_RELEASE_CANDIDATES,
-  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+  DEMO_MODEL_RELEASE_CANDIDATES,
+  DEMO_OFFICIAL_SOURCE_SNIPPETS,
   buildModelReleaseCandidate,
   buildOfficialUpdatesReviewInbox,
   canUseNormalizedUsdPricing,
@@ -177,8 +177,8 @@ describe('officialWatchtower', () => {
     })
 
     const inbox = buildOfficialUpdatesReviewInbox({
-      candidates: [...INITIAL_MODEL_RELEASE_CANDIDATES, fxCandidate],
-      snippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+      candidates: [...DEMO_MODEL_RELEASE_CANDIDATES, fxCandidate],
+      snippets: DEMO_OFFICIAL_SOURCE_SNIPPETS,
       noisyCandidates: [{ candidateId: 'noisy:generic-model', title: 'Generic model mention', reason: 'source_candidate_limit_exceeded' }],
       sourceChangedCount: 2,
     })
@@ -190,7 +190,7 @@ describe('officialWatchtower', () => {
     expect(inbox.needsRegionReview.map(candidate => candidate.modelOwner)).toContain('01ai_yi')
     expect(inbox.needsFxReview.map(candidate => candidate.modelOwner)).toContain('alibaba_qwen')
     expect(inbox.noisyCandidates).toEqual([expect.objectContaining({ reason: 'source_candidate_limit_exceeded' })])
-    expect(inbox.ragRecordCount).toBe(INITIAL_OFFICIAL_SOURCE_SNIPPETS.length)
+    expect(inbox.ragRecordCount).toBe(DEMO_OFFICIAL_SOURCE_SNIPPETS.length)
     expect(inbox.sourceChangedCount).toBe(2)
   })
 })

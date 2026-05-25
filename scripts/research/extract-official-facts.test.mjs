@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractOfficialFacts } from './extract-official-facts.mjs'
+import { canAutoAcceptExtractedFacts, extractOfficialFacts } from './extract-official-facts.mjs'
 
 const SOURCE = {
   id: 'alibaba-model-studio-pricing',
@@ -54,6 +54,7 @@ describe('extractOfficialFacts', () => {
     ]))
     expect(facts.confidence).toBe('high')
     expect(facts.warnings).toEqual([])
+    expect(canAutoAcceptExtractedFacts(facts)).toBe(true)
   })
 
   it('keeps cloud-hosted third-party pricing from overriding first-party model facts', () => {
@@ -76,5 +77,18 @@ describe('extractOfficialFacts', () => {
       hostedThirdPartyModel: true,
     })
     expect(facts.warnings).toContain('hosted_third_party_prices_must_not_override_first_party_facts')
+    expect(canAutoAcceptExtractedFacts(facts)).toBe(false)
+  })
+
+  it('quarantines low-confidence regex fallback output from accepted facts', () => {
+    const facts = extractOfficialFacts({
+      source: SOURCE,
+      text: 'This broad page mentions pricing updates but no exact model or token price.',
+      capturedAt: '2026-05-24T00:00:00.000Z',
+    })
+
+    expect(facts.confidence).toBe('low')
+    expect(facts.warnings).toEqual(expect.arrayContaining(['model_candidate_unavailable', 'pricing_fact_unavailable']))
+    expect(canAutoAcceptExtractedFacts(facts)).toBe(false)
   })
 })

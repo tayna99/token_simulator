@@ -356,7 +356,7 @@ export function canUseNormalizedUsdPricing(candidate: ModelReleaseCandidate): bo
     && candidate.status !== 'needs_fx_review'
 }
 
-export const INITIAL_MODEL_RELEASE_CANDIDATES: ModelReleaseCandidate[] = [
+export const DEMO_MODEL_RELEASE_CANDIDATES: ModelReleaseCandidate[] = [
   buildModelReleaseCandidate({
     detectedAt: '2026-05-24T00:00:00.000Z',
     sourceId: 'kimi-pricing-chat',
@@ -405,7 +405,7 @@ export const INITIAL_MODEL_RELEASE_CANDIDATES: ModelReleaseCandidate[] = [
   }),
 ]
 
-export const INITIAL_PRICING_FACT_CANDIDATES = [
+export const DEMO_PRICING_FACT_CANDIDATES = [
   {
     id: 'fact-candidate:kimi-k2-6',
     modelFamily: 'kimi',
@@ -423,7 +423,7 @@ export const INITIAL_PRICING_FACT_CANDIDATES = [
   },
 ]
 
-export const INITIAL_OFFICIAL_SOURCE_SNIPPETS: OfficialSourceSnippet[] = [
+export const DEMO_OFFICIAL_SOURCE_SNIPPETS: OfficialSourceSnippet[] = [
   {
     snippetId: 'source:kimi-pricing-chat#kimi-k2-6',
     sourceId: 'kimi-pricing-chat',
@@ -452,7 +452,7 @@ export const INITIAL_OFFICIAL_SOURCE_SNIPPETS: OfficialSourceSnippet[] = [
   },
 ]
 
-export const INITIAL_FX_RATE_SNAPSHOTS = [
+export const DEMO_FX_RATE_SNAPSHOTS = [
   {
     base: 'CNY',
     quote: 'USD',

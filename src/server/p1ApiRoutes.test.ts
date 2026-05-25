@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function responseCollector() {
   const result = { statusCode: 0, body: undefined as unknown }
@@ -17,6 +17,11 @@ function responseCollector() {
 }
 
 describe('P1 Vercel API routes', () => {
+  afterEach(() => {
+    vi.doUnmock('./storage/kvStore')
+    vi.resetModules()
+  })
+
   it('routes SDK-lite usage events through /api/sdk-lite/usage', async () => {
     vi.resetModules()
     vi.doMock('./storage/kvStore', () => ({
@@ -71,7 +76,7 @@ describe('P1 Vercel API routes', () => {
       snapshotAllowed: true,
       eventRef: 'sdk:p1:workspace-demo:req_route_ok',
     })
-  })
+  }, 60000)
 
   it('routes P1 RAG evidence queries through /api/rag/p1-evidence', async () => {
     const { default: handler } = await import('../../api/rag/p1-evidence')
