@@ -1,19 +1,19 @@
-# AgentPayroll Review Call Script
+# AgentPayroll 리뷰콜 스크립트
 
 이 리뷰콜의 목적은 리포트 설명이 아니라, 고객이 다음 세 문장을 실제로 말할 수 있는지 검증하는 것이다.
 
-## Call Setup
+## 통화 준비
 
 - 리포트 소요 시간: 30분
-- 시작 전에 확인할 것: 리포트 버전, 사용 데이터 범위, trust limitation, 계산 기준일
+- 시작 전에 확인할 것: 리포트 버전, 사용 데이터 범위, trust limitation(신뢰/보안상 제한 사항), 계산 기준일
 - 운영자 원칙: 숫자를 방어하려 하지 말고, 고객이 어떤 결정을 할 수 있는지 확인한다.
 
-## Quote 1: 데이터 공유 의도
+## 인용 1: 데이터 공유 의도
 
 검증 문장:
 
 ```text
-"raw prompt나 개인정보 없이도 이 정도 usage metadata는 공유할 수 있습니다."
+"raw prompt(원문 프롬프트)나 개인정보 없이도 이 정도 usage metadata(사용량 메타데이터)는 공유할 수 있습니다."
 ```
 
 확인 질문:
@@ -28,7 +28,7 @@
 - `data_blocker`: 없음 / 컬럼 부족 / 보안 승인 / export 권한 / 기타
 - 원문 반응:
 
-## Quote 2: 리포트 공유 의도
+## 인용 2: 리포트 공유 의도
 
 검증 문장:
 
@@ -48,12 +48,12 @@
 - `sharing_audience`: founder / finance / product / engineering / investor / board / other
 - 원문 반응:
 
-## Quote 3: 가격 또는 limit 결정 의도
+## 인용 3: 가격 또는 limit 결정 의도
 
 검증 문장:
 
 ```text
-"이 결과를 보고 가격, 사용량 제한, credit, overage, 모델 라우팅 중 하나를 결정하겠습니다."
+"이 결과를 보고 가격, 사용량 제한, credit(선불 사용량 크레딧), overage(초과 사용 과금), 모델 라우팅(요청을 어떤 모델로 보낼지 정하는 방식) 중 하나를 결정하겠습니다."
 ```
 
 확인 질문:
@@ -69,7 +69,7 @@
 - `decision_deadline`: 날짜 또는 기간
 - 원문 반응:
 
-## Repeat Report Question
+## 반복 리포트 질문
 
 마지막 질문:
 
@@ -83,6 +83,6 @@
 - `requested_next_report_scope`: same_metrics / new_segment / pricing_change_followup / data_readiness_followup
 - 원문 반응:
 
-## Acceptance Check
+## 합격 확인
 
-리뷰콜 기록은 세 quote의 원문 반응을 짧게 보존해야 한다. 합격 신호는 "기능이 있으면 좋겠다"가 아니라 "이 리포트를 다시 받고 싶다" 또는 "이 리포트로 결정을 하겠다"다.
+리뷰콜 기록은 세 quote(검증 문장)의 원문 반응을 짧게 보존해야 한다. 합격 신호는 "기능이 있으면 좋겠다"가 아니라 "이 리포트를 다시 받고 싶다" 또는 "이 리포트로 결정을 하겠다"다.

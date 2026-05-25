@@ -1,4 +1,4 @@
-# AI Cost Snapshot
+# AI Cost Snapshot(1회 AI 비용 진단 리포트)
 
 가격: 30만~100만 원  
 기간: 데이터 수령 후 3~5영업일  
@@ -10,16 +10,16 @@
 
 ## 받는 것
 
-- AI 기능별 원가 breakdown
+- AI 기능별 원가 breakdown(비용을 기능별로 쪼개 본 내역)
 - 고객 또는 요금제별 비용 압박 지점
-- gross margin을 깨는 사용 패턴 후보
-- 가격, limit, credit, 모델 라우팅 중 하나 이상의 의사결정 후보
+- gross margin(매출총이익률)을 깨는 사용 패턴 후보
+- 가격, limit(사용량 제한), credit(선불 사용량 크레딧), 모델 라우팅(요청을 어떤 모델로 보낼지 정하는 방식) 중 하나 이상의 의사결정 후보
 - 데이터 한계와 추가로 필요한 컬럼
 - 리뷰콜에서 합의한 다음 결정
 
 ## 필요한 데이터
 
-- 익명화된 usage metadata CSV 또는 JSONL
+- 익명화된 usage metadata(사용량 메타데이터) CSV 또는 JSONL
 - 가능한 컬럼: timestamp, customer_id, plan_id, feature, model, input_tokens, output_tokens, total_cost, status, retry_count, revenue 또는 plan_price
 - raw prompt, 대화 원문, 개인정보, API key는 보내지 않는다.
 
@@ -36,9 +36,9 @@
 
 리뷰콜에서는 다음 중 하나를 결정 후보로 남긴다.
 
-- Pro 또는 Team 플랜의 사용량 cap 조정
-- credit, overage, hybrid pricing 검토
-- 손해 고객 또는 heavy user 대응 정책
+- Pro 또는 Team 플랜의 사용량 cap(상한) 조정
+- credit(선불 사용량 크레딧), overage(초과 사용 과금), hybrid pricing(정액제와 사용량 과금을 섞은 가격제) 검토
+- 손해 고객 또는 heavy user(사용량이 매우 큰 고객) 대응 정책
 - 고비용 기능의 모델 라우팅 변경 검토
 - 다음 달 동일 지표 반복 리포트 요청 여부
 
@@ -46,6 +46,6 @@
 
 - 얼마인가: 30만~100만 원
 - 무엇을 받는가: 1장 요약 리포트, 계산 부록, 30분 리뷰콜
-- 어떤 데이터를 줘야 하는가: prompt-free usage metadata
-- 무엇은 포함되지 않는가: 실시간 모니터링, 자동 과금 변경, raw prompt 분석
-- 리포트 이후 무엇을 해야 하는가: 가격, limit, credit, overage, 모델 라우팅 중 하나의 결정을 고른다.
+- 어떤 데이터를 줘야 하는가: prompt-free usage metadata(raw prompt 없이 정리한 사용량 메타데이터)
+- 무엇은 포함되지 않는가: 실시간 모니터링, 자동 과금 변경, raw prompt(원문 프롬프트) 분석
+- 리포트 이후 무엇을 해야 하는가: 가격, limit(사용량 제한), credit(선불 사용량 크레딧), overage(초과 사용 과금), 모델 라우팅 중 하나의 결정을 고른다.
