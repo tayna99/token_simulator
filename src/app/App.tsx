@@ -94,6 +94,12 @@ import {
   OFFICIAL_SOURCE_REGISTRY,
   officialWatchtowerCoverageSummary,
 } from '../features/research/lib/officialWatchtower'
+import {
+  chunkApiDoc,
+  normalizeApiDoc,
+  type ApiDocChunk,
+  type RagContextBlock,
+} from '../features/rag/lib/apiDocRag'
 
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
@@ -191,6 +197,7 @@ interface P1RagEvidencePanelState {
   status: 'idle' | 'loaded' | 'error'
   persistence: string
   evidence: P1VectorRagEvidenceResult | null
+  contextBlocks?: RagContextBlock[]
   metadata?: {
     workspaceId: string
     query: string
@@ -201,6 +208,7 @@ interface P1RagEvidencePanelState {
 interface P1RagEvidenceApiBody {
   persistence?: string
   evidence?: P1VectorRagEvidenceResult
+  contextBlocks?: RagContextBlock[]
   metadata?: {
     workspaceId: string
     query: string
@@ -388,6 +396,31 @@ const P1_RAG_SAMPLE_COLLECTIONS: Record<'official_docs' | 'benchmark_evidence' |
     },
   ],
 }
+
+function sectionTitleForOfficialSource(sourceKind: string): string {
+  if (sourceKind === 'pricing') return 'Pricing'
+  if (sourceKind === 'changelog' || sourceKind === 'release_note') return 'Release notes'
+  if (sourceKind === 'model_doc' || sourceKind === 'docs_index') return 'Model docs'
+  return 'Official source'
+}
+
+function officialDocChunksFromInitialSnippets(): ApiDocChunk[] {
+  return INITIAL_OFFICIAL_SOURCE_SNIPPETS.flatMap(snippet => {
+    const source = OFFICIAL_SOURCE_REGISTRY.find(item => item.id === snippet.sourceId)
+    if (!source) return []
+    return chunkApiDoc(normalizeApiDoc({
+      source,
+      capturedAt: snippet.capturedAt,
+      rawText: [
+        `# ${source.id}`,
+        `## ${sectionTitleForOfficialSource(source.sourceKind)}`,
+        snippet.text,
+      ].join('\n'),
+    }))
+  })
+}
+
+const P1_RAG_SAMPLE_OFFICIAL_DOC_CHUNKS = officialDocChunksFromInitialSnippets()
 
 function sdkLiteSampleEvent(kind: 'clean' | 'blocked'): {
   source: P1UsageAdapterSource
@@ -2696,6 +2729,7 @@ function App() {
           workspaceId,
           query,
           collections: P1_RAG_SAMPLE_COLLECTIONS,
+          officialDocChunks: P1_RAG_SAMPLE_OFFICIAL_DOC_CHUNKS,
           structuredFactRefs,
         }),
       })
@@ -2705,6 +2739,7 @@ function App() {
         status: 'loaded',
         persistence: body.persistence ?? 'unknown',
         evidence: body.evidence,
+        contextBlocks: body.contextBlocks,
         metadata: body.metadata ?? { workspaceId, query },
         error: body.error,
       })

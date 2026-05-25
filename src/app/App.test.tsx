@@ -190,7 +190,7 @@ describe('App AI team operations workspace', () => {
   it('shows Trust blocking in customer copy and exposes SDK/RAG internals only in debug mode', async () => {
     const user = userEvent.setup()
     window.history.pushState({}, '', '/token_simulator/?debug=1')
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       if (url === '/api/sdk-lite/usage') {
         return new Response(JSON.stringify({
@@ -263,6 +263,16 @@ describe('App AI team operations workspace', () => {
     expect(ragPanel).toHaveTextContent(/decision:cache-policy/i)
     expect(ragPanel).toHaveTextContent(/baseline_unavailable/i)
     expect(ragPanel).toHaveTextContent(/RAG route metadata/i)
+    const ragRequest = fetchMock.mock.calls.find(([input]) => String(input) === '/api/rag/p1-evidence')
+    const ragPayload = JSON.parse(String(ragRequest?.[1]?.body ?? '{}'))
+    expect(ragPayload.officialDocChunks[0]).toMatchObject({
+      collection: 'official_docs',
+      metadata: {
+        sourceId: expect.any(String),
+        sectionType: expect.any(String),
+        officialSourceTrust: expect.any(String),
+      },
+    })
   })
 
   it('shows the front operating panel only in admin mode', () => {

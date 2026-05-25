@@ -14,6 +14,7 @@ import {
 import { createMemoryKvStore, createUnavailableKvStore } from './storage/kvStore'
 import { MODELS } from '../features/alternatives/data/models'
 import type { AgentSpec } from '../features/team-cost/lib/agentSpec'
+import { chunkApiDoc, normalizeApiDoc } from '../features/rag/lib/apiDocRag'
 
 function supportAgentSpec(): AgentSpec {
   return {
@@ -261,6 +262,56 @@ describe('P1 API handlers', () => {
     expect(response.body.evidence.results.benchmark_evidence.refs).toEqual(['evidence:peer-cache'])
     expect(response.body.evidence.results.decision_history.refs).toEqual(['decision:cache-policy'])
     expect(response.body.evidence.results.official_docs.scores[0]).toBeGreaterThan(0)
+  })
+
+  it('uses official docs vector chunks to return bounded LLM context for P1 RAG evidence', async () => {
+    const source = {
+      id: 'google-gemini-pricing',
+      modelOwner: 'google',
+      servingProvider: 'first_party',
+      modelFamilies: ['gemini'],
+      sourceKind: 'pricing',
+      url: 'https://ai.google.dev/gemini-api/docs/pricing',
+      pricingRegion: 'global',
+      sourceLanguage: 'en',
+      officialSourceTrust: 'official_pricing',
+    }
+    const officialDocChunks = chunkApiDoc(normalizeApiDoc({
+      source,
+      capturedAt: '2026-05-24T00:00:00.000Z',
+      rawText: [
+        '# Gemini API',
+        '## Authentication',
+        'Use an API key for requests.',
+        '## Pricing',
+        'Cached input tokens receive a discount when repeated context is reused.',
+      ].join('\n'),
+    }))
+
+    const response = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cached token pricing discount',
+      topK: 1,
+      structuredFactRefs: ['fact:gemini-3-5-flash'],
+      officialDocChunks,
+      collections: {
+        benchmark_evidence: [],
+        decision_history: [],
+      },
+    }, { store: createMemoryKvStore() })
+
+    expect(response.status).toBe(200)
+    expect(response.body.evidence.results.official_docs.records[0].id).toMatch(/^source:google-gemini-pricing#/)
+    expect(response.body.evidence.results.official_docs.refs).toEqual(expect.arrayContaining([
+      'source:google-gemini-pricing',
+      'fact:gemini-3-5-flash',
+    ]))
+    expect(response.body.contextBlocks?.[0]).toMatchObject({
+      collection: 'official_docs',
+      mayOverrideFacts: false,
+      sourceUrl: source.url,
+    })
+    expect(response.body.contextBlocks?.[0].text).toContain('Cached input tokens')
   })
 
   it('keeps P1 RAG API benchmark gaps explicit instead of inventing peer averages', async () => {

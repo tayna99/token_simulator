@@ -35,6 +35,14 @@ import {
   type P1VectorRagEvidenceResult,
   type P1VectorRagKind,
 } from '../features/p1/lib/p1OperatingSystem'
+import {
+  buildRagContextBlocks,
+  buildVectorIndex,
+  createHashEmbeddingProvider,
+  searchVectorIndex,
+  type ApiDocChunk,
+  type RagContextBlock,
+} from '../features/rag/lib/apiDocRag'
 
 export interface ApiResult<T> {
   status: number
@@ -132,6 +140,7 @@ export interface SdkLiteUsageApiResponse {
 export interface P1RagEvidenceApiResponse {
   persistence: PersistenceState
   evidence: P1VectorRagEvidenceResult
+  contextBlocks?: RagContextBlock[]
   metadata?: {
     workspaceId: string
     query: string
@@ -621,6 +630,72 @@ function ragCollections(value: unknown) {
   return collections
 }
 
+function isApiDocChunk(value: unknown): value is ApiDocChunk {
+  return isObject(value)
+    && value.collection === 'official_docs'
+    && typeof value.id === 'string'
+    && typeof value.text === 'string'
+    && typeof value.sourceUrl === 'string'
+    && Array.isArray(value.refs)
+    && isObject(value.metadata)
+    && typeof value.metadata.sourceId === 'string'
+    && Array.isArray(value.metadata.headingPath)
+    && typeof value.metadata.sectionType === 'string'
+}
+
+function apiDocChunks(value: unknown): ApiDocChunk[] {
+  return Array.isArray(value) ? value.filter(isApiDocChunk) : []
+}
+
+async function retrieveOfficialDocsVectorEvidence(input: {
+  query: string
+  chunks: ApiDocChunk[]
+  structuredFactRefs: string[]
+  topK?: number
+}): Promise<{
+  evidence: P1RagEvidenceResult
+  contextBlocks: RagContextBlock[]
+}> {
+  const embeddingProvider = createHashEmbeddingProvider()
+  const index = await buildVectorIndex({
+    collection: 'official_docs',
+    chunks: input.chunks,
+    embeddingProvider,
+  })
+  const results = await searchVectorIndex({
+    index,
+    query: input.query,
+    topK: input.topK,
+    embeddingProvider,
+    filter: { officialSourceTrust: 'official_pricing' },
+  })
+  const records = results.map(result => ({
+    id: result.chunk.id,
+    text: result.chunk.text,
+    sourceUrl: result.chunk.sourceUrl,
+  }))
+  const refs = Array.from(new Set([
+    ...results.flatMap(result => result.chunk.refs),
+    ...input.structuredFactRefs,
+  ]))
+
+  return {
+    evidence: {
+      kind: 'official_docs',
+      found: records.length > 0,
+      refs,
+      mayOverrideFacts: false,
+      records,
+      scores: results.map(result => result.score),
+      warnings: records.length > 0 ? [] : ['official_docs_unavailable'],
+    },
+    contextBlocks: buildRagContextBlocks(results, {
+      maxChunks: input.topK ?? 5,
+      maxCharsPerChunk: 1600,
+    }),
+  }
+}
+
 function coerceExternalActions(value: unknown): P1ExternalAction[] {
   return Array.isArray(value)
     ? value.filter((item): item is P1ExternalAction => (
@@ -671,12 +746,26 @@ export async function handleP1RagEvidenceApi(
     return { status: 400, body: { ...base, error: 'invalid_rag_query' } }
   }
 
+  const structuredFactRefs = stringArray(body.structuredFactRefs)
   const evidence = retrieveP1VectorRagEvidence({
     query: body.query,
     collections: ragCollections(body.collections),
-    structuredFactRefs: stringArray(body.structuredFactRefs),
+    structuredFactRefs,
     topK: typeof body.topK === 'number' ? body.topK : undefined,
   })
+  let contextBlocks: RagContextBlock[] = []
+  const officialDocChunks = apiDocChunks(body.officialDocChunks)
+  if (officialDocChunks.length > 0) {
+    const officialDocs = await retrieveOfficialDocsVectorEvidence({
+      query: body.query,
+      chunks: officialDocChunks,
+      structuredFactRefs,
+      topK: typeof body.topK === 'number' ? body.topK : undefined,
+    })
+    evidence.results.official_docs = officialDocs.evidence
+    evidence.warnings = Array.from(new Set(Object.values(evidence.results).flatMap(result => result.warnings)))
+    contextBlocks = officialDocs.contextBlocks
+  }
   const store = contextStore(context)
 
   if (store.persistence === 'kv') {
@@ -692,6 +781,7 @@ export async function handleP1RagEvidenceApi(
     body: {
       persistence: store.persistence,
       evidence,
+      contextBlocks,
       metadata: { workspaceId, query: body.query },
     },
   }
