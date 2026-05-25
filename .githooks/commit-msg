@@ -1,0 +1,2 @@
+#!/bin/sh
+npm run --silent memory:check-commit -- "$1"

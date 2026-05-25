@@ -21,6 +21,9 @@
     "research:official-watch": "node scripts/research/watch-official-sources.mjs",
     "research:official-watch-update": "node scripts/research/watch-official-sources.mjs --update",
     "research:benchmark-corpus": "node scripts/research/benchmark-corpus.mjs",
+    "memory:capture": "node scripts/company-memory/capture-update.mjs",
+    "memory:check-commit": "node scripts/company-memory/check-commit-message.mjs",
+    "memory:weekly": "node scripts/company-memory/weekly-summary.mjs",
     "production:demo:seed:dry-run": "node scripts/supabase/seed-production-demo.mjs --dry-run",
     "production:demo:smoke": "node scripts/supabase/smoke-production-demo.mjs"
   },
