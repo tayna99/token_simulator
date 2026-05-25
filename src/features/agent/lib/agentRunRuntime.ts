@@ -7,6 +7,7 @@ export type AgentRunStage = 'design' | 'cost' | 'bottleneck' | 'optimize' | 'dec
 export type AgentRunLlmMode = 'deterministic-fallback' | 'provider-llm'
 export type AgentRunRuntimeMode = 'local' | 'server'
 export type AgentRunExecutionMode = 'stage_committee' | 'all_hands' | 'single_agent'
+export type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
 
 const OPERATING_AGENT_IDS = [
   'provider_api_intelligence',
@@ -62,6 +63,15 @@ export interface AgentEvidenceCoverage {
   decisionHistory: AgentEvidenceCoverageItem
 }
 
+export interface AgentRunRuntimeProof {
+  status: RuntimeCapabilityStatus
+  providerRunId?: string
+  agentInvocationProof?: string[]
+  fallbackReason?: string
+  startedAt: string
+  completedAt: string
+}
+
 export interface AgentRunInput {
   apiKey?: string
   mode: AgentRunMode
@@ -102,6 +112,7 @@ export interface AgentRunResponse {
   answer: string
   report: string
   llmMode: AgentRunLlmMode
+  runtime: AgentRunRuntimeProof
   supervisorSummary: string
   disagreements: string[]
   decisionReadiness: 'ready' | 'needs_review' | 'blocked' | string
@@ -165,7 +176,7 @@ function refsFromRecords(records: unknown[], prefix: 'source' | 'evidence' | 'de
     const normalizedId = id
       ? (id.startsWith(`${prefix}:`) ? id : `${prefix}:${id}`)
       : ''
-    return [...refs, normalizedId].filter(Boolean)
+    return refs.length > 0 ? refs : [normalizedId].filter(Boolean)
   }))
 }
 
@@ -262,6 +273,56 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
+function routeStringArray(route: Record<string, unknown>, key: string): string[] {
+  const value = route[key]
+  return isStringArray(value) ? value : []
+}
+
+function routePrimaryAgentId(fallback: AgentRunResponse): string | null {
+  const routePrimary = stringField(fallback.agentRoute, 'primaryAgentId')
+  return routePrimary || fallback.primaryAgentId
+}
+
+function routeReviewerAgentIds(fallback: AgentRunResponse): string[] {
+  return routeStringArray(fallback.agentRoute, 'reviewerAgentIds')
+}
+
+function routeCalledAgentIds(fallback: AgentRunResponse): string[] {
+  const routed = routeStringArray(fallback.agentRoute, 'routedAgentIds')
+  return routed.length > 0 ? routed : routeStringArray(fallback.agentRoute, 'calledAgentIds')
+}
+
+function isRuntimeCapabilityStatus(value: unknown): value is RuntimeCapabilityStatus {
+  return value === 'provider_llm'
+    || value === 'deterministic_preview'
+    || value === 'unavailable'
+    || value === 'connector_not_configured'
+}
+
+function timestampedRuntime(status: RuntimeCapabilityStatus, fallbackReason?: string): AgentRunRuntimeProof {
+  const now = new Date().toISOString()
+  return {
+    status,
+    ...(fallbackReason ? { fallbackReason } : {}),
+    startedAt: now,
+    completedAt: now,
+  }
+}
+
+function normalizeRuntime(value: unknown, fallback: AgentRunRuntimeProof): AgentRunRuntimeProof {
+  if (!isRecord(value) || !isRuntimeCapabilityStatus(value.status)) return fallback
+  const startedAt = typeof value.startedAt === 'string' && value.startedAt ? value.startedAt : fallback.startedAt
+  const completedAt = typeof value.completedAt === 'string' && value.completedAt ? value.completedAt : fallback.completedAt
+  return {
+    status: value.status,
+    ...(typeof value.providerRunId === 'string' && value.providerRunId ? { providerRunId: value.providerRunId } : {}),
+    ...(isStringArray(value.agentInvocationProof) ? { agentInvocationProof: value.agentInvocationProof } : {}),
+    ...(typeof value.fallbackReason === 'string' && value.fallbackReason ? { fallbackReason: value.fallbackReason } : {}),
+    startedAt,
+    completedAt,
+  }
+}
+
 function isAgenticEvent(value: unknown): value is AgenticEvent {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<AgenticEvent>
@@ -303,6 +364,9 @@ function normalizeEvidenceCoverage(value: unknown, fallback: AgentEvidenceCovera
 function normalizeEvents(candidate: Partial<AgentRunResponse>, fallback: AgentRunResponse): AgenticEvent[] {
   const routeEvents = fallback.events
   if (!Array.isArray(candidate.events)) return routeEvents
+  const providerRuntime = candidate.runtime?.status === 'provider_llm'
+  const fallbackPrimary = routePrimaryAgentId(fallback)
+  const fallbackReviewers = routeReviewerAgentIds(fallback)
   return candidate.events.filter(isAgenticEvent).map((event, index) => {
     const fallbackEvent = routeEvents[index] ?? routeEvents[0]
     const usedTools = isStringArray(event.usedTools) ? event.usedTools : (
@@ -310,16 +374,16 @@ function normalizeEvents(candidate: Partial<AgentRunResponse>, fallback: AgentRu
     )
     return {
       ...event,
-      agentId: event.agentId ?? fallbackEvent?.agentId ?? fallback.primaryAgentId,
-      calledAgentTool: event.calledAgentTool ?? fallbackEvent?.calledAgentTool ?? (
-        fallback.primaryAgentId ? `call_${fallback.primaryAgentId}_agent` : null
+      agentId: event.agentId ?? (providerRuntime ? fallbackPrimary : fallbackEvent?.agentId ?? fallback.primaryAgentId),
+      calledAgentTool: event.calledAgentTool ?? (
+        providerRuntime && fallbackPrimary ? `call_${fallbackPrimary}_agent` : fallbackEvent?.calledAgentTool ?? null
       ),
       stance: event.stance ?? fallbackEvent?.stance ?? 'support',
       toolResultRefs: event.toolResultRefs.length > 0 ? event.toolResultRefs : fallback.toolResultRefs,
       riskCardIds: event.riskCardIds,
       usedTools,
       usedCapabilityTools: isStringArray(event.usedCapabilityTools) ? event.usedCapabilityTools : usedTools,
-      reviewerAgentIds: isStringArray(event.reviewerAgentIds) ? event.reviewerAgentIds : fallback.reviewerAgentIds,
+      reviewerAgentIds: isStringArray(event.reviewerAgentIds) ? event.reviewerAgentIds : fallbackReviewers,
       evidenceRefs: isStringArray(event.evidenceRefs) ? event.evidenceRefs : [],
       evidenceWarnings: isStringArray(event.evidenceWarnings) ? event.evidenceWarnings : [],
       nextQuestion: typeof event.nextQuestion === 'string' ? event.nextQuestion : '',
@@ -332,18 +396,32 @@ function normalizeEvents(candidate: Partial<AgentRunResponse>, fallback: AgentRu
 function normalizeResponse(value: unknown, fallback: AgentRunResponse): AgentRunResponse {
   if (!value || typeof value !== 'object') return fallback
   const candidate = value as Partial<AgentRunResponse>
+  const runtime = normalizeRuntime(candidate.runtime, fallback.runtime)
+  const isProviderRuntime = runtime.status === 'provider_llm'
+  const routedAgentIds = routeCalledAgentIds(fallback)
+  const primaryAgentId = typeof candidate.primaryAgentId === 'string'
+    ? candidate.primaryAgentId
+    : isProviderRuntime
+      ? routePrimaryAgentId(fallback)
+      : fallback.primaryAgentId
+  const reviewerAgentIds = isStringArray(candidate.reviewerAgentIds)
+    ? candidate.reviewerAgentIds
+    : isProviderRuntime
+      ? routeReviewerAgentIds(fallback)
+      : fallback.reviewerAgentIds
   return {
     events: normalizeEvents(candidate, fallback),
     answer: typeof candidate.answer === 'string' ? candidate.answer : fallback.answer,
     report: typeof candidate.report === 'string' ? candidate.report : fallback.report,
-    llmMode: candidate.llmMode === 'provider-llm' ? 'provider-llm' : 'deterministic-fallback',
+    llmMode: isProviderRuntime && candidate.llmMode === 'provider-llm' ? 'provider-llm' : 'deterministic-fallback',
+    runtime,
     supervisorSummary: typeof candidate.supervisorSummary === 'string' ? candidate.supervisorSummary : fallback.supervisorSummary,
     disagreements: isStringArray(candidate.disagreements) ? candidate.disagreements : fallback.disagreements,
     decisionReadiness: typeof candidate.decisionReadiness === 'string' ? candidate.decisionReadiness : fallback.decisionReadiness,
     nextQuestions: isStringArray(candidate.nextQuestions) ? candidate.nextQuestions : fallback.nextQuestions,
-    calledAgentIds: isStringArray(candidate.calledAgentIds) ? candidate.calledAgentIds : fallback.calledAgentIds,
-    primaryAgentId: typeof candidate.primaryAgentId === 'string' ? candidate.primaryAgentId : fallback.primaryAgentId,
-    reviewerAgentIds: isStringArray(candidate.reviewerAgentIds) ? candidate.reviewerAgentIds : fallback.reviewerAgentIds,
+    calledAgentIds: isStringArray(candidate.calledAgentIds) ? candidate.calledAgentIds : (isProviderRuntime ? routedAgentIds : fallback.calledAgentIds),
+    primaryAgentId,
+    reviewerAgentIds,
     agentRoute: candidate.agentRoute && typeof candidate.agentRoute === 'object' ? candidate.agentRoute as Record<string, unknown> : fallback.agentRoute,
     snapshotVersion: typeof candidate.snapshotVersion === 'string' ? candidate.snapshotVersion : fallback.snapshotVersion,
     usedTools: isStringArray(candidate.usedTools) ? candidate.usedTools : [],
@@ -357,7 +435,11 @@ function normalizeResponse(value: unknown, fallback: AgentRunResponse): AgentRun
   }
 }
 
-function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unavailable'): AgentRunResponse {
+function fallbackResponse(
+  input: AgentRunInput,
+  warning = 'agentic runtime unavailable',
+  status: Extract<RuntimeCapabilityStatus, 'deterministic_preview' | 'unavailable'> = 'deterministic_preview',
+): AgentRunResponse {
   const refs = toolRefsFrom(input)
   const refsLabel = refs.join(', ') || 'deterministic snapshot'
   const route = routeOperatingAgents(input)
@@ -367,10 +449,6 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
     ...evidenceCoverage.benchmarkEvidence.warnings,
     ...evidenceCoverage.decisionHistory.warnings,
   ])
-  const agentLabel = (agentId: string) => {
-    const agent = (input.operatingAgents ?? []).find(item => stringField(item, 'id') === agentId)
-    return stringField(agent, 'label') || agentId
-  }
   const warnings = unique([
     warning,
     ...(hasBlockingTrustInspection(input.trustInspection) ? ['trust pipeline requires review before snapshot use'] : []),
@@ -383,45 +461,57 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
       }),
     ...frontOperatingAssetRefs(input),
   ])
+  const runtime = timestampedRuntime(status, warning)
+  const routedAgentLabel = route.calledAgentIds.join(', ') || 'none'
+  const fallbackEventType = status === 'unavailable' ? 'runtime_unavailable' : 'deterministic_preview'
+  const fallbackMessage = status === 'unavailable'
+    ? `Agent runtime unavailable; deterministic preview is grounded in ${refsLabel}. Routed agents were not invoked (${routedAgentLabel}).`
+    : `Deterministic preview is grounded in ${refsLabel}. Routed agents were not invoked (${routedAgentLabel}).`
+  const coverageRefs = unique([
+    ...evidenceCoverage.officialDocs.refs,
+    ...evidenceCoverage.benchmarkEvidence.refs,
+    ...evidenceCoverage.decisionHistory.refs,
+  ])
   return {
-    events: route.calledAgentIds.map(agentId => ({
-      type: 'analysis',
-      message: `${agentLabel(agentId)} fallback is grounded in ${refsLabel}.`,
-      agentId,
-      calledAgentTool: `call_${agentId}_agent`,
+    events: [{
+      type: fallbackEventType,
+      message: fallbackMessage,
+      agentId: null,
+      calledAgentTool: null,
       stance: evidenceWarnings.length > 0 ? 'caution' : 'support',
       toolResultRefs: refs,
       riskCardIds: [],
       usedTools: [],
       usedCapabilityTools: [],
-      reviewerAgentIds: route.reviewerAgentIds.filter(reviewerId => reviewerId !== agentId),
-      evidenceRefs: [],
+      reviewerAgentIds: [],
+      evidenceRefs: coverageRefs,
       evidenceWarnings,
       nextQuestion: evidenceWarnings.includes('baseline_unavailable') ? 'Which peer baseline should be added before adoption?' : '',
       basisRefs: [],
       assetRefs,
-    })),
-    answer: `Operating team fallback is grounded in ${refsLabel}.`,
-    report: `One-page report fallback uses ${refsLabel}.`,
+    }],
+    answer: `${status === 'unavailable' ? 'Agent runtime unavailable' : 'Deterministic preview'} is grounded in ${refsLabel}.`,
+    report: `Preview report uses ${refsLabel}; no operating agent was invoked.`,
     llmMode: 'deterministic-fallback',
-    supervisorSummary: `${route.primaryAgentId} led a fallback review grounded in ${refsLabel}.`,
-    disagreements: route.reviewerAgentIds.map(reviewerId => `${reviewerId} should review ${route.primaryAgentId}'s recommendation before adoption.`),
+    runtime,
+    supervisorSummary: `${status === 'unavailable' ? 'Agent runtime unavailable' : 'Deterministic preview only'}; routed agents were ${routedAgentLabel}.`,
+    disagreements: [],
     decisionReadiness: 'needs_review',
     nextQuestions: [
       ...(evidenceWarnings.includes('baseline_unavailable') ? ['Which peer baseline should be added before adoption?'] : []),
       'Confirm provider runtime availability before treating AI interpretation as LLM assisted.',
       'Review the cited deterministic refs before adopting a recommendation.',
     ],
-    calledAgentIds: route.calledAgentIds,
-    primaryAgentId: route.primaryAgentId,
-    reviewerAgentIds: route.reviewerAgentIds,
-    agentRoute: route,
+    calledAgentIds: [],
+    primaryAgentId: null,
+    reviewerAgentIds: [],
+    agentRoute: { ...route, routedAgentIds: route.calledAgentIds, calledAgentIds: [], previewOnly: true },
     snapshotVersion: input.snapshotVersion ?? '',
     usedTools: [],
     toolResultRefs: refs,
     riskCardIds: [],
     decisionIds: [],
-    evidenceRefs: [],
+    evidenceRefs: coverageRefs,
     evidenceCoverage,
     assetRefs,
     warnings: unique([...warnings, ...evidenceWarnings]),
@@ -443,9 +533,9 @@ export async function runAgentRuntime(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     })
-    if (!response.ok) return fallbackResponse(input, `agentic runtime failed with ${response.status}`)
+    if (!response.ok) return fallbackResponse(input, `agentic runtime failed with ${response.status}`, 'unavailable')
     return normalizeResponse(await response.json(), fallback)
   } catch {
-    return fallbackResponse(input)
+    return fallbackResponse(input, 'agentic runtime unavailable', 'unavailable')
   }
 }

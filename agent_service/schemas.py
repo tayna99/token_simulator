@@ -4,6 +4,7 @@ The TypeScript app owns all deterministic cost and margin calculations. This
 service receives those snapshots and returns interpretation events only.
 """
 
+from datetime import UTC, datetime
 from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
@@ -31,6 +32,7 @@ TeamCostEventType = Literal[
 ]
 
 LlmMode = Literal["deterministic-fallback", "provider-llm"]
+RuntimeCapabilityStatus = Literal["provider_llm", "deterministic_preview", "unavailable", "connector_not_configured"]
 AgentRunMode = Literal["report", "ask", "decision_support"]
 AgentStage = Literal["design", "cost", "bottleneck", "optimize", "decision-log"]
 AgentExecutionMode = Literal["stage_committee", "all_hands", "single_agent"]
@@ -143,11 +145,25 @@ class AgentRunInput(BaseModel):
     frontOperatingSystem: dict[str, Any] = Field(default_factory=dict)
 
 
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+class AgentRunRuntimeProof(BaseModel):
+    status: RuntimeCapabilityStatus = "unavailable"
+    providerRunId: str | None = None
+    agentInvocationProof: list[str] = Field(default_factory=list)
+    fallbackReason: str | None = None
+    startedAt: str = Field(default_factory=_utc_now)
+    completedAt: str = Field(default_factory=_utc_now)
+
+
 class AgentRunResponse(BaseModel):
     events: list[AgenticEvent] = Field(default_factory=list)
     answer: str = ""
     report: str = ""
     llmMode: LlmMode = "deterministic-fallback"
+    runtime: AgentRunRuntimeProof = Field(default_factory=AgentRunRuntimeProof)
     supervisorSummary: str = ""
     disagreements: list[str] = Field(default_factory=list)
     decisionReadiness: str = "needs_review"
@@ -165,6 +181,15 @@ class AgentRunResponse(BaseModel):
     evidenceCoverage: dict[str, Any] = Field(default_factory=dict)
     assetRefs: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+class P1RagEvidenceRequest(BaseModel):
+    workspaceId: str = ""
+    query: str
+    topK: int = 5
+    structuredFactRefs: list[str] = Field(default_factory=list)
+    officialDocChunks: list[dict[str, Any]] = Field(default_factory=list)
+    filters: dict[str, str | int | float | bool] = Field(default_factory=dict)
 
 
 class Analysis(BaseModel):

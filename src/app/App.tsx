@@ -41,6 +41,18 @@ import { Badge, Button, MetricTile, Surface } from '../shared/ui/primitives'
 import { fmtCurrency, fmtPercent, fmtTokens } from '../lib/format'
 import { AI_TEAM_AGENT_CATALOG } from '../features/team-cost/lib/agentCatalog'
 import { TEAM_COST_BENCHMARKS } from '../features/team-cost/lib/benchmarkCorpus'
+import {
+  MODEL_BENCHMARK_RECORDS,
+  MODEL_PERF_MATRIX,
+  modelBenchmarkRecordToCorpusChunk,
+  modelBenchmarkRecordsAsP1RagRecords,
+} from '../features/rag/lib/modelBenchmarkCorpus'
+import { usageSchemaSourcesAsCorpusChunks } from '../features/rag/data/usageSchemaRegistry'
+import {
+  buildDecisionHistoryCorpusRecords,
+  decisionHistoryRecordsAsP1RagRecords,
+} from '../features/rag/lib/decisionHistoryCorpus'
+import type { CorpusChunk } from '../features/rag/lib/corpusTypes'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { detectBottlenecks } from '../features/team-cost/lib/bottleneckAnalysis'
 import { estimateAgentWorkload, summarizeTeamCost, type TeamCostEstimate } from '../features/team-cost/lib/estimateAgentWorkload'
@@ -100,7 +112,6 @@ import {
   type ApiDocChunk,
   type RagContextBlock,
 } from '../features/rag/lib/apiDocRag'
-
 export type Role = 'developer' | 'pm' | 'ceo'
 export type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -322,6 +333,12 @@ const EMPTY_AGENT_RUN_RESPONSE: AgentRunResponse = {
   answer: 'Agentic RAG is waiting for a deterministic snapshot.',
   report: 'One-page report will be generated after the SparkClaw demo or a real import.',
   llmMode: 'deterministic-fallback',
+  runtime: {
+    status: 'deterministic_preview',
+    startedAt: '2026-05-25T00:00:00.000Z',
+    completedAt: '2026-05-25T00:00:00.000Z',
+    fallbackReason: 'waiting for deterministic snapshot',
+  },
   supervisorSummary: 'Operating team synthesis is waiting for a deterministic snapshot.',
   disagreements: [],
   decisionReadiness: 'needs_review',
@@ -345,21 +362,6 @@ const EMPTY_AGENT_RUN_RESPONSE: AgentRunResponse = {
   warnings: [],
 }
 
-const MODEL_PERF_MATRIX = [
-  {
-    taskType: 'classification',
-    modelId: 'gemini-3.1-flash',
-    qualityBasis: 'assumption',
-    risk: 'Low-risk classification can be routed only after sample quality checks.',
-  },
-  {
-    taskType: 'report_generation',
-    modelId: 'claude-sonnet-4.6',
-    qualityBasis: 'assumption',
-    risk: 'Executive-facing reports need review before cheaper-model routing.',
-  },
-]
-
 const EMPTY_SDK_LITE_PANEL_STATE: SdkLitePanelState = {
   status: 'idle',
   snapshotAllowed: false,
@@ -375,26 +377,58 @@ const EMPTY_P1_RAG_EVIDENCE_STATE: P1RagEvidencePanelState = {
   evidence: null,
 }
 
+function corpusTrustFromOfficialSource(sourceTrust: string): CorpusChunk['metadata']['corpusTrust'] {
+  if (sourceTrust === 'official_pricing'
+    || sourceTrust === 'official_docs'
+    || sourceTrust === 'official_announcement'
+    || sourceTrust === 'official_cloud_hosted') {
+    return sourceTrust
+  }
+  return 'official_announcement'
+}
+
+function officialSourceToCorpusChunk(source: typeof OFFICIAL_SOURCE_REGISTRY[number]): CorpusChunk {
+  return {
+    id: `source:${source.id}`,
+    corpusId: 'official_source',
+    text: `${source.modelOwner} ${source.sourceKind} official source for pricing, cache, model docs, and margin review.`,
+    sourceUrl: source.url,
+    refs: [`source:${source.id}`],
+    mayOverrideFacts: false,
+    metadata: {
+      sourceKind: source.sourceKind,
+      corpusTrust: corpusTrustFromOfficialSource(source.officialSourceTrust),
+      ownerAgentIds: source.ownerAgentIds as CorpusChunk['metadata']['ownerAgentIds'],
+      consumerAgentIds: ['provider_api_intelligence', 'model_inference_research', 'cost_modeling', 'optimization_routing', 'knowledge_release_ops'],
+      cadence: source.cadence === 'manual' ? 'manual' : source.cadence,
+      sourceId: source.id,
+    },
+  }
+}
+
 const P1_RAG_SAMPLE_COLLECTIONS: Record<'official_docs' | 'benchmark_evidence' | 'decision_history', P1RagRecord[]> = {
-  official_docs: [
-    {
-      id: 'google-pricing',
-      text: 'Cache pricing source for Gemini API models.',
-      sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
-    },
-  ],
-  benchmark_evidence: [
-    {
-      id: 'peer-cache',
-      text: 'Peer teams improve margin when cache hit rate is tracked separately from raw input tokens.',
-    },
-  ],
-  decision_history: [
-    {
-      id: 'cache-policy',
-      text: 'Held cache routing until QA confirmed no quality regression.',
-    },
-  ],
+  official_docs: OFFICIAL_SOURCE_REGISTRY.map(source => ({
+    id: source.id,
+    text: `${source.modelOwner} ${source.sourceKind} official source for pricing, cache, model docs, and margin review.`,
+    sourceUrl: source.url,
+    refs: [`source:${source.id}`],
+    corpusTrust: source.officialSourceTrust,
+    ownerAgentIds: source.ownerAgentIds,
+    consumerAgentIds: ['provider_api_intelligence', 'model_inference_research', 'cost_modeling', 'optimization_routing', 'knowledge_release_ops'],
+  })),
+  benchmark_evidence: modelBenchmarkRecordsAsP1RagRecords(MODEL_BENCHMARK_RECORDS),
+  decision_history: decisionHistoryRecordsAsP1RagRecords(buildDecisionHistoryCorpusRecords({
+    decisions: [],
+    riskCards: [],
+    operatingLedger: [],
+    snapshot: { snapshotVersion: 'snapshot:decision-history:sample' },
+  })),
+}
+
+const P1_RAG_SAMPLE_CORPUS_COLLECTIONS: Partial<Record<'official_source' | 'model_benchmark' | 'usage_schema' | 'decision_history', CorpusChunk[]>> = {
+  official_source: OFFICIAL_SOURCE_REGISTRY.map(officialSourceToCorpusChunk),
+  model_benchmark: MODEL_BENCHMARK_RECORDS.map(modelBenchmarkRecordToCorpusChunk),
+  usage_schema: usageSchemaSourcesAsCorpusChunks(),
 }
 
 function sectionTitleForOfficialSource(sourceKind: string): string {
@@ -1598,7 +1632,7 @@ function P1ExternalAutomationPanel({
           <p className="text-xs font-semibold uppercase text-primary-normal">P1 external execution</p>
           <h2 className="mt-1 text-base font-semibold text-label-normal">Draft → approval → execute → ledger</h2>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
-            External mutation stays blocked until a human approval is recorded. The default connector mode is dry_run.
+            External mutation stays blocked until human approval, connector config, rollback metadata, and idempotency are present.
           </p>
         </div>
         <Badge tone="caution">approval gate required</Badge>
@@ -1625,7 +1659,7 @@ function P1ExternalAutomationPanel({
         <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
           <p className="text-sm font-semibold text-label-normal">Slack/Email alert</p>
           <p className="mt-1 text-xs text-label-alternative">
-            Draft preview only until approval. Execute records a dry_run ledger entry.
+            Draft preview only until approval. Execute records an explicit dry_run sandbox ledger entry.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={onApproveAlert} disabled={alertAction.status !== 'draft'}>
@@ -1741,9 +1775,21 @@ function DecisionAssistantPanel({
     const agent = operatingAgents.find(item => item.id === agentId)
     return agent?.label ?? agentId ?? 'Unassigned agent'
   }
-  const calledAgentLabel = agentRun.calledAgentIds.length === operatingAgents.length
-    ? `${agentRun.calledAgentIds.length} agents`
-    : agentRun.calledAgentIds.map(agentLabel).join(', ')
+  const routeStringArray = (key: string): string[] => {
+    const value = agentRun.agentRoute[key]
+    return Array.isArray(value) ? value.filter(item => typeof item === 'string') : []
+  }
+  const displayAgentIds = agentRun.calledAgentIds.length > 0
+    ? agentRun.calledAgentIds
+    : routeStringArray('routedAgentIds')
+  const displayReviewerAgentIds = agentRun.reviewerAgentIds.length > 0
+    ? agentRun.reviewerAgentIds
+    : routeStringArray('reviewerAgentIds')
+  const displayPrimaryAgentId = agentRun.primaryAgentId
+    ?? (typeof agentRun.agentRoute.primaryAgentId === 'string' ? agentRun.agentRoute.primaryAgentId : null)
+  const calledAgentLabel = displayAgentIds.length === operatingAgents.length
+    ? `${displayAgentIds.length} agents`
+    : displayAgentIds.map(agentLabel).join(', ')
   const executionModeLabel = typeof agentRun.agentRoute.executionMode === 'string'
     ? agentRun.agentRoute.executionMode
     : ''
@@ -1808,13 +1854,13 @@ function DecisionAssistantPanel({
         <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
           <p className="text-xs font-semibold uppercase text-primary-normal">Stage answer</p>
           <p className="mt-1 text-sm text-label-neutral">{stageAnswerText}</p>
-          {showInternal && agentRun.calledAgentIds.length > 0 && (
+          {showInternal && displayAgentIds.length > 0 && (
             <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-2">
               <p className="text-xs font-semibold uppercase text-primary-normal">Called agents</p>
               <p className="mt-1 text-xs text-label-neutral">{calledAgentLabel}</p>
               <p className="mt-1 text-xs text-label-alternative">
-                primary: {agentLabel(agentRun.primaryAgentId)}
-                {agentRun.reviewerAgentIds.length > 0 && ` | reviewers: ${agentRun.reviewerAgentIds.map(agentLabel).join(', ')}`}
+                primary: {agentLabel(displayPrimaryAgentId)}
+                {displayReviewerAgentIds.length > 0 && ` | reviewers: ${displayReviewerAgentIds.map(agentLabel).join(', ')}`}
               </p>
               {agentRun.snapshotVersion && (
                 <p className="mt-1 text-xs text-label-alternative" translate="no">{agentRun.snapshotVersion}</p>
@@ -2576,6 +2622,9 @@ function App() {
       modelReleaseCandidates: INITIAL_MODEL_RELEASE_CANDIDATES.map(candidate => ({ ...candidate })),
       pricingFactCandidates: INITIAL_PRICING_FACT_CANDIDATES.map(candidate => ({ ...candidate })),
       fxRateSnapshots: INITIAL_FX_RATE_SNAPSHOTS.map(snapshot => ({ ...snapshot })),
+      corpusRegistryVersion: 'corpus_registry_v0.1',
+      ragEvidenceCoverage: p1RagEvidencePanel.evidence?.results ?? null,
+      benchmarkEvidenceRefs: MODEL_BENCHMARK_RECORDS.flatMap(record => record.sourceRefs),
       trustInspection: importedUsage?.trustInspection ?? null,
       formulaVersion: COST_FORMULA_VERSION,
       providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
@@ -2588,6 +2637,7 @@ function App() {
     importedUsage?.totalCostUsd,
     importedUsage?.trustInspection,
     operatingLedgerRows,
+    p1RagEvidencePanel.evidence?.results,
     riskCards,
     teamCostBottlenecks,
     teamCostEstimate.monthlyCostUsd,
@@ -2705,9 +2755,23 @@ function App() {
   const handleRunP1RagEvidenceCheck = async () => {
     const query = 'cache margin'
     const structuredFactRefs = ['fact:gemini-3-5-flash']
+    const decisionHistoryChunks = buildDecisionHistoryCorpusRecords({
+      decisions,
+      riskCards: [...riskCards, ...teamCostRiskCards],
+      operatingLedger: operatingLedgerRows,
+      snapshot: { snapshotVersion: agentSnapshot.snapshotVersion, activeStage: activeDecisionStage },
+    })
+    const collections = {
+      ...P1_RAG_SAMPLE_COLLECTIONS,
+      decision_history: decisionHistoryRecordsAsP1RagRecords(decisionHistoryChunks),
+    }
+    const corpusCollections = {
+      ...P1_RAG_SAMPLE_CORPUS_COLLECTIONS,
+      decision_history: decisionHistoryChunks,
+    }
     const fallbackEvidence = retrieveP1VectorRagEvidence({
       query,
-      collections: P1_RAG_SAMPLE_COLLECTIONS,
+      collections,
       structuredFactRefs,
     })
 
@@ -2728,7 +2792,8 @@ function App() {
         body: JSON.stringify({
           workspaceId,
           query,
-          collections: P1_RAG_SAMPLE_COLLECTIONS,
+          collections,
+          corpusCollections,
           officialDocChunks: P1_RAG_SAMPLE_OFFICIAL_DOC_CHUNKS,
           structuredFactRefs,
         }),
@@ -2763,7 +2828,12 @@ function App() {
 
   const handleExecuteP1Alert = () => {
     setP1AlertAction(action => {
-      const execution = executeExternalAction({ action, connectorMode: 'dry_run' })
+      const execution = executeExternalAction({
+        action,
+        connectorMode: 'dry_run',
+        connectorConfig: { id: 'resend_email', configured: true },
+        idempotencyKey: `idem:${action.id}:sandbox`,
+      })
       setP1AlertExecution(execution)
       return execution.status === 'executed' ? { ...action, status: 'executed' } : action
     })
@@ -2779,7 +2849,12 @@ function App() {
 
   const handleExecuteP1Billing = () => {
     setP1BillingAction(action => {
-      const execution = executeExternalAction({ action, connectorMode: 'dry_run' })
+      const execution = executeExternalAction({
+        action,
+        connectorMode: 'dry_run',
+        connectorConfig: { id: 'stripe_billing', configured: true, rollbackMetadata: { sandbox: true } },
+        idempotencyKey: `idem:${action.id}:sandbox`,
+      })
       setP1BillingExecution(execution)
       return execution.status === 'executed' ? { ...action, status: 'executed' } : action
     })

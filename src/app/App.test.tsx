@@ -273,6 +273,81 @@ describe('App AI team operations workspace', () => {
         officialSourceTrust: expect.any(String),
       },
     })
+    expect(ragPayload.corpusCollections.model_benchmark[0]).toMatchObject({
+      corpusId: 'model_benchmark',
+      refs: expect.arrayContaining([expect.stringMatching(/^evidence:/)]),
+      metadata: {
+        corpusTrust: 'third_party_benchmark',
+      },
+    })
+    expect(ragPayload.corpusCollections.usage_schema[0]).toMatchObject({
+      corpusId: 'usage_schema',
+      refs: expect.arrayContaining([expect.stringMatching(/^evidence:usage-schema-/)]),
+    })
+  })
+
+  it('updates the P1 RAG evidence panel when C2 benchmark evidence arrives after an empty check', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    let ragCallCount = 0
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/rag/p1-evidence') {
+        ragCallCount += 1
+        const hasBenchmark = ragCallCount > 1
+        return new Response(JSON.stringify({
+          persistence: 'kv',
+          evidence: {
+            mayOverrideFacts: false,
+            results: {
+              official_docs: {
+                found: true,
+                refs: ['source:google-gemini-pricing', 'fact:gemini-3-5-flash'],
+                records: [{ id: 'google-gemini-pricing', text: 'Cache pricing source.' }],
+                scores: [1],
+                warnings: [],
+              },
+              benchmark_evidence: hasBenchmark
+                ? {
+                    found: true,
+                    refs: ['evidence:lmarena-leaderboard'],
+                    records: [{ id: 'lmarena-leaderboard', text: 'Human preference benchmark evidence.' }],
+                    scores: [1],
+                    warnings: [],
+                  }
+                : {
+                    found: false,
+                    refs: [],
+                    records: [],
+                    scores: [],
+                    warnings: ['baseline_unavailable'],
+                  },
+              decision_history: {
+                found: true,
+                refs: ['decision:cache-policy'],
+                records: [{ id: 'cache-policy', text: 'Held cache routing until QA.' }],
+                scores: [1],
+                warnings: [],
+              },
+            },
+            warnings: hasBenchmark ? [] : ['baseline_unavailable'],
+          },
+          metadata: { workspaceId: 'workspace-demo', query: 'cache margin' },
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Run P1 RAG evidence check/i }))
+    const panel = await screen.findByTestId('p1-rag-evidence-panel')
+    expect(panel).toHaveTextContent(/baseline_unavailable/i)
+    expect(panel).not.toHaveTextContent(/evidence:lmarena-leaderboard/i)
+
+    await user.click(screen.getByRole('button', { name: /Run P1 RAG evidence check/i }))
+    await waitFor(() => expect(panel).toHaveTextContent(/evidence:lmarena-leaderboard/i))
+    expect(panel).not.toHaveTextContent(/baseline_unavailable/i)
   })
 
   it('shows the front operating panel only in admin mode', () => {

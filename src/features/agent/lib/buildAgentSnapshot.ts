@@ -22,6 +22,9 @@ export interface BuildAgentSnapshotInput {
   modelReleaseCandidates?: unknown[]
   pricingFactCandidates?: unknown[]
   fxRateSnapshots?: unknown[]
+  corpusRegistryVersion?: string
+  ragEvidenceCoverage?: unknown
+  benchmarkEvidenceRefs?: string[]
   trustInspection?: TrustInspectionResult | null
   formulaVersion?: string
   providerRegistryVersion?: string

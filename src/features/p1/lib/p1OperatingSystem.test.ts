@@ -155,8 +155,26 @@ describe('p1OperatingSystem', () => {
 
     expect(normalized.trustInspection.allowedForSnapshot).toBe(true)
     expect(normalized.dimensions).toEqual(expect.arrayContaining(['customer', 'feature', 'model', 'plan']))
+    expect(normalized.schemaEvidenceRefs).toEqual(expect.arrayContaining(['evidence:usage-schema-vercel-ai-gateway']))
     expect(blocked.trustInspection.allowedForSnapshot).toBe(false)
     expect(blocked.snapshotAllowed).toBe(false)
+  })
+
+  it('recognizes OpenRouter and LiteLLM usage schema evidence without admitting raw fields', () => {
+    const openrouter = normalizeP1UsageAdapterExport({
+      source: 'openrouter',
+      rawCsv: 'timestamp,request_id,model,prompt_tokens,completion_tokens,session_id\n2026-05-25,req_1,gpt-5.5,100,20,sess_1',
+    })
+    const litellm = normalizeP1UsageAdapterExport({
+      source: 'litellm',
+      rawCsv: 'timestamp,customer_id,model,input_tokens,output_tokens,api_key\n2026-05-25,cust_1,gpt-5.5,100,20,sk-test',
+    })
+
+    expect(openrouter.schemaEvidenceRefs).toEqual(['evidence:usage-schema-openrouter'])
+    expect(openrouter.missingDimensions).toContain('customer')
+    expect(litellm.schemaEvidenceRefs).toEqual(['evidence:usage-schema-litellm'])
+    expect(litellm.snapshotAllowed).toBe(false)
+    expect(litellm.trustInspection.warnings).toContain('api_key_candidate_detected')
   })
 
   it('accepts SDK-lite metadata events but blocks raw prompt, completion, API key, or PII fields', () => {
@@ -318,7 +336,33 @@ describe('p1OperatingSystem', () => {
     expect(result.ledgerEntry).toBeNull()
   })
 
-  it('executes approved external actions as dry-runs and creates a ledger entry', () => {
+  it('blocks approved external actions when no connector is configured', () => {
+    const draft = buildExternalActionDraft({
+      workspaceId: 'workspace-demo',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    })
+    const approved = approveExternalAction({
+      action: draft,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+      decidedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    const result = executeExternalAction({
+      action: approved,
+      executedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(result.status).toBe('blocked')
+    expect(result.error).toBe('connector_not_configured')
+    expect(result.connectorMode).toBeNull()
+    expect(result.ledgerEntry).toBeNull()
+  })
+
+  it('executes approved external actions only with explicit connector config and idempotency', () => {
     const draft = buildExternalActionDraft({
       workspaceId: 'workspace-demo',
       kind: 'email_alert',
@@ -336,17 +380,22 @@ describe('p1OperatingSystem', () => {
     const result = executeExternalAction({
       action: approved,
       connectorMode: 'dry_run',
+      connectorConfig: { id: 'resend_email', configured: true },
+      idempotencyKey: 'idem:email:follow-up',
       executedAt: '2026-05-25T00:01:00.000Z',
     })
 
     expect(approved.status).toBe('approved')
     expect(result.status).toBe('executed')
     expect(result.connectorMode).toBe('dry_run')
+    expect(result.idempotencyKey).toBe('idem:email:follow-up')
     expect(result.ledgerEntry).toMatchObject({
       workspaceId: 'workspace-demo',
       actionId: draft.id,
       kind: 'email_alert',
       connectorMode: 'dry_run',
+      connectorId: 'resend_email',
+      idempotencyKey: 'idem:email:follow-up',
       status: 'ledgered',
     })
   })
@@ -369,6 +418,8 @@ describe('p1OperatingSystem', () => {
     const result = executeExternalAction({
       action: approved,
       connectorMode: 'dry_run',
+      connectorConfig: { id: 'stripe_billing', configured: true },
+      idempotencyKey: 'idem:billing:usage-cap',
       executedAt: '2026-05-25T00:01:00.000Z',
     })
 

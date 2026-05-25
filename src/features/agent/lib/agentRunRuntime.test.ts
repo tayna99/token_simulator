@@ -10,6 +10,13 @@ describe('runAgentRuntime', () => {
       answer: 'Cost pressure is grounded in tool:monthlyAiCogs.',
       report: 'CEO/CFO one-pager grounded in tool:monthlyAiCogs.',
       llmMode: 'provider-llm',
+      runtime: {
+        status: 'provider_llm',
+        providerRunId: 'run:test-cost',
+        agentInvocationProof: ['call_cost_modeling_agent', 'call_cost_engine_qa_agent', 'call_finance_ops_agent'],
+        startedAt: '2026-05-25T00:00:00.000Z',
+        completedAt: '2026-05-25T00:00:01.000Z',
+      },
       supervisorSummary: 'Cost Modeling Agent led the review.',
       disagreements: [],
       decisionReadiness: 'ready',
@@ -87,6 +94,13 @@ describe('runAgentRuntime', () => {
       })],
     })
     expect(result.llmMode).toBe('provider-llm')
+    expect(result.runtime.status).toBe('provider_llm')
+    expect(result.runtime.providerRunId).toBe('run:test-cost')
+    expect(result.runtime.agentInvocationProof).toEqual([
+      'call_cost_modeling_agent',
+      'call_cost_engine_qa_agent',
+      'call_finance_ops_agent',
+    ])
     expect(result.usedTools).toContain('lookup_snapshot_value')
     expect(result.calledAgentIds).toEqual(['cost_modeling', 'cost_engine_qa', 'finance_ops'])
     expect(result.primaryAgentId).toBe('cost_modeling')
@@ -124,12 +138,21 @@ describe('runAgentRuntime', () => {
         answer: 'Grounded in tool:monthlyAiCogs.',
         report: 'Grounded report.',
         llmMode: 'provider-llm',
+        runtime: {
+          status: 'provider_llm',
+          providerRunId: 'run:partial',
+          agentInvocationProof: ['call_optimization_routing_agent'],
+          startedAt: '2026-05-25T00:00:00.000Z',
+          completedAt: '2026-05-25T00:00:01.000Z',
+        },
         usedTools: ['retrieve_metric_flags'],
         toolResultRefs: ['tool:monthlyAiCogs'],
       }), { status: 200 })),
     })
 
     expect(result.calledAgentIds).toEqual(['optimization_routing', 'model_inference_research', 'trust_security_compliance'])
+    expect(result.runtime.status).toBe('provider_llm')
+    expect(result.runtime.providerRunId).toBe('run:partial')
     expect(result.assetRefs).toContain('asset:icp_scorecard')
     expect(result.primaryAgentId).toBe('optimization_routing')
     expect(result.snapshotVersion).toBe('snapshot:partial')
@@ -171,6 +194,13 @@ describe('runAgentRuntime', () => {
         answer: 'Decision needs review.',
         report: 'Decision needs review.',
         llmMode: 'provider-llm',
+        runtime: {
+          status: 'provider_llm',
+          providerRunId: 'run:evidence',
+          agentInvocationProof: ['call_cost_modeling_agent'],
+          startedAt: '2026-05-25T00:00:00.000Z',
+          completedAt: '2026-05-25T00:00:01.000Z',
+        },
         decisionReadiness: 'needs_review',
         evidenceCoverage: {
           officialDocs: { found: true, refs: ['source:google-pricing'], records: [{ id: 'google-pricing', text: 'Cache pricing.' }], scores: [1], warnings: [] },
@@ -187,6 +217,45 @@ describe('runAgentRuntime', () => {
     expect(result.evidenceCoverage.officialDocs.refs).toEqual(['source:google-pricing'])
     expect(result.evidenceCoverage.benchmarkEvidence.warnings).toContain('baseline_unavailable')
     expect(result.decisionReadiness).toBe('needs_review')
+  })
+
+  it('surfaces C2 benchmark RAG refs in deterministic fallback evidence for optimization reviews', async () => {
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'optimize',
+      question: 'Can routing use GPT-5.5 for the expensive workflow?',
+      executionMode: 'stage_committee',
+      snapshotVersion: 'snapshot:c2-rag',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+      ragCollections: {
+        official_docs: [{ id: 'openai-api-pricing', text: 'Official pricing source.', refs: ['source:openai-api-pricing'] }],
+        benchmark_evidence: [{
+          id: 'evidence:artificial-analysis-models:gpt-5-5:intelligence-index',
+          text: 'GPT-5.5 intelligence_index: 74.',
+          refs: ['evidence:artificial-analysis-models'],
+        }],
+        decision_history: [{ id: 'decision:routing-hold', text: 'Held routing until benchmark review.', refs: ['decision:routing-hold'] }],
+      },
+    }, { runtime: 'local' })
+
+    expect(result.runtime.status).toBe('deterministic_preview')
+    expect(result.calledAgentIds).toEqual([])
+    expect(result.events[0].calledAgentTool).toBeNull()
+    expect(result.evidenceCoverage.benchmarkEvidence).toMatchObject({
+      found: true,
+      refs: ['evidence:artificial-analysis-models'],
+      warnings: [],
+    })
+    expect(result.evidenceRefs).toContain('evidence:artificial-analysis-models')
+    expect(result.warnings).not.toContain('baseline_unavailable')
   })
 
   it('returns deterministic fallback when the server runtime fails', async () => {
@@ -211,13 +280,18 @@ describe('runAgentRuntime', () => {
     })
 
     expect(result.llmMode).toBe('deterministic-fallback')
+    expect(result.runtime.status).toBe('unavailable')
+    expect(result.runtime.fallbackReason).toContain('503')
     expect(result.answer).toContain('tool:monthlyAiCogs')
     expect(result.toolResultRefs).toEqual(['tool:monthlyAiCogs'])
-    expect(result.calledAgentIds).toEqual(['customer_diagnostic_pricing', 'usage_data_ingestion', 'cost_engine_qa'])
-    expect(result.primaryAgentId).toBe('customer_diagnostic_pricing')
-    expect(result.events.map(event => event.agentId)).toEqual(result.calledAgentIds)
+    expect(result.calledAgentIds).toEqual([])
+    expect(result.primaryAgentId).toBeNull()
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0].type).toBe('runtime_unavailable')
+    expect(result.events[0].calledAgentTool).toBeNull()
+    expect(result.events[0].agentId).toBeNull()
     expect(result.snapshotVersion).toBe('snapshot:fallback')
-    expect(result.supervisorSummary).toContain('customer_diagnostic_pricing')
+    expect(result.supervisorSummary).toContain('unavailable')
     expect(result.decisionReadiness).toBe('needs_review')
   })
 
@@ -247,8 +321,12 @@ describe('runAgentRuntime', () => {
       },
     }, { runtime: 'local' })
 
-    expect(result.calledAgentIds).toEqual(['trust_security_compliance', 'usage_data_ingestion', 'cost_engine_qa'])
-    expect(result.primaryAgentId).toBe('trust_security_compliance')
+    expect(result.runtime.status).toBe('deterministic_preview')
+    expect(result.calledAgentIds).toEqual([])
+    expect(result.primaryAgentId).toBeNull()
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0].type).toBe('deterministic_preview')
+    expect(result.events[0].calledAgentTool).toBeNull()
     expect(result.warnings).toContain('trust pipeline requires review before snapshot use')
   })
 })

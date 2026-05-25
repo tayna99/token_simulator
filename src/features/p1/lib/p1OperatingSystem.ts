@@ -1,4 +1,5 @@
 import { inspectUsageImportSecurity, type TrustInspectionResult } from '../../trust/lib/securityMiddleware'
+import { schemaEvidenceRefsForAdapter } from '../../rag/data/usageSchemaRegistry'
 
 export type CustomerDashboardCtaId =
   | 'run_sparkclaw_sample'
@@ -45,11 +46,16 @@ export type P1ApprovalStatus = 'draft' | 'approved' | 'rejected' | 'executed'
 export type P1ExternalActionKind = 'retention_reminder' | 'audit_export' | 'slack_alert' | 'email_alert' | 'billing_change'
 export type P1ExternalActionStatus = 'draft' | 'approved' | 'rejected' | 'executed'
 export type P1ExternalConnectorMode = 'dry_run' | 'live'
+export type P1ExternalConnectorId = 'slack_webhook' | 'resend_email' | 'stripe_billing' | 'metronome'
 
 export interface P1RagRecord {
   id: string
   text: string
   sourceUrl?: string
+  refs?: string[]
+  corpusTrust?: string
+  ownerAgentIds?: string[]
+  consumerAgentIds?: string[]
 }
 
 export interface P1RagEvidenceResult {
@@ -105,20 +111,32 @@ export interface P1ExternalActionLedgerEntry {
   kind: P1ExternalActionKind
   status: 'ledgered'
   connectorMode: P1ExternalConnectorMode
+  connectorId: P1ExternalConnectorId
+  idempotencyKey: string
   dryRunRef?: string
   externalRef?: string
+  rollbackMetadata: Record<string, unknown>
   sourceRefs: string[]
   executedAt: string
 }
 
 export interface P1ExternalActionExecutionResult {
   status: 'blocked' | 'executed'
-  connectorMode: P1ExternalConnectorMode
+  connectorMode: P1ExternalConnectorMode | null
+  connectorId?: P1ExternalConnectorId
+  idempotencyKey?: string
   actionId: string
-  error?: 'approval_required' | 'rollback_metadata_required'
+  error?: 'approval_required' | 'rollback_metadata_required' | 'connector_not_configured' | 'idempotency_key_required'
   dryRunRef?: string
   externalRef?: string
+  rollbackMetadata?: Record<string, unknown>
   ledgerEntry: P1ExternalActionLedgerEntry | null
+}
+
+export interface P1ExternalConnectorConfig {
+  id: P1ExternalConnectorId
+  configured: boolean
+  rollbackMetadata?: Record<string, unknown>
 }
 
 export type P1UsageAdapterSource =
@@ -127,6 +145,8 @@ export type P1UsageAdapterSource =
   | 'vercel_ai_gateway'
   | 'helicone'
   | 'langfuse'
+  | 'openrouter'
+  | 'litellm'
   | 'application_gateway'
 
 export type NormalizedUsageDimension =
@@ -146,6 +166,7 @@ export interface NormalizedP1UsageAdapterExport {
   source: P1UsageAdapterSource
   dimensions: NormalizedUsageDimension[]
   missingDimensions: NormalizedUsageDimension[]
+  schemaEvidenceRefs: string[]
   trustInspection: TrustInspectionResult
   snapshotAllowed: boolean
 }
@@ -488,9 +509,11 @@ export function approveExternalAction(input: {
 export function executeExternalAction(input: {
   action: P1ExternalAction
   connectorMode?: P1ExternalConnectorMode
+  connectorConfig?: P1ExternalConnectorConfig
+  idempotencyKey?: string
   executedAt?: string
 }): P1ExternalActionExecutionResult {
-  const connectorMode = input.connectorMode ?? 'dry_run'
+  const connectorMode = input.connectorMode ?? null
   const executedAt = input.executedAt ?? new Date().toISOString()
   if (input.action.status !== 'approved') {
     return {
@@ -510,9 +533,34 @@ export function executeExternalAction(input: {
       ledgerEntry: null,
     }
   }
+  if (!connectorMode || !input.connectorConfig?.configured) {
+    return {
+      status: 'blocked',
+      connectorMode,
+      connectorId: input.connectorConfig?.id,
+      actionId: input.action.id,
+      error: 'connector_not_configured',
+      ledgerEntry: null,
+    }
+  }
+  if (!input.idempotencyKey) {
+    return {
+      status: 'blocked',
+      connectorMode,
+      connectorId: input.connectorConfig.id,
+      actionId: input.action.id,
+      error: 'idempotency_key_required',
+      ledgerEntry: null,
+    }
+  }
 
   const refPrefix = connectorMode === 'dry_run' ? 'dry-run' : 'external'
   const externalRef = `${refPrefix}:${input.action.workspaceId}:${input.action.kind}:${Date.parse(executedAt) || 0}`
+  const rollbackMetadata = {
+    rollbackRef: input.action.rollbackRef ?? (typeof input.action.payload.rollbackRef === 'string' ? input.action.payload.rollbackRef : ''),
+    actionSnapshot: input.action.payload,
+    ...(input.connectorConfig.rollbackMetadata ?? {}),
+  }
   const ledgerEntry: P1ExternalActionLedgerEntry = {
     id: `ledger:${input.action.id}`,
     workspaceId: input.action.workspaceId,
@@ -520,8 +568,11 @@ export function executeExternalAction(input: {
     kind: input.action.kind,
     status: 'ledgered',
     connectorMode,
+    connectorId: input.connectorConfig.id,
+    idempotencyKey: input.idempotencyKey,
     dryRunRef: connectorMode === 'dry_run' ? externalRef : undefined,
     externalRef: connectorMode === 'live' ? externalRef : undefined,
+    rollbackMetadata,
     sourceRefs: input.action.sourceRefs,
     executedAt,
   }
@@ -529,9 +580,12 @@ export function executeExternalAction(input: {
   return {
     status: 'executed',
     connectorMode,
+    connectorId: input.connectorConfig.id,
+    idempotencyKey: input.idempotencyKey,
     actionId: input.action.id,
     dryRunRef: ledgerEntry.dryRunRef,
     externalRef: ledgerEntry.externalRef,
+    rollbackMetadata,
     ledgerEntry,
   }
 }
@@ -638,7 +692,9 @@ function retrieveVectorCollection(input: {
     kind: input.kind === 'benchmark_evidence' ? 'benchmark' : input.kind,
     found: records.length > 0,
     refs: [
-      ...records.map(record => refWithPrefix(prefix, record.id)),
+      ...records.flatMap(record => record.refs && record.refs.length > 0
+        ? record.refs
+        : [refWithPrefix(prefix, record.id)]),
       ...(input.kind === 'official_docs' ? input.structuredFactRefs : []),
     ],
     mayOverrideFacts: false,
@@ -713,6 +769,7 @@ export function normalizeP1UsageAdapterExport(input: {
     source: input.source,
     dimensions,
     missingDimensions: REQUIRED_USAGE_DIMENSIONS.filter(dimension => !dimensions.includes(dimension)),
+    schemaEvidenceRefs: schemaEvidenceRefsForAdapter(input.source),
     trustInspection,
     snapshotAllowed: trustInspection.allowedForSnapshot,
   }

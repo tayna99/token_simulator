@@ -1,0 +1,58 @@
+[
+  {
+    "id": "artificial-analysis-models",
+    "corpusId": "model_benchmark",
+    "sourceKind": "benchmark",
+    "url": "https://artificialanalysis.ai/models",
+    "active": true,
+    "parserStrategy": "parseArtificialAnalysis",
+    "cadence": "weekly",
+    "sourceLanguage": "en",
+    "corpusTrust": "third_party_benchmark",
+    "ownerAgentIds": ["model_inference_research"],
+    "consumerAgentIds": ["model_inference_research", "optimization_routing", "customer_diagnostic_pricing"],
+    "evidenceRefPrefix": "evidence:"
+  },
+  {
+    "id": "lmarena-leaderboard",
+    "corpusId": "model_benchmark",
+    "sourceKind": "benchmark",
+    "url": "https://lmarena.ai/leaderboard",
+    "active": true,
+    "parserStrategy": "manual_review",
+    "cadence": "weekly",
+    "sourceLanguage": "en",
+    "corpusTrust": "third_party_benchmark",
+    "ownerAgentIds": ["model_inference_research"],
+    "consumerAgentIds": ["model_inference_research", "optimization_routing", "customer_diagnostic_pricing"],
+    "evidenceRefPrefix": "evidence:"
+  },
+  {
+    "id": "llm-stats-models",
+    "corpusId": "model_benchmark",
+    "sourceKind": "benchmark",
+    "url": "https://llm-stats.com/",
+    "active": false,
+    "parserStrategy": "manual_review",
+    "cadence": "weekly",
+    "sourceLanguage": "en",
+    "corpusTrust": "third_party_benchmark",
+    "ownerAgentIds": ["model_inference_research"],
+    "consumerAgentIds": ["model_inference_research", "optimization_routing"],
+    "evidenceRefPrefix": "evidence:"
+  },
+  {
+    "id": "provider-model-cards",
+    "corpusId": "model_benchmark",
+    "sourceKind": "model_card",
+    "url": null,
+    "active": true,
+    "parserStrategy": "official_doc_manual_review",
+    "cadence": "weekly",
+    "sourceLanguage": "en",
+    "corpusTrust": "official_docs",
+    "ownerAgentIds": ["model_inference_research", "provider_api_intelligence"],
+    "consumerAgentIds": ["model_inference_research", "optimization_routing"],
+    "evidenceRefPrefix": "evidence:"
+  }
+]

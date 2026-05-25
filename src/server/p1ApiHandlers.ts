@@ -23,6 +23,7 @@ import {
   buildExternalActionDraft,
   executeExternalAction,
   type P1ExternalAction,
+  type P1ExternalConnectorId,
   type P1ExternalConnectorMode,
   type P1ExternalActionExecutionResult,
   type P1ExternalActionKind,
@@ -43,6 +44,20 @@ import {
   type ApiDocChunk,
   type RagContextBlock,
 } from '../features/rag/lib/apiDocRag'
+import {
+  buildOfficialUpdatesReviewInbox,
+  INITIAL_MODEL_RELEASE_CANDIDATES,
+  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+  type OfficialUpdatesReviewInbox,
+} from '../features/research/lib/officialWatchtower'
+import {
+  isCorpusChunk,
+  p1RecordsFromCorpusEvidence,
+  retrieveCorpusEvidence,
+  type CorpusCollectionsInput,
+  type CorpusEvidenceResult,
+} from '../features/rag/lib/corpusRag'
+import { CORPUS_IDS, type CorpusId } from '../features/rag/lib/corpusTypes'
 
 export interface ApiResult<T> {
   status: number
@@ -140,6 +155,7 @@ export interface SdkLiteUsageApiResponse {
 export interface P1RagEvidenceApiResponse {
   persistence: PersistenceState
   evidence: P1VectorRagEvidenceResult
+  corpusEvidence?: CorpusEvidenceResult
   contextBlocks?: RagContextBlock[]
   metadata?: {
     workspaceId: string
@@ -178,6 +194,12 @@ export interface TeamCostCalibrationApiResponse {
   error?: string
 }
 
+export interface OfficialUpdatesApiResponse {
+  persistence: PersistenceState
+  inbox: OfficialUpdatesReviewInbox
+  error?: string
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
 }
@@ -192,6 +214,8 @@ function isP1UsageAdapterSource(value: unknown): value is P1UsageAdapterSource {
     || value === 'vercel_ai_gateway'
     || value === 'helicone'
     || value === 'langfuse'
+    || value === 'openrouter'
+    || value === 'litellm'
     || value === 'application_gateway'
 }
 
@@ -200,10 +224,18 @@ function isP1ExternalActionKind(value: unknown): value is P1ExternalActionKind {
     || value === 'email_alert'
     || value === 'billing_change'
     || value === 'audit_export'
+    || value === 'retention_reminder'
 }
 
-function externalConnectorMode(value: unknown): P1ExternalConnectorMode {
-  return value === 'live' ? 'live' : 'dry_run'
+function externalConnectorMode(value: unknown): P1ExternalConnectorMode | undefined {
+  return value === 'live' || value === 'dry_run' ? value : undefined
+}
+
+function isP1ExternalConnectorId(value: unknown): value is P1ExternalConnectorId {
+  return value === 'slack_webhook'
+    || value === 'resend_email'
+    || value === 'stripe_billing'
+    || value === 'metronome'
 }
 
 function queryValue(query: Record<string, string | string[] | undefined>, key: string): string | undefined {
@@ -647,6 +679,49 @@ function apiDocChunks(value: unknown): ApiDocChunk[] {
   return Array.isArray(value) ? value.filter(isApiDocChunk) : []
 }
 
+function corpusCollections(value: unknown): CorpusCollectionsInput {
+  const input = isObject(value) ? value : {}
+  return CORPUS_IDS.reduce<CorpusCollectionsInput>((result, corpusId) => {
+    const records = input[corpusId]
+    if (Array.isArray(records)) {
+      result[corpusId] = records.filter(isCorpusChunk)
+    }
+    return result
+  }, {})
+}
+
+function hasCorpusCollections(collections: CorpusCollectionsInput): boolean {
+  return CORPUS_IDS.some(corpusId => (collections[corpusId]?.length ?? 0) > 0)
+}
+
+function applyCorpusEvidenceToLegacyP1(input: {
+  evidence: P1VectorRagEvidenceResult
+  corpusEvidence: CorpusEvidenceResult
+  structuredFactRefs: string[]
+}) {
+  const apply = (corpusId: CorpusId, p1Kind: P1VectorRagKind, legacyKind: P1RagEvidenceResult['kind']) => {
+    const result = input.corpusEvidence.results[corpusId]
+    if (!result.found && result.warnings.length === 0) return
+    input.evidence.results[p1Kind] = {
+      kind: legacyKind,
+      found: result.found,
+      refs: [
+        ...result.refs,
+        ...(p1Kind === 'official_docs' ? input.structuredFactRefs : []),
+      ],
+      mayOverrideFacts: false,
+      records: p1RecordsFromCorpusEvidence(input.corpusEvidence, corpusId),
+      scores: result.scores,
+      warnings: result.warnings,
+    }
+  }
+
+  apply('official_source', 'official_docs', 'official_docs')
+  apply('model_benchmark', 'benchmark_evidence', 'benchmark')
+  apply('decision_history', 'decision_history', 'decision_history')
+  input.evidence.warnings = Array.from(new Set(Object.values(input.evidence.results).flatMap(result => result.warnings)))
+}
+
 async function retrieveOfficialDocsVectorEvidence(input: {
   query: string
   chunks: ApiDocChunk[]
@@ -753,6 +828,18 @@ export async function handleP1RagEvidenceApi(
     structuredFactRefs,
     topK: typeof body.topK === 'number' ? body.topK : undefined,
   })
+  const parsedCorpusCollections = corpusCollections(body.corpusCollections)
+  const corpusEvidence = hasCorpusCollections(parsedCorpusCollections)
+    ? retrieveCorpusEvidence({
+        query: body.query,
+        agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+        collections: parsedCorpusCollections,
+        topK: typeof body.topK === 'number' ? body.topK : undefined,
+      })
+    : undefined
+  if (corpusEvidence) {
+    applyCorpusEvidenceToLegacyP1({ evidence, corpusEvidence, structuredFactRefs })
+  }
   let contextBlocks: RagContextBlock[] = []
   const officialDocChunks = apiDocChunks(body.officialDocChunks)
   if (officialDocChunks.length > 0) {
@@ -771,7 +858,10 @@ export async function handleP1RagEvidenceApi(
   if (store.persistence === 'kv') {
     await store.setJson(workspaceKey(workspaceId, 'p1-rag-last-query'), {
       query: body.query,
-      refs: Object.values(evidence.results).flatMap(result => result.refs),
+      refs: Array.from(new Set([
+        ...Object.values(evidence.results).flatMap(result => result.refs),
+        ...(corpusEvidence ? Object.values(corpusEvidence.results).flatMap(result => result.refs) : []),
+      ])),
       retrievedAt: new Date().toISOString(),
     })
   }
@@ -781,10 +871,31 @@ export async function handleP1RagEvidenceApi(
     body: {
       persistence: store.persistence,
       evidence,
+      corpusEvidence,
       contextBlocks,
       metadata: { workspaceId, query: body.query },
     },
   }
+}
+
+export async function handleOfficialUpdatesApi(
+  method: string,
+  _body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<OfficialUpdatesApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(_body, context.query)
+  const inbox = buildOfficialUpdatesReviewInbox({
+    candidates: INITIAL_MODEL_RELEASE_CANDIDATES,
+    snippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+    sourceChangedCount: INITIAL_OFFICIAL_SOURCE_SNIPPETS.length,
+  })
+  const base: OfficialUpdatesApiResponse = {
+    persistence: contextStore(context).persistence,
+    inbox,
+  }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  if (method !== 'GET') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+  return { status: 200, body: base }
 }
 
 export async function handleP1ExternalActionsApi(
@@ -859,9 +970,25 @@ export async function handleP1ExternalActionsApi(
     }
 
     if (body.action === 'execute') {
+      const connectorId = isP1ExternalConnectorId(body.connectorId) ? body.connectorId : undefined
+      const env = contextEnv(context)
+      const configuredFromEnv = connectorId === 'slack_webhook'
+        ? Boolean(env.SLACK_WEBHOOK_URL)
+        : connectorId === 'resend_email'
+          ? Boolean(env.RESEND_API_KEY)
+          : connectorId === 'stripe_billing'
+            ? Boolean(env.STRIPE_SECRET_KEY)
+            : connectorId === 'metronome'
+              ? Boolean(env.METRONOME_API_KEY)
+              : false
+      const connectorConfigured = typeof body.connectorConfigured === 'boolean'
+        ? body.connectorConfigured
+        : configuredFromEnv
       const execution = executeExternalAction({
         action: existing,
         connectorMode: externalConnectorMode(body.connectorMode),
+        connectorConfig: connectorId ? { id: connectorId, configured: connectorConfigured } : undefined,
+        idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined,
         executedAt: (context.now?.() ?? new Date()).toISOString(),
       })
       if (execution.status === 'blocked') {

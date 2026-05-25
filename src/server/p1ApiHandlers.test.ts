@@ -8,6 +8,7 @@ import {
   handleRiskCardsApi,
   handleP1RagEvidenceApi,
   handleP1ExternalActionsApi,
+  handleOfficialUpdatesApi,
   handleSdkLiteUsageApi,
   handleUsageImportApi,
 } from './p1ApiHandlers'
@@ -264,6 +265,76 @@ describe('P1 API handlers', () => {
     expect(response.body.evidence.results.official_docs.scores[0]).toBeGreaterThan(0)
   })
 
+  it('serves split corpusCollections for C2, C4, and C9 while preserving legacy P1 evidence', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cache quality schema decision',
+      structuredFactRefs: ['fact:gemini-3-5-flash'],
+      corpusCollections: {
+        model_benchmark: [{
+          id: 'evidence:lmarena-leaderboard',
+          corpusId: 'model_benchmark',
+          text: 'Human preference benchmark evidence for quality routing.',
+          sourceUrl: 'https://lmarena.ai/leaderboard',
+          refs: ['evidence:lmarena-leaderboard'],
+          mayOverrideFacts: false,
+          metadata: {
+            sourceKind: 'benchmark',
+            corpusTrust: 'third_party_benchmark',
+            ownerAgentIds: ['model_inference_research'],
+            consumerAgentIds: ['model_inference_research'],
+            cadence: 'weekly',
+          },
+        }],
+        usage_schema: [{
+          id: 'evidence:usage-schema-openrouter',
+          corpusId: 'usage_schema',
+          text: 'OpenRouter usage schema includes prompt and completion token fields.',
+          sourceUrl: 'https://openrouter.ai/docs',
+          refs: ['evidence:usage-schema-openrouter'],
+          mayOverrideFacts: false,
+          metadata: {
+            sourceKind: 'log_schema',
+            corpusTrust: 'official_docs',
+            ownerAgentIds: ['usage_data_ingestion'],
+            consumerAgentIds: ['usage_data_ingestion'],
+            cadence: 'weekly',
+          },
+        }],
+        decision_history: [{
+          id: 'decision:cache-policy',
+          corpusId: 'decision_history',
+          text: 'Decision history held cache routing until quality review.',
+          sourceUrl: 'decision:cache-policy',
+          refs: ['decision:cache-policy'],
+          mayOverrideFacts: false,
+          metadata: {
+            sourceKind: 'decision',
+            corpusTrust: 'internal_authoritative',
+            ownerAgentIds: ['knowledge_release_ops'],
+            consumerAgentIds: ['knowledge_release_ops'],
+            cadence: 'on_write',
+          },
+        }],
+      },
+    }, { store })
+
+    expect(response.status).toBe(200)
+    expect(response.body.corpusEvidence?.mayOverrideFacts).toBe(false)
+    expect(response.body.corpusEvidence?.results.model_benchmark.refs).toEqual(['evidence:lmarena-leaderboard'])
+    expect(response.body.corpusEvidence?.results.usage_schema.refs).toEqual(['evidence:usage-schema-openrouter'])
+    expect(response.body.corpusEvidence?.results.decision_history.refs).toEqual(['decision:cache-policy'])
+    expect(response.body.evidence.results.benchmark_evidence.refs).toEqual(['evidence:lmarena-leaderboard'])
+
+    const lastQuery = await store.getJson<{ refs: string[] }>('workspace:workspace-demo:p1-rag-last-query')
+    expect(lastQuery?.refs).toEqual(expect.arrayContaining([
+      'evidence:lmarena-leaderboard',
+      'evidence:usage-schema-openrouter',
+      'decision:cache-policy',
+    ]))
+  })
+
   it('uses official docs vector chunks to return bounded LLM context for P1 RAG evidence', async () => {
     const source = {
       id: 'google-gemini-pricing',
@@ -333,6 +404,16 @@ describe('P1 API handlers', () => {
     expect(JSON.stringify(response.body.evidence)).not.toMatch(/average|peerAverage|mean/i)
   })
 
+  it('returns an admin official updates review inbox without auto-accepting candidates', async () => {
+    const response = await handleOfficialUpdatesApi('GET', undefined, { query: { workspaceId: 'workspace-demo' } })
+
+    expect(response.status).toBe(200)
+    expect(response.body.inbox.reviewCandidates.length).toBeGreaterThan(0)
+    expect(response.body.inbox.needsRegionReview.map(candidate => candidate.status)).toContain('needs_region_review')
+    expect(response.body.inbox.ragRecordCount).toBeGreaterThan(0)
+    expect(response.body.inbox.reviewCandidates.map(candidate => candidate.status)).not.toContain('accepted')
+  })
+
   it('stores external action drafts and blocks execution before approval', async () => {
     const store = createMemoryKvStore()
     const draft = await handleP1ExternalActionsApi('POST', {
@@ -356,7 +437,7 @@ describe('P1 API handlers', () => {
     expect(blocked.body.ledger).toEqual([])
   })
 
-  it('executes approved external actions as dry-runs and persists ledger entries', async () => {
+  it('blocks approved external actions until connector config and idempotency are supplied', async () => {
     const store = createMemoryKvStore()
     const draft = await handleP1ExternalActionsApi('POST', {
       workspaceId: 'workspace-demo',
@@ -383,9 +464,55 @@ describe('P1 API handlers', () => {
     const listed = await handleP1ExternalActionsApi('GET', undefined, { store, query: { workspaceId: 'workspace-demo' } })
 
     expect(approved.status).toBe(202)
+    expect(executed.status).toBe(409)
+    expect(executed.body.execution).toMatchObject({ status: 'blocked', connectorMode: null, error: 'connector_not_configured' })
+    expect(listed.body.actions).toHaveLength(1)
+    expect(listed.body.ledger).toHaveLength(0)
+  })
+
+  it('executes approved external actions only with explicit connector config and persists ledger entries', async () => {
+    const store = createMemoryKvStore()
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    }, { store })
+    const actionId = draft.body.action?.id
+
+    await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+    }, { store })
+    const executed = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+      connectorMode: 'dry_run',
+      connectorId: 'resend_email',
+      connectorConfigured: true,
+      idempotencyKey: 'idem:email:follow-up',
+    }, { store })
+    const listed = await handleP1ExternalActionsApi('GET', undefined, { store, query: { workspaceId: 'workspace-demo' } })
+
     expect(executed.status).toBe(202)
-    expect(executed.body.execution).toMatchObject({ status: 'executed', connectorMode: 'dry_run' })
-    expect(executed.body.ledger).toEqual([expect.objectContaining({ actionId, status: 'ledgered' })])
+    expect(executed.body.execution).toMatchObject({
+      status: 'executed',
+      connectorMode: 'dry_run',
+      connectorId: 'resend_email',
+      idempotencyKey: 'idem:email:follow-up',
+    })
+    expect(executed.body.ledger).toEqual([expect.objectContaining({
+      actionId,
+      status: 'ledgered',
+      connectorId: 'resend_email',
+      idempotencyKey: 'idem:email:follow-up',
+    })])
     expect(listed.body.actions).toHaveLength(1)
     expect(listed.body.ledger).toHaveLength(1)
   })

@@ -19,6 +19,31 @@ class FakeInterpreter:
         return Analysis(headline="API team report", explanation=f"Grounded in {refs[0]}")
 
 
+class FakeRagStore:
+    def __init__(self):
+        self.upserted = []
+
+    def upsert_chunks(self, chunks):
+        self.upserted.extend(chunks)
+        return len(chunks)
+
+    def search(self, query, *, top_k=5, where=None):
+        return [{
+            "id": "source:google-pricing#pricing",
+            "collection": "official_docs",
+            "text": "Cached input tokens receive a discount.",
+            "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+            "refs": ["source:google-pricing", "source:google-pricing#pricing"],
+            "score": 0.91,
+            "mayOverrideFacts": False,
+            "metadata": {
+                "sourceId": "google-pricing",
+                "sourceKind": "pricing",
+                "headingPath": ["Gemini API", "Pricing"],
+            },
+        }]
+
+
 def test_health_endpoint():
     client = TestClient(main.app)
 
@@ -97,5 +122,49 @@ def test_agent_run_endpoint_contract():
     assert response.status_code == 200
     body = response.json()
     assert body["llmMode"] in ["deterministic-fallback", "provider-llm"]
+    assert body["runtime"]["status"] in ["unavailable", "provider_llm"]
+    if body["runtime"]["status"] == "provider_llm":
+        assert body["runtime"]["providerRunId"]
+        assert body["runtime"]["agentInvocationProof"]
     assert "tool:monthlyAiCogs" in body["toolResultRefs"]
     assert body["answer"]
+
+
+def test_p1_rag_endpoint_uses_chroma_store(monkeypatch):
+    store = FakeRagStore()
+    monkeypatch.setattr(main, "_chroma_store", lambda: store)
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/rag/p1-evidence",
+        json={
+            "workspaceId": "workspace-demo",
+            "query": "cached token pricing",
+            "topK": 1,
+            "structuredFactRefs": ["fact:gemini-3-5-flash"],
+            "officialDocChunks": [{
+                "id": "source:google-pricing#pricing",
+                "collection": "official_docs",
+                "text": "Cached input tokens receive a discount.",
+                "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+                "refs": ["source:google-pricing"],
+                "metadata": {
+                    "sourceId": "google-pricing",
+                    "sourceKind": "pricing",
+                    "headingPath": ["Gemini API", "Pricing"],
+                },
+            }],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert store.upserted[0]["id"] == "source:google-pricing#pricing"
+    assert body["persistence"] == "chroma"
+    assert body["evidence"]["results"]["official_docs"]["refs"] == [
+        "source:google-pricing",
+        "source:google-pricing#pricing",
+        "fact:gemini-3-5-flash",
+    ]
+    assert body["contextBlocks"][0]["mayOverrideFacts"] is False
+    assert body["metadata"]["retrieval"] == "chroma"

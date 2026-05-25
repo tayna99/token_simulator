@@ -4,12 +4,26 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from agentic_runtime import run_agentic_runtime
 from interpreter import Interpreter
 from pipeline import run_pipeline, run_team_cost_pipeline
-from schemas import AgentRunInput, AgentRunResponse, RunInput, RunOutput, TeamCostRunInput, TeamCostRunOutput
+from rag.chroma_store import (
+    ChromaOfficialDocsStore,
+    ChromaUnavailableError,
+    rag_evidence_from_chroma_results,
+)
+from schemas import (
+    AgentRunInput,
+    AgentRunResponse,
+    P1RagEvidenceRequest,
+    RunInput,
+    RunOutput,
+    TeamCostRunInput,
+    TeamCostRunOutput,
+)
 
 load_dotenv()
 
@@ -44,6 +58,13 @@ def _agent_model(api_key: str | None):
     return init_chat_model(_model_name(), api_key=api_key)
 
 
+def _chroma_store() -> ChromaOfficialDocsStore:
+    return ChromaOfficialDocsStore(
+        path=os.getenv("CHROMA_PATH", "agent_service/.chroma"),
+        dimensions=int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "64")),
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -59,6 +80,74 @@ def run_agent(payload: RunInput) -> RunOutput:
 def run_agentic(payload: AgentRunInput) -> AgentRunResponse:
     api_key = _api_key(payload.apiKey)
     return run_agentic_runtime(payload, model=_agent_model(api_key))
+
+
+@app.post("/api/rag/p1-evidence")
+def p1_rag_evidence(payload: P1RagEvidenceRequest):
+    try:
+        store = _chroma_store()
+    except ChromaUnavailableError as error:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "persistence": "not_configured",
+                "evidence": {
+                    "mayOverrideFacts": False,
+                    "results": {
+                        "official_docs": {
+                            "kind": "official_docs",
+                            "found": False,
+                            "refs": [],
+                            "mayOverrideFacts": False,
+                            "records": [],
+                            "scores": [],
+                            "warnings": ["rag_index_unavailable"],
+                        },
+                        "benchmark_evidence": {
+                            "kind": "benchmark",
+                            "found": False,
+                            "refs": [],
+                            "mayOverrideFacts": False,
+                            "records": [],
+                            "scores": [],
+                            "warnings": ["baseline_unavailable"],
+                        },
+                        "decision_history": {
+                            "kind": "decision_history",
+                            "found": False,
+                            "refs": [],
+                            "mayOverrideFacts": False,
+                            "records": [],
+                            "scores": [],
+                            "warnings": ["decision_history_unavailable"],
+                        },
+                    },
+                    "warnings": ["rag_index_unavailable"],
+                },
+                "contextBlocks": [],
+                "metadata": {
+                    "workspaceId": payload.workspaceId,
+                    "query": payload.query,
+                    "retrieval": "chroma",
+                },
+                "error": str(error),
+            },
+        )
+
+    if payload.officialDocChunks:
+        store.upsert_chunks(payload.officialDocChunks)
+    results = store.search(
+        payload.query,
+        top_k=payload.topK,
+        where=payload.filters or None,
+    )
+    response = rag_evidence_from_chroma_results(
+        query=payload.query,
+        results=results,
+        structured_fact_refs=payload.structuredFactRefs,
+    )
+    response["metadata"]["workspaceId"] = payload.workspaceId
+    return response
 
 
 @app.post("/api/team-cost-agent", response_model=TeamCostRunOutput)

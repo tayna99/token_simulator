@@ -67,6 +67,35 @@ describe('officialWatchtower', () => {
     ]))
   })
 
+  it('tracks Big3 official pricing sources in the C1 official source registry', () => {
+    expect(OFFICIAL_SOURCE_REGISTRY).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'openai-api-pricing',
+        modelOwner: 'openai',
+        modelFamilies: expect.arrayContaining(['gpt']),
+        sourceKind: 'pricing',
+        url: 'https://openai.com/api/pricing/',
+        officialSourceTrust: 'official_pricing',
+      }),
+      expect.objectContaining({
+        id: 'anthropic-claude-pricing',
+        modelOwner: 'anthropic',
+        modelFamilies: expect.arrayContaining(['claude']),
+        sourceKind: 'pricing',
+        url: 'https://docs.anthropic.com/en/docs/about-claude/pricing',
+        officialSourceTrust: 'official_pricing',
+      }),
+      expect.objectContaining({
+        id: 'google-gemini-pricing',
+        modelOwner: 'google',
+        modelFamilies: expect.arrayContaining(['gemini', 'gemma']),
+        sourceKind: 'pricing',
+        url: 'https://ai.google.dev/gemini-api/docs/pricing',
+        officialSourceTrust: 'official_pricing',
+      }),
+    ]))
+  })
+
   it('keeps first-party and cloud-hosted candidates separate', () => {
     const firstParty = buildModelReleaseCandidate({
       detectedAt: '2026-05-24T00:00:00.000Z',

@@ -284,6 +284,36 @@ def test_agent_tool_permission_matrix_keeps_calculation_tools_out():
     assert "retrieve_learning_loop_records" in AGENT_TOOL_PERMISSION_MATRIX["knowledge_release_ops"]
     assert "retrieve_p1_vector_rag_evidence" in AGENT_TOOL_PERMISSION_MATRIX["provider_api_intelligence"]
     assert "retrieve_p1_vector_rag_evidence" in AGENT_TOOL_PERMISSION_MATRIX["knowledge_release_ops"]
+    assert "retrieve_benchmark_evidence" in AGENT_TOOL_PERMISSION_MATRIX["optimization_routing"]
+
+
+def test_benchmark_tool_preserves_c2_evidence_refs_without_double_prefixing():
+    tools = {
+        tool.name: tool for tool in build_agent_tools(
+            tool_results={"monthlyAiCogs": 4820},
+            threshold_policy={},
+            metric_flags=[],
+            risk_cards=[],
+            benchmark_cards=[
+                {
+                    "id": "evidence:artificial-analysis-models:gpt-5-5:intelligence-index",
+                    "text": "GPT-5.5 intelligence_index benchmark evidence.",
+                    "refs": ["evidence:artificial-analysis-models"],
+                    "tags": ["routing", "quality"],
+                }
+            ],
+            decision_history=[],
+            fact_sources=[],
+            operating_agents=OPERATING_AGENTS,
+            operating_assets=[],
+        )
+    }
+
+    benchmark = json.loads(tools["retrieve_benchmark_evidence"].invoke({"query": "intelligence", "tags": ["routing"]}))
+
+    assert benchmark["found"] is True
+    assert benchmark["refs"] == ["evidence:artificial-analysis-models"]
+    assert "baseline_unavailable" not in benchmark["warnings"]
 
 
 def test_stage_router_supports_committee_single_agent_and_all_hands():
@@ -399,6 +429,9 @@ def test_agentic_runtime_uses_create_agent_path_with_structured_response():
     assert agent_message["ragContextBlocks"][0]["refs"] == ["source:google-pricing"]
     assert agent_message["ragContextBlocks"][0]["mayOverrideFacts"] is False
     assert result.llmMode == "provider-llm"
+    assert result.runtime.status == "provider_llm"
+    assert result.runtime.providerRunId.startswith("agent-service:")
+    assert result.runtime.agentInvocationProof == ["call_cost_modeling_agent"]
     assert result.primaryAgentId == "cost_modeling"
     assert result.reviewerAgentIds == []
     assert result.calledAgentIds == ["cost_modeling"]
@@ -437,6 +470,9 @@ def test_supervisor_provider_path_calls_operating_agent_tools():
     )
 
     assert "call_cost_modeling_agent" in factory.supervisor_tool_names
+    assert result.runtime.status == "provider_llm"
+    assert result.runtime.providerRunId.startswith("agent-service:")
+    assert result.runtime.agentInvocationProof == ["call_cost_modeling_agent"]
     assert factory.agent_tool_names
     assert result.calledAgentIds == ["cost_modeling"]
     assert result.events[0].agentId == "cost_modeling"
@@ -467,6 +503,8 @@ def test_provider_all_hands_forces_all_11_agent_calls_even_if_supervisor_calls_o
 
     assert len(result.calledAgentIds) == 11
     assert len(result.events) == 11
+    assert result.runtime.status == "provider_llm"
+    assert len(result.runtime.agentInvocationProof) == 11
     assert "call_cost_modeling_agent" in factory.supervisor_tool_names
 
 
@@ -512,12 +550,15 @@ def test_agentic_runtime_fallback_runs_stage_committee_without_provider():
     )
 
     assert result.llmMode == "deterministic-fallback"
-    assert result.primaryAgentId == "optimization_routing"
-    assert result.reviewerAgentIds == ["model_inference_research", "trust_security_compliance"]
-    assert result.calledAgentIds == ["optimization_routing", "model_inference_research", "trust_security_compliance"]
-    assert len(result.events) == 3
-    assert {event.agentId for event in result.events} == set(result.calledAgentIds)
-    assert all(event.calledAgentTool for event in result.events)
+    assert result.runtime.status == "unavailable"
+    assert result.runtime.fallbackReason == "provider_unavailable"
+    assert result.primaryAgentId is None
+    assert result.reviewerAgentIds == []
+    assert result.calledAgentIds == []
+    assert len(result.events) == 1
+    assert result.events[0].type == "runtime_unavailable"
+    assert result.events[0].agentId is None
+    assert result.events[0].calledAgentTool is None
     assert result.snapshotVersion == "snapshot:fallback"
     assert "asset:icp_scorecard" in result.assetRefs
     assert result.supervisorSummary
@@ -539,9 +580,11 @@ def test_agentic_runtime_all_hands_fallback_returns_all_operating_agents():
     )
 
     assert result.llmMode == "deterministic-fallback"
-    assert len(result.calledAgentIds) == 11
-    assert len(result.events) == 11
-    assert result.events[0].agentId == result.calledAgentIds[0]
+    assert result.runtime.status == "unavailable"
+    assert result.calledAgentIds == []
+    assert len(result.events) == 1
+    assert result.events[0].type == "runtime_unavailable"
+    assert result.events[0].calledAgentTool is None
     assert result.supervisorSummary
 
 
@@ -574,5 +617,6 @@ def test_agentic_runtime_falls_back_when_numeric_claim_has_no_tool_ref():
     )
 
     assert result.llmMode == "deterministic-fallback"
+    assert result.runtime.status == "unavailable"
     assert "uncited numeric claim" in " ".join(result.warnings)
     assert "tool:monthlyAiCogs" in result.toolResultRefs

@@ -9,13 +9,14 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain.tools import tool
 
 from interpreter import has_uncited_numeric_claim
-from schemas import AgenticEvent, AgentRunInput, AgentRunResponse
+from schemas import AgenticEvent, AgentRunInput, AgentRunResponse, AgentRunRuntimeProof
 
 FORBIDDEN_AGENT_TOOL_NAMES = {
     "calculate_cost",
@@ -97,6 +98,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
     "optimization_routing": {
         "retrieve_metric_flags",
         "retrieve_risk_cards",
+        "retrieve_benchmark_evidence",
         "retrieve_model_perf_matrix",
         "retrieve_operating_asset",
     },
@@ -258,11 +260,17 @@ def _official_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
 
 
 def _benchmark_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
-    return _unique([
-        f"evidence:{item.get('evidenceId') or item.get('evidenceRef') or item.get('id')}"
-        for item in records
-        if item.get("evidenceId") or item.get("evidenceRef") or item.get("id")
-    ])
+    refs: list[str] = []
+    for item in records:
+        item_refs = item.get("refs")
+        if isinstance(item_refs, list) and item_refs:
+            refs.extend(str(ref) for ref in item_refs if ref)
+            continue
+        ref = item.get("evidenceId") or item.get("evidenceRef") or item.get("id")
+        if ref:
+            ref_text = str(ref)
+            refs.append(ref_text if ref_text.startswith("evidence:") else f"evidence:{ref_text}")
+    return _unique(refs)
 
 
 def _decision_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -346,6 +354,28 @@ def _unique(items: Sequence[str]) -> list[str]:
 
 def _agent_tool_name(agent_id: str) -> str:
     return f"call_{agent_id}_agent"
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _runtime_proof(
+    *,
+    status: str,
+    provider_run_id: str | None = None,
+    agent_invocation_proof: Sequence[str] = (),
+    fallback_reason: str | None = None,
+    started_at: str | None = None,
+) -> AgentRunRuntimeProof:
+    return AgentRunRuntimeProof(
+        status=status,  # type: ignore[arg-type]
+        providerRunId=provider_run_id,
+        agentInvocationProof=_unique([str(item) for item in agent_invocation_proof if item]),
+        fallbackReason=fallback_reason,
+        startedAt=started_at or _utc_now(),
+        completedAt=_utc_now(),
+    )
 
 
 def _known_agent_ids(operating_agents: Sequence[Mapping[str, Any]] | None = None) -> list[str]:
@@ -432,7 +462,12 @@ def route_operating_agents(
     }
 
 
-def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None) -> AgentRunResponse:
+def _fallback_response(
+    payload: AgentRunInput,
+    warnings: list[str] | None = None,
+    *,
+    fallback_reason: str = "provider_unavailable",
+) -> AgentRunResponse:
     refs = _refs_from_tool_results(payload.toolResults)
     refs_label = ", ".join(refs) if refs else "deterministic snapshot"
     evidence_coverage = _build_evidence_coverage(payload)
@@ -445,37 +480,45 @@ def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None
         operating_agents=payload.operatingAgents,
         trust_inspection=payload.trustInspection,
     )
-    answer = f"Operating team fallback is grounded in {refs_label}."
-    report = f"One-page report fallback uses {refs_label} and does not create new numbers."
+    answer = f"Agent runtime unavailable; deterministic preview is grounded in {refs_label}."
+    report = f"Preview report uses {refs_label}; no operating agent was invoked."
     asset_refs = _payload_asset_refs(payload)
-    reviewer_ids = route["reviewerAgentIds"]
+    routed_agent_ids = list(route["calledAgentIds"])
+    routed_label = ", ".join(routed_agent_ids) if routed_agent_ids else "none"
+    coverage_refs = _unique([
+        *evidence_coverage["officialDocs"].get("refs", []),
+        *evidence_coverage["benchmarkEvidence"].get("refs", []),
+        *evidence_coverage["decisionHistory"].get("refs", []),
+    ])
     events = [
         {
-            "type": "analysis",
-            "message": f"{_agent_profile(agent_id, payload.operatingAgents).get('label', agent_id)} fallback is grounded in {refs_label}.",
-            "agentId": agent_id,
-            "calledAgentTool": _agent_tool_name(agent_id),
+            "type": "runtime_unavailable",
+            "message": f"Agent runtime unavailable; deterministic preview is grounded in {refs_label}. Routed agents were not invoked ({routed_label}).",
+            "agentId": None,
+            "calledAgentTool": None,
             "toolResultRefs": refs,
             "riskCardIds": [str(card.get("id")) for card in payload.riskCards if card.get("id")],
             "usedTools": [],
             "usedCapabilityTools": [],
-            "reviewerAgentIds": [item for item in reviewer_ids if item != agent_id],
-            "evidenceRefs": [],
+            "reviewerAgentIds": [],
+            "evidenceRefs": coverage_refs,
             "stance": "caution" if evidence_warnings else "support",
             "evidenceWarnings": evidence_warnings,
             "nextQuestion": "Which missing evidence ref should be added before adoption?" if evidence_warnings else "",
             "assetRefs": asset_refs,
         }
-        for agent_id in route["calledAgentIds"]
     ]
     return AgentRunResponse(
         events=events,
         answer=answer,
         report=report,
         llmMode="deterministic-fallback",
+        runtime=_runtime_proof(
+            status="unavailable",
+            fallback_reason=fallback_reason,
+        ),
         supervisorSummary=(
-            f"{route['primaryAgentId']} led a fallback review with "
-            f"{len(route['reviewerAgentIds'])} reviewer agent(s), grounded in {refs_label}."
+            f"Agent runtime unavailable; routed agents were {routed_label}, but no call_*_agent tool was invoked."
         ),
         disagreements=[],
         decisionReadiness="needs_review",
@@ -484,23 +527,19 @@ def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None
             "Confirm provider runtime availability before treating AI interpretation as LLM assisted.",
             "Review the cited deterministic refs before adopting a recommendation.",
         ],
-        calledAgentIds=route["calledAgentIds"],
-        primaryAgentId=route["primaryAgentId"],
-        reviewerAgentIds=reviewer_ids,
-        agentRoute=route,
+        calledAgentIds=[],
+        primaryAgentId=None,
+        reviewerAgentIds=[],
+        agentRoute={**route, "routedAgentIds": routed_agent_ids, "calledAgentIds": [], "previewOnly": True},
         snapshotVersion=payload.snapshotVersion,
         usedTools=[],
         toolResultRefs=refs,
         riskCardIds=[str(card.get("id")) for card in payload.riskCards if card.get("id")],
-        evidenceRefs=[
-            str(card.get("evidenceId") or card.get("evidenceRef"))
-            for card in payload.benchmarkCards
-            if card.get("evidenceId") or card.get("evidenceRef")
-        ],
+        evidenceRefs=coverage_refs,
         evidenceCoverage=evidence_coverage,
         assetRefs=asset_refs,
         warnings=_unique([
-            *(warnings or ["provider unavailable; deterministic fallback used"]),
+            *(warnings or ["provider unavailable; deterministic preview only"]),
             *evidence_warnings,
             *(["trust pipeline requires review before snapshot use"] if route["reason"] == "trust pipeline requires review before snapshot use" else []),
         ]),
@@ -674,11 +713,7 @@ def build_agent_tools(
             card for card in benchmark_cards
             if _matches_query(card, query, tags or [])
         ]
-        refs = [
-            f"evidence:{card.get('evidenceId') or card.get('evidenceRef') or card.get('id')}"
-            for card in matches
-            if card.get("evidenceId") or card.get("evidenceRef") or card.get("id")
-        ]
+        refs = _benchmark_refs(matches)
         if not matches:
             return _envelope(
                 tool_name="retrieve_benchmark_evidence",
@@ -1001,11 +1036,7 @@ def build_agent_tools(
         ]
 
         official_refs = _official_refs(official_matches)
-        benchmark_refs = [
-            f"evidence:{item.get('evidenceId') or item.get('evidenceRef') or item.get('id')}"
-            for item in benchmark_matches
-            if item.get("evidenceId") or item.get("evidenceRef") or item.get("id")
-        ]
+        benchmark_refs = _benchmark_refs(benchmark_matches)
         risk_refs = [
             f"risk:{item.get('id')}"
             for item in risk_matches
@@ -1486,11 +1517,22 @@ def _merge_agent_responses(
     supervisor = _synthesize_supervisor_fields(payload=payload, route=route, responses=responses)
     evidence_coverage = _build_evidence_coverage(payload)
     coverage_warnings = _coverage_warnings(evidence_coverage)
+    agent_invocation_proof = _unique([
+        event.calledAgentTool
+        for event in events
+        if event.calledAgentTool
+    ])
+    provider_run_id = f"agent-service:{payload.snapshotVersion or 'snapshot'}:{','.join(called_agent_ids) or 'no-agent'}"
     return AgentRunResponse(
         events=events,
         answer=primary_response.answer or f"Operating team answer is grounded in {', '.join(refs) or 'deterministic snapshot'}.",
         report="\n".join(response.report for response in responses if response.report) or primary_response.report,
         llmMode="provider-llm",
+        runtime=_runtime_proof(
+            status="provider_llm",
+            provider_run_id=provider_run_id,
+            agent_invocation_proof=agent_invocation_proof,
+        ),
         **supervisor,
         calledAgentIds=called_agent_ids,
         primaryAgentId=primary_agent_id,
@@ -1524,7 +1566,7 @@ def run_agentic_runtime(
         trust_inspection=payload.trustInspection,
     )
     if model is None:
-        return _fallback_response(payload)
+        return _fallback_response(payload, fallback_reason="provider_unavailable")
 
     response = _run_supervisor_agent_as_tool(
         payload=payload,
@@ -1534,5 +1576,5 @@ def run_agentic_runtime(
     )
     warnings = _validate_grounding(response, refs)
     if warnings:
-        return _fallback_response(payload, warnings)
+        return _fallback_response(payload, warnings, fallback_reason="guardrail_rejected")
     return response

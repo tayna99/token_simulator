@@ -40,6 +40,10 @@ export type ServingProvider =
   | 'custom'
 
 export type ModelFamily =
+  | 'gpt'
+  | 'claude'
+  | 'gemini'
+  | 'gemma'
   | 'composer'
   | 'qwen'
   | 'kimi'
