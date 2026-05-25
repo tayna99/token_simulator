@@ -25,6 +25,9 @@ export interface TrustInspectionResult {
   allowedForSnapshot: boolean
   anonymizationStatus: AnonymizationStatus
   retentionNote: string
+  retentionAction: string
+  blockedColumns: string[]
+  snapshotColumns: string[]
   analysisScope: TrustAnalysisScope
 }
 
@@ -50,9 +53,9 @@ function fileExtension(filename: string): string {
   return filename.split('.').pop()?.toLowerCase() ?? ''
 }
 
-function headerSet(rawCsv: string): Set<string> {
+function headerColumns(rawCsv: string): string[] {
   const firstLine = rawCsv.split(/\r?\n/)[0] ?? ''
-  return new Set(firstLine.split(',').map(item => item.trim()))
+  return firstLine.split(',').map(item => item.trim()).filter(Boolean)
 }
 
 function hasAny(headers: Set<string>, names: string[]): boolean {
@@ -90,21 +93,40 @@ function blockedScopes(headers: Set<string>, blocked: boolean): string[] {
   ]
 }
 
+const BLOCKED_SNAPSHOT_COLUMNS = [
+  'prompt',
+  'raw_prompt',
+  'messages',
+  'conversation',
+  'transcript',
+  'api_key',
+  'apikey',
+  'openai_api_key',
+  'provider_api_key',
+]
+
 export function inspectUsageImportSecurity(input: TrustInspectionInput): TrustInspectionResult {
-  const headers = headerSet(input.rawCsv)
+  const columns = headerColumns(input.rawCsv)
+  const headers = new Set(columns)
   const warnings: TrustWarning[] = []
+  const blockedColumns: string[] = []
   const extension = fileExtension(input.filename)
   const maxFileSizeBytes = DEFAULT_DATA_INTAKE_POLICY.maxFileSizeMb * 1024 * 1024
 
   if (extension && !DEFAULT_DATA_INTAKE_POLICY.allowedFileTypes.includes(extension as 'csv' | 'jsonl')) {
     warnings.push('file_type_not_allowed')
+    blockedColumns.push(`file_type:${input.filename}`)
   }
   if (typeof input.fileSizeBytes === 'number' && input.fileSizeBytes > maxFileSizeBytes) {
     warnings.push('file_size_exceeded')
+    blockedColumns.push(`file_size:${input.fileSizeBytes}`)
   }
+
+  const blockedDataColumns = columns.filter(column => BLOCKED_SNAPSHOT_COLUMNS.includes(column))
 
   if (containsRawPrompt(headers)) warnings.push('raw_prompt_detected')
   if (containsApiKey(input.rawCsv, headers)) warnings.push('api_key_candidate_detected')
+  blockedColumns.push(...blockedDataColumns)
   if (containsPii(input.rawCsv)) warnings.push('pii_candidate_detected')
   if (!headers.has('plan_id')) warnings.push('plan_id_missing')
   if (!headers.has('customer_id')) warnings.push('customer_id_missing')
@@ -127,6 +149,9 @@ export function inspectUsageImportSecurity(input: TrustInspectionInput): TrustIn
     allowedForSnapshot: !blocked,
     anonymizationStatus: blocked ? 'blocked' : warnings.includes('pii_candidate_detected') ? 'required' : 'not_needed',
     retentionNote: `Raw upload should be deleted or re-confirmed after ${DEFAULT_DATA_INTAKE_POLICY.retentionDays} days.`,
+    retentionAction: `raw_upload_delete_or_reconfirm_after_${DEFAULT_DATA_INTAKE_POLICY.retentionDays}_days`,
+    blockedColumns,
+    snapshotColumns: columns.filter(column => !blockedDataColumns.includes(column)),
     analysisScope: {
       available: blocked ? [] : availableScopes(headers),
       blocked: blockedScopes(headers, blocked),
@@ -141,6 +166,9 @@ function isTrustInspectionResult(value: unknown): value is TrustInspectionResult
     && typeof candidate.allowedForSnapshot === 'boolean'
     && (candidate.anonymizationStatus === 'not_needed' || candidate.anonymizationStatus === 'required' || candidate.anonymizationStatus === 'blocked')
     && typeof candidate.retentionNote === 'string'
+    && typeof candidate.retentionAction === 'string'
+    && Array.isArray(candidate.blockedColumns)
+    && Array.isArray(candidate.snapshotColumns)
     && Array.isArray(candidate.warnings)
     && !!candidate.analysisScope
     && Array.isArray(candidate.analysisScope.available)

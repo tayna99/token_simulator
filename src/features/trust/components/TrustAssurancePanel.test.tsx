@@ -18,6 +18,9 @@ describe('TrustAssurancePanel', () => {
       allowedForSnapshot: true,
       anonymizationStatus: 'required',
       retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionAction: 'raw_upload_delete_or_reconfirm_after_30_days',
+      blockedColumns: [],
+      snapshotColumns: ['timestamp', 'feature', 'model', 'email'],
       analysisScope: {
         available: ['feature_cost'],
         blocked: ['plan_margin'],
@@ -35,6 +38,9 @@ describe('TrustAssurancePanel', () => {
       allowedForSnapshot: false,
       anonymizationStatus: 'blocked',
       retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionAction: 'raw_upload_delete_or_reconfirm_after_30_days',
+      blockedColumns: ['prompt', 'api_key'],
+      snapshotColumns: ['timestamp', 'input_tokens'],
       analysisScope: {
         available: [],
         blocked: ['all_analysis'],
@@ -43,5 +49,28 @@ describe('TrustAssurancePanel', () => {
 
     expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
     expect(screen.getByText(/차단된 데이터는 snapshot\/report\/decision history로 넘어가지 않습니다/)).toBeInTheDocument()
+  })
+  it('renders buyer-facing proof for snapshot fields, blocked fields, and retention action', () => {
+    render(<TrustAssurancePanel result={{
+      status: 'blocked',
+      warnings: ['raw_prompt_detected', 'api_key_candidate_detected'],
+      allowedForSnapshot: false,
+      anonymizationStatus: 'blocked',
+      retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionAction: 'raw_upload_delete_or_reconfirm_after_30_days',
+      blockedColumns: ['prompt', 'api_key'],
+      snapshotColumns: ['timestamp', 'input_tokens'],
+      analysisScope: {
+        available: [],
+        blocked: ['all_analysis'],
+      },
+    }} />)
+
+    expect(screen.getByText('snapshot/report로 넘어간 필드')).toBeInTheDocument()
+    expect(screen.getByText('timestamp, input_tokens')).toBeInTheDocument()
+    expect(screen.getByText('차단된 필드')).toBeInTheDocument()
+    expect(screen.getByText('prompt, api_key')).toBeInTheDocument()
+    expect(screen.getByText('retention/delete 예정')).toBeInTheDocument()
+    expect(screen.getByText('raw_upload_delete_or_reconfirm_after_30_days')).toBeInTheDocument()
   })
 })

@@ -12,6 +12,9 @@ describe('inspectUsageImportSecurity', () => {
     expect(result.warnings).toContain('raw_prompt_detected')
     expect(result.warnings).toContain('api_key_candidate_detected')
     expect(result.allowedForSnapshot).toBe(false)
+    expect(result.blockedColumns).toEqual(['prompt', 'api_key'])
+    expect(result.snapshotColumns).toEqual(['timestamp', 'input_tokens'])
+    expect(result.retentionAction).toBe('raw_upload_delete_or_reconfirm_after_30_days')
   })
 
   it('marks plan margin analysis as blocked when plan_id is missing', () => {
@@ -39,6 +42,17 @@ describe('inspectUsageImportSecurity', () => {
     expect(result.warnings).toContain('file_type_not_allowed')
     expect(result.warnings).toContain('file_size_exceeded')
     expect(result.allowedForSnapshot).toBe(false)
+    expect(result.blockedColumns).toEqual(['file_type:usage.xlsx', 'file_size:11534336'])
+    expect(result.snapshotColumns).toEqual([
+      'timestamp',
+      'feature',
+      'model',
+      'input_tokens',
+      'output_tokens',
+      'plan_id',
+      'customer_id',
+      'revenue',
+    ])
   })
 
   it('keeps PII imports in needs_mapping with anonymization required', () => {

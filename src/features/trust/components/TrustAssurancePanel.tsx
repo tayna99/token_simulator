@@ -81,6 +81,22 @@ export function TrustAssurancePanel({ result }: Props) {
       <p className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs text-label-neutral">
         {summary.nextAction}
       </p>
+      {result && (
+        <div className="mt-3 grid gap-2 text-xs text-label-neutral md:grid-cols-3">
+          <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="font-semibold text-label-normal">snapshot/report로 넘어간 필드</p>
+            <p className="mt-1" translate="no">{result.snapshotColumns.join(', ') || '—'}</p>
+          </div>
+          <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="font-semibold text-label-normal">차단된 필드</p>
+            <p className="mt-1" translate="no">{result.blockedColumns.join(', ') || '—'}</p>
+          </div>
+          <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="font-semibold text-label-normal">retention/delete 예정</p>
+            <p className="mt-1" translate="no">{result.retentionAction}</p>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
