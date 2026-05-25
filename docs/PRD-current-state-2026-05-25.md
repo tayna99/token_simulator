@@ -164,20 +164,87 @@ audience: internal | customer                                        (얼마나 
 
 후보(우선순위 제안):
 
-1. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
-2. Supabase production adapter 배선 — migration을 실제 store/retriever adapter로 연결
-3. RAG 코퍼스 운영화 — C4 usage-schema → C9 decision-history → C2 manual-review benchmark queue
-4. C1 빅3 공식 가격 등재 — 커버리지 완성
-5. Rate card draft UX — "왜/언제 export/billing 아님" 시각 강조
+1. **Next.js 프론트 전환 (메이저 방향, §10 참조)** — 고객 SaaS+auth/멀티테넌트, BFF, SSR/SEO, 거대 `App.tsx` 구조 정리를 동시에 노림. 마이그레이션 옵션(A 점진 / B 전체 재작성) 확정 필요.
+2. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
+3. Supabase production adapter 배선 — migration을 실제 store/retriever adapter로 연결 (Next 멀티테넌트 persistence와 합류)
+4. RAG 코퍼스 운영화 — C4 usage-schema → C9 decision-history → C2 manual-review benchmark queue
+5. C1 빅3 공식 가격 등재 — 커버리지 완성
+6. Rate card draft UX — "왜/언제 export/billing 아님" 시각 강조
 
 미결정:
+- **Next.js 마이그레이션 옵션 A vs B 최종 확정** (§10.4) — 본 PRD 승인 시 결정
 - v3.2 방향 문서와 이 사실 문서의 정본 관계를 어디까지 합칠 것인가
 - decision-flow 5단계 vs v3.2가 그리는 더 넓은 stage 집합의 통합 시점
 - Supabase pgvector를 기본 production RAG store로 승격할 트리거 기준
 
 ---
 
-## 10. 참조 인덱스
+## 10. 프론트엔드 타깃: Next.js (다음 메이저 방향)
+
+목적: 현재 Vite SPA(클라이언트 only) 프런트를 Next.js(App Router)로 전환한다. 네 가지 목적을 동시에 노린다 — (1) 고객용 SaaS 대시보드 + 인증/멀티테넌트, (2) API routes(BFF)로 백엔드 통합, (3) SSR/SEO + 랜딩·마케팅, (4) 거대 `App.tsx` 구조 정리.
+
+### 10.1 왜 Next.js — 목적별 매핑
+
+| 목적 | Next 수단 | 영향받는 현 코드 |
+|---|---|---|
+| 고객 SaaS + auth/멀티테넌트 | route groups `(marketing)`/`(app)`, Auth.js·Clerk·Supabase Auth 중 택1, `/w/[workspaceId]` 세그먼트, 서버 세션 | localStorage `workspaceId`(`App.tsx`) → 서버 workspace/세션으로 이전, tenant별 데이터 격리 |
+| API routes (BFF) | Next route handlers가 FastAPI `agent_service` 앞단 BFF(auth/rate-limit/cache), 결정론 TS 코어는 server action/route handler에서 실행 | vite proxy `/api→:8000` 대체, `src/server/*`(p1ApiHandlers, teamCost) → route handlers로 흡수 가능 |
+| SSR/SEO + 랜딩 | `(marketing)` SSG/SSR, 공유 리포트 페이지 SSR, `next/og` OG 이미지 | 공유 가능한 one-page report / rate card draft를 customer audience projection으로 서버 렌더 |
+| 구조 정리 | 화면을 route segment + RSC/client 분리로 분해 | 3000줄 `App.tsx` → stage별 route, role/audience는 URL/searchParams |
+
+### 10.2 타깃 아키텍처 개요
+
+- **Route groups:** `(marketing)` 공개 SSR / `(app)/w/[workspaceId]/(stages)` 인증 워크스페이스.
+- **RSC/Client 경계:** 결정론 계산·조회는 서버(RSC·route handler·server action), 차트·export는 client. client-only 고정 대상 — recharts, html-to-image(`SummaryCard` PNG), jspdf (browser API 의존).
+- **BFF:** Next route handlers → FastAPI `agent_service`. LangGraph/Chroma/pytest 자산을 유지하고 Next가 **대체가 아니라 감싼다.**
+- **결정론 단일 경로 유지:** `src/lib/calculator.ts` 등 순수 함수는 서버/클라가 **같은 모듈**을 import. fork 금지(헌법). 순수·결정론이라 SSR hydration mismatch 위험은 낮음.
+- **상태축 매핑:** stage→route segment, role/audience→searchParams. `?mode=admin`(showInternal)은 클라 쿼리에서 **서버 권한 체크로 승격**.
+
+### 10.3 헌법(`CLAUDE.md`) 영향 — 반드시 갱신
+
+- **"클라이언트 사이드 only — 서버 없음, DB 없음" 규칙이 깨진다.** Next 도입 = 서버·세션·DB 존재. 헌법을 *"결정론 계산은 클라/서버 어디서 돌든 `calculator.ts` 단일 모듈"* 로 개정해야 한다.
+- **translate 보호 이전(회귀 경로).** `<meta name="google" content="notranslate">` + root `translate="no"`를 `index.html`이 아니라 `app/layout.tsx`로 이전. 누락 시 헌법이 경고한 자동번역 회귀가 재발한다. 영어 블록 `lang="en"`도 RSC/client 양쪽 유지.
+- **localStorage 의존 제거.** `decisionStore`, `plannerState`, `workspaceId`는 SSR/RSC에서 동작하지 않음 → 서버 persistence(Supabase) 또는 명시적 client component로 이전. (§9 Supabase adapter 작업과 합류)
+- **포맷 단일 경로(`format.ts`)는 그대로 portable.**
+
+### 10.4 마이그레이션 옵션 (미정 → 결정 필요)
+
+**옵션 A — 점진(strangler) [추천]**
+순수 `lib`/`domain`을 무수정 포팅 → Next App Router shell + auth + 마케팅 먼저(즉시 SSR 가치, 저위험) → 워크스페이스는 기존 컴포넌트를 client island로 포팅 → 이후 stage별로 RSC로 분해.
+- 장점: 테스트/동작 보존, auth·랜딩 빠른 출시, 위험 분산, 헌법 검증 게이트 유지 쉬움.
+- 단점: 초기엔 `App.tsx` 부채를 안고 감, client island 위주라 SSR 이점이 점진적, 일시적 2-멘탈모델.
+
+**옵션 B — 전체 재작성(App Router-native)**
+화면을 RSC/client로 새 설계, stage별 route, mutation은 server action.
+- 장점: 깨끗한 SSR/멀티테넌트, `App.tsx` 부채 즉시 제거.
+- 단점: 고위험·장기간, 결정론 일관성·translate 보호·전체 테스트(445개) 재검증 부담, 모멘텀 손실.
+
+**옵션 C — Next shell + 기존 SPA 임베드** (과도기 한정, 비추천)
+마케팅/auth만 Next, 워크스페이스는 기존 Vite SPA를 subpath/iframe. 빠르지만 빌드 2개·장기 부채·멀티테넌트 라우팅 한계.
+
+추천: **옵션 A.** 시퀀스가 4목적을 자연 정렬한다 — 랜딩/SEO+auth(그린필드, 즉시) → BFF로 FastAPI 감싸기 → 대시보드 멀티테넌트 → 내부 stage RSC 분해.
+
+### 10.5 단계 시퀀스 (옵션 A 기준)
+
+- **P0 Next shell:** App Router, `app/layout.tsx`(translate 보호 이전), 순수 lib 포팅, 기존 워크스페이스를 단일 client route로 마운트 → 동작 동치 + 전체 테스트 그린 유지.
+- **P1 마케팅/SEO:** `(marketing)` SSG + 공유 리포트 SSR + `next/og` 이미지.
+- **P2 Auth/멀티테넌트:** 세션, `/w/[workspaceId]`, localStorage → 서버 persistence(Supabase).
+- **P3 BFF:** route handlers로 `/api` 통합, FastAPI 앞단 auth/cache.
+- **P4 구조 정리:** stage별 route + RSC/client 분리, `App.tsx` 해체.
+
+각 P 종료 시 헌법 검증 게이트(`test:run` + `build` + `pytest`) 통과 + translate/결정론 일관성 회귀 테스트.
+
+### 10.6 리스크 / 미결정
+
+- Auth 선택: Auth.js vs Clerk vs Supabase Auth (멀티테넌트 모델과 함께).
+- 결정론 코어 실행 위치: 서버 우선 vs 클라 우선 (번들 크기·프라이버시·hydration 트레이드오프).
+- `agent_service` 배포 토폴로지: Next와 동일 호스트 vs 분리 서비스.
+- 공유 리포트 데이터 노출 범위(customer audience projection 강제) + 링크 권한.
+- 옵션 A/B 최종 확정 — 본 PRD 승인 시 결정.
+
+---
+
+## 11. 참조 인덱스
 
 - 헌법: `CLAUDE.md`
 - 방향 PRD: `docs/PRD-v3.md`(v3.2), `docs/PRD-v2.md`(v2.5 복구 정본)
