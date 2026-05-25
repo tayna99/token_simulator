@@ -76,8 +76,8 @@ const registryInputs = benchmarkRegistryJson as CorpusSourceInput[]
 export const BENCHMARK_CORPUS_SOURCES: CorpusSource[] = registryInputs.map(source => normalizeCorpusSource(source))
 
 function isParserImplemented(parserStrategy: string | undefined) {
-  return Boolean(parserStrategy)
-    && !/manual|todo|unimplemented/i.test(parserStrategy)
+  if (!parserStrategy) return false
+  return !/manual|todo|unimplemented/i.test(parserStrategy)
 }
 
 function isStale(checkedAtIso: string | undefined, nowIso: string, staleAfterDays: number) {

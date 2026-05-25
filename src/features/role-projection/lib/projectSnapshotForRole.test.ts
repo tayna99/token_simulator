@@ -2,15 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { projectSnapshotForRole } from './projectSnapshotForRole'
 
 const snapshot = {
-  monthlyCostLabel: '$12,340',
-  marginLabel: '34%',
-  topAgentShareLabel: '48%',
-  featureLabel: 'CS triage',
-  customerLabel: 'cust-heavy-01',
+  monthlyCostUsd: 12340,
+  grossMarginPct: 0.34,
+  topAgentShare: 0.48,
+  topFeature: 'CS triage',
+  lossCustomerCount: 3,
   refs: ['tool:team.monthlyCostUsd', 'snapshot:cost:abc', 'risk:model-routing'],
 }
 
 describe('projectSnapshotForRole', () => {
+  it('formats numeric snapshot values through the shared formatters', () => {
+    const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
+    const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')
+    const ceo = projectSnapshotForRole(snapshot, 'ceo', 'internal')
+
+    expect(developer.primaryKpis.find(item => item.id === 'monthly_cost')?.value).toBe('$12,340')
+    expect(developer.primaryKpis.find(item => item.id === 'top_agent_share')?.value).toBe('48%')
+    expect(pm.primaryKpis.find(item => item.id === 'margin')?.value).toBe('34%')
+    expect(pm.primaryKpis.find(item => item.id === 'feature')?.value).toBe('CS triage')
+    expect(ceo.primaryKpis.find(item => item.id === 'customer')?.value).toBe('3 customers')
+  })
+
   it('returns different primary focus for developer, PM, and CEO roles', () => {
     const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
     const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')
@@ -22,38 +34,11 @@ describe('projectSnapshotForRole', () => {
     expect(new Set([developer.assistant.title, pm.assistant.title, ceo.assistant.title]).size).toBe(3)
   })
 
-  it('returns actual workspace panel keys instead of abstract placeholder labels', () => {
-    const developer = projectSnapshotForRole(snapshot, 'developer', 'internal')
-    const pm = projectSnapshotForRole(snapshot, 'pm', 'internal')
-    const ceo = projectSnapshotForRole(snapshot, 'ceo', 'internal')
-
-    expect(developer.panelOrder).toEqual(expect.arrayContaining([
-      'operational_signals',
-      'cost_attribution',
-      'report_output',
-    ]))
-    expect(pm.panelOrder).toEqual(expect.arrayContaining([
-      'cost_attribution',
-      'pricing_simulator',
-      'optimization_review',
-    ]))
-    expect(ceo.panelOrder).toEqual(expect.arrayContaining([
-      'margin_risk',
-      'one_page_report',
-      'decision_log',
-    ]))
-    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('model_tokens')
-    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('feature_cost')
-    expect([...developer.panelOrder, ...pm.panelOrder, ...ceo.panelOrder]).not.toContain('profitability')
-  })
-
   it('masks internal refs for customer audience and preserves them for admin audience', () => {
     const customer = projectSnapshotForRole(snapshot, 'developer', 'customer')
     const internal = projectSnapshotForRole(snapshot, 'developer', 'internal')
 
     expect(customer.assistant.refs).toEqual([])
-    expect(customer.panelOrder).not.toContain('debug_refs')
     expect(internal.assistant.refs).toEqual(snapshot.refs)
-    expect(internal.panelOrder).toContain('debug_refs')
   })
 })

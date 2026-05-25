@@ -1,3 +1,5 @@
+import { fmtCurrency, fmtNumber, fmtPercent } from '../../../lib/format'
+
 export type RoleProjectionRole = 'developer' | 'pm' | 'ceo'
 export type RoleProjectionAudience = 'customer' | 'internal'
 export type RoleProjectionPanelKey =
@@ -32,11 +34,11 @@ export const ROLE_PROJECTION_PANEL_LABELS: Record<RoleProjectionPanelKey, string
 }
 
 export interface RoleProjectionSnapshot {
-  monthlyCostLabel: string
-  marginLabel: string
-  topAgentShareLabel: string
-  featureLabel: string
-  customerLabel: string
+  monthlyCostUsd: number
+  grossMarginPct: number
+  topAgentShare: number
+  topFeature: string
+  lossCustomerCount: number
   refs: string[]
 }
 
@@ -57,12 +59,17 @@ export interface RoleViewModel {
   audience: RoleProjectionAudience
   title: string
   primaryKpis: RoleProjectionKpi[]
-  panelOrder: RoleProjectionPanelKey[]
   assistant: RoleAssistantProjection
 }
 
 function visibleRefs(snapshot: RoleProjectionSnapshot, audience: RoleProjectionAudience): string[] {
   return audience === 'internal' ? [...snapshot.refs] : []
+}
+
+function fmtCustomerCount(count: number): string {
+  const formatted = fmtNumber(count)
+  if (!Number.isFinite(count)) return formatted
+  return `${formatted} ${count === 1 ? 'customer' : 'customers'}`
 }
 
 export function projectSnapshotForRole(
@@ -71,7 +78,10 @@ export function projectSnapshotForRole(
   audience: RoleProjectionAudience,
 ): RoleViewModel {
   const refs = visibleRefs(snapshot, audience)
-  const debugPanel: RoleProjectionPanelKey[] = audience === 'internal' ? ['debug_refs'] : []
+  const monthlyCostValue = fmtCurrency(snapshot.monthlyCostUsd)
+  const marginValue = fmtPercent(snapshot.grossMarginPct)
+  const topAgentShareValue = fmtPercent(snapshot.topAgentShare)
+  const customerValue = fmtCustomerCount(snapshot.lossCustomerCount)
 
   if (role === 'developer') {
     return {
@@ -79,18 +89,9 @@ export function projectSnapshotForRole(
       audience,
       title: 'Developer projection',
       primaryKpis: [
-        { id: 'top_agent_share', label: 'Top agent share', value: snapshot.topAgentShareLabel },
-        { id: 'monthly_cost', label: 'Monthly AI cost', value: snapshot.monthlyCostLabel },
+        { id: 'top_agent_share', label: 'Top agent share', value: topAgentShareValue },
+        { id: 'monthly_cost', label: 'Monthly AI cost', value: monthlyCostValue },
         { id: 'debug_refs', label: 'Trace refs', value: refs.length > 0 ? `${refs.length} refs` : 'Stored in admin view' },
-      ],
-      panelOrder: [
-        'operational_signals',
-        'cost_attribution',
-        'team_forecast',
-        'report_output',
-        'optimization_review',
-        'team_cost_simulator',
-        ...debugPanel,
       ],
       assistant: {
         title: 'Developer cost trace',
@@ -106,18 +107,9 @@ export function projectSnapshotForRole(
       audience,
       title: 'CEO projection',
       primaryKpis: [
-        { id: 'monthly_cost', label: 'Monthly AI cost', value: snapshot.monthlyCostLabel },
-        { id: 'margin', label: 'Margin', value: snapshot.marginLabel },
-        { id: 'customer', label: 'Customer at risk', value: snapshot.customerLabel },
-      ],
-      panelOrder: [
-        'margin_risk',
-        'one_page_report',
-        'decision_log',
-        'optimization_review',
-        'pricing_simulator',
-        'cost_attribution',
-        ...debugPanel,
+        { id: 'monthly_cost', label: 'Monthly AI cost', value: monthlyCostValue },
+        { id: 'margin', label: 'Margin', value: marginValue },
+        { id: 'customer', label: 'Customer at risk', value: customerValue },
       ],
       assistant: {
         title: 'CEO operating decision',
@@ -132,18 +124,9 @@ export function projectSnapshotForRole(
     audience,
     title: 'PM projection',
     primaryKpis: [
-      { id: 'feature', label: 'Feature driver', value: snapshot.featureLabel },
-      { id: 'customer', label: 'Customer segment', value: snapshot.customerLabel },
-      { id: 'margin', label: 'Margin', value: snapshot.marginLabel },
-    ],
-    panelOrder: [
-      'cost_attribution',
-      'pricing_simulator',
-      'optimization_review',
-      'margin_risk',
-      'operating_ledger',
-      'decision_log',
-      ...debugPanel,
+      { id: 'feature', label: 'Feature driver', value: snapshot.topFeature },
+      { id: 'customer', label: 'Customer segment', value: customerValue },
+      { id: 'margin', label: 'Margin', value: marginValue },
     ],
     assistant: {
       title: 'PM feature economics',

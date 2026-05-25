@@ -25,7 +25,7 @@
 
 - **이미 있는 자산을 모른다.** 문서는 `buildDeterministicSnapshot`, `decision ledger`, `RightAssistantPanel`을 "새로 만들 것"처럼 쓰지만, 실제로는 `buildAgentSnapshot.ts`, `decision-log/`, `DecisionAssistantPanel`로 **이미 존재한다.** 그대로 따르면 중복 구현 위험이 있다.
 - **role과 audience(내부/고객)를 한 축으로 뭉갠다.** 문서는 Developer/PM/CEO만 본다. 그런데 실제 제품에는 **직교하는 두 번째 축**이 이미 있다 — "고객에게 보여줄 화면" vs "내부 운영자(`?mode=admin`)가 보는 화면". 이 둘을 합치면 안 된다. (자세히는 §3.2)
-- **파일 구조 제안(§12)이 실제와 다르다.** 문서는 `features/workspace`, `role-views`, `snapshots`, `reports`를 제안하지만 실제는 도메인 단위(`features/usage`, `features/unit-economics`, `features/pricing` …) + `domain/`이다. 문서 구조를 그대로 따르면 기존 폴더 관례(`docs/architecture/folder-structure.md`)와 충돌한다.
+- **파일 구조 제안(§12)이 실제와 다르다.** 문서는 `features/workspace`, `role-views`, `snapshots`, `reports`를 제안하지만 실제는 도메인 단위(`features/usage`, `features/unit-economics`, `features/pricing` …) + `domain/`이고, 역할 projection의 실제 홈은 `src/features/role-projection/`이다. 문서 구조를 그대로 따르면 기존 폴더 관례(`docs/architecture/folder-structure.md`)와 충돌한다.
 - **stage 목록이 다르다.** 문서 §4는 홈/업로드/비용·마진/병목/최적화/의사결정/리포트/실행/근거/설정 10단계인데, 실제는 `DECISION_STAGES` 5단계(Design → Cost → Bottleneck → Optimize+Risk → Decision Log)다. 문서가 이상적이긴 하나 현재 구현과의 매핑을 먼저 정의해야 한다.
 
 ---
@@ -85,34 +85,34 @@
 
 원칙: **기존 stage·showInternal 구조를 깨지 않는다.** 각 Phase는 독립적으로 머지 가능하고, 각 단계 끝에 `npm run test:run` + `npm run build` 통과를 조건으로 한다(헌법).
 
-### Phase 0 — 죽은 코드 정리 + 의사결정 (0.5일)
+### Phase 0 — 죽은 코드 정리 + 선언적 역할 우선순위 승격 (0.5일)
 
 목적: 혼란 제거. 지금 `roleLanguage.ts`가 "role이 구현돼 있다"는 착각을 준다.
 
 - [ ] `src/lib/roleLanguage.ts`의 `ROLE_PACK`/`summaryTemplate`이 정말 미사용인지 최종 확인 (grep 결과 참조 0건).
-- [ ] **재사용 결정**: 살린다. `ROLE_PACK`의 `emphasisOrder`/`summaryTone`은 Phase 2 projection의 좋은 출발점이다. 단 현 위치(`src/lib`)가 아니라 `src/features/role-views/`(신규)로 이동.
-- [ ] 이동 시 `src/lib/roleLanguage.ts`는 re-export 셔임만 남긴다 (folder-structure.md의 점진 마이그레이션 관례 준수).
-- [ ] 실패 테스트 먼저: `roleLanguage`의 `ROLE_PACK[role].emphasisOrder`가 세 역할에서 서로 다른 순서를 반환하는지 확인하는 테스트 추가(TDD).
+- [ ] **재사용 결정**: 원본 파일은 살리지 않는다. 옛 키(`breakdown`, `budget`, `migration`, `scenario`)는 현재 stage 카드와 맞지 않으므로 삭제한다.
+- [ ] `ROLE_PACK`의 좋은 아이디어였던 "역할별 우선순위"만 `src/features/role-projection/lib/stageCards.ts`의 선언적 affinity 테이블로 승격한다.
+- [ ] 실패 테스트 먼저: 같은 stage card registry가 developer/pm/ceo에서 서로 다른 정렬과 primary/auxiliary 분리를 반환하는지 확인한다(TDD).
 
-산출물: 죽은 코드가 "의도된 projection 입력"으로 승격되거나 삭제됨. 더 이상 미스리딩 없음.
+산출물: 죽은 `src/lib/roleLanguage.ts` 삭제. 역할 우선순위는 실제 stage card key 기반 registry 한 곳에서만 관리.
 
 ### Phase 1 — 타입 있는 snapshot 경계 정의 (1~1.5일)
 
 목적: 문서의 "DeterministicSnapshot"을 실제 타입으로. 지금 `AgentSnapshotPayload`는 `Record<string, unknown>` bag이라 projection이 타입 안전하지 않다.
 
-- [ ] `src/features/role-views/snapshotTypes.ts` 신규: `RoleProjectionSnapshot` 타입 정의.
+- [ ] `src/features/role-projection/lib/projectSnapshotForRole.ts`의 `RoleProjectionSnapshot` 타입을 숫자 입력으로 정의.
   - 이미 계산되는 값들을 한 곳에 모은 **읽기 전용 뷰 타입**이다 (새 계산 아님):
     ```ts
     interface RoleProjectionSnapshot {
-      cost: { totalUsd: number; byModel: ModelCostRow[]; byFeature: FeatureCostRow[] }
-      margin: { grossMarginPct: number; lossCustomers: CustomerMarginRow[]; planMargins: MarginRow[] }
-      performance: { avgLatency?: number; retryRate?: number; cacheHitRate?: number }
-      pricing: ScenarioResult[]
-      risk: RiskCard[]
-      meta: { snapshotVersion: string; formulaVersion: string; providerRegistryVersion: string }
+      monthlyCostUsd: number
+      grossMarginPct: number
+      topAgentShare: number
+      topFeature: string
+      lossCustomerCount: number
+      refs: string[]
     }
     ```
-- [ ] `buildRoleProjectionSnapshot(deps)`: App.tsx가 이미 들고 있는 `attribution`, `planMargins`, `customerMargins`, `scenarios`, `teamCostEstimate`, `agentSnapshot`을 받아 위 타입으로 모으는 **순수 함수**. 계산은 기존 lib 재사용, 여기서 새 산술 금지.
+- [ ] App.tsx가 이미 들고 있는 `attribution`, `planMargins`, `heavyUsers`, `teamCostEstimate`, `agentSnapshot`에서 숫자 snapshot을 만든다. 계산은 기존 lib 재사용, 여기서 새 산술 금지.
 - [ ] `src/lib/` 순수 함수 100% 커버리지 규칙에 따라 단위 테스트 동반.
 
 산출물: 컴포넌트가 의존할 단일·타입 안전 projection 입력.
@@ -121,22 +121,27 @@
 
 목적: 문서 §6~§9의 핵심. 단 audience 축 포함.
 
-- [ ] `src/features/role-views/roleViewModel.ts`:
+- [ ] `src/features/role-projection/lib/projectSnapshotForRole.ts`:
     ```ts
     type Role = 'developer' | 'pm' | 'ceo'
     type Audience = 'internal' | 'customer'
     interface RoleViewModel {
       kpis: MetricCardModel[]
       primaryTable: TableModel
-      secondaryPanels: PanelKey[]   // 렌더할 기존 패널의 key 목록
       assistant: { title: string; focus: string; refs: string[] }
-      recommendedActions: ActionModel[]
     }
-    function projectSnapshotForRole(
-      snapshot: RoleProjectionSnapshot, role: Role, audience: Audience
-    ): RoleViewModel
     ```
-- [ ] `buildDeveloperView` / `buildPmView` / `buildCeoView` 구현. **secondaryPanels는 새 컴포넌트가 아니라 기존 패널의 key 리스트**를 반환한다 (예: dev=`['attribution:model','operationalSignals']`, pm=`['attribution:feature','marginRisk','riskCards']`, ceo=`['marginRisk','pricing','onePageReport']`). 재배치/숨김이 핵심.
+- [ ] `src/features/role-projection/lib/stageCards.ts`:
+    ```ts
+    interface StageCard {
+      key: string
+      affinity: Record<Role, 0 | 1 | 2 | 3>
+    }
+    function orderCardsForRole(cards: StageCard[], role: Role): StageCard[]
+    function splitCardsByRoleAffinity(cards: StageCard[], role: Role): { primary: StageCard[]; auxiliary: StageCard[] }
+    ```
+- [ ] ViewModel은 숫자 라벨과 assistant copy를 맡고, stage card 순서/접기는 `stageCards.ts`가 맡는다.
+- [ ] `buildDeveloperView` / `buildPmView` / `buildCeoView` 구현. **새 컴포넌트가 아니라 기존 stage card key**를 재사용한다. 재배치/숨김이 핵심.
 - [ ] **TDD 가드레일 테스트(헌법 핵심)**: 같은 snapshot으로 세 역할 ViewModel을 만들어도 **공통 숫자(총 비용·마진율)는 동일**해야 한다. role이 다르면 순서/노출만 다르고 값은 같다.
 - [ ] `audience='customer'`일 때 `assistant.refs`가 마스킹되는지 테스트 (`customerSafeAgentText` 재사용).
 
@@ -146,9 +151,9 @@
 
 목적: projection을 실제 렌더에 연결. 주입 지점은 이미 특정됨.
 
-- [ ] **stageWorkspace 주입** (`App.tsx:2531-2644`): 각 stage 분기 안에서 `const view = projectSnapshotForRole(snapshot, state.role, showInternal ? 'internal' : 'customer')`를 읽어 `view.secondaryPanels` 순서/포함 여부로 패널을 렌더. stage 구조는 유지, role이 그 안의 구성을 바꾼다.
+- [ ] **stageWorkspace 주입** (`App.tsx`): 각 stage 분기에서 stage card registry를 넘기고, `orderCardsForRole`/`splitCardsByRoleAffinity`로 패널을 정렬·접기 렌더한다. stage 구조는 유지, role이 그 안의 구성 우선순위를 바꾼다.
 - [ ] **우측 AI 패널** (`DecisionAssistantPanel`, `App.tsx:954`): props에 `role` 추가, `view.assistant.title/focus/refs`로 헤더와 ref를 역할별로 교체. (문서 §10 그대로, 단 기존 컴포넌트 확장)
-- [ ] **리포트**: 단일 `OnePageReportPanel`을 유지하되 `role` prop으로 섹션 강조를 바꾼다. 완전 3분할(`DeveloperReport`/`PmReport`/`CeoReport`)은 비용 대비 효과가 낮으므로 **보류** — 이미 `SummaryCard`의 audience 토글이 절반을 한다. 대신 `OnePageReportPanel`이 `role`에 따라 섹션 순서를 `ROLE_PACK.emphasisOrder`로 정렬하게.
+- [ ] **리포트**: 단일 `OnePageReportPanel`과 `SummaryCard`의 기존 audience/buildSummaryText 경로를 유지한다. 새 `ROLE_PACK` 또는 `summaryTemplate`을 되살리지 않는다.
 - [ ] **컴포넌트 테스트(헌법)**: `rerender`로 role을 바꿨을 때 KPI·패널 순서가 갱신되는지 검증. 정적 BASE_STATE만으로는 안 됨(헌법 명시).
 
 산출물: [개발자]/[PM]/[CEO] 전환이 실제로 의미 있는 화면 차이를 만든다.
@@ -180,21 +185,22 @@
 
 ## 2026-05-25 Implementation Status
 
-Role projection is now wired into the real stage workspace card order.
+Role projection is now wired into the real stage workspace card order and auxiliary folding.
 
-- `projectSnapshotForRole(...).panelOrder` is applied through `orderWorkspacePanels` in `App.tsx`.
-- Stage cards keep their existing content and are reordered, not duplicated or dropped.
-- The first role-prioritized card receives the visible emphasis ring.
-- Regression coverage lives in `App.test.tsx`: CEO view moves `margin_risk` before `cost_attribution`, Developer view moves `operational_signals` before `margin_risk`, and required cards remain present after role switching.
+- `projectSnapshotForRole(...)` takes numeric snapshot input and formats labels inside the projection view builder.
+- `src/features/role-projection/lib/stageCards.ts` is the single declarative source for cost-stage role affinity.
+- `stageWorkspace` passes the cost-stage registry to `splitCardsByRoleAffinity`; high-affinity cards render first, low-affinity cards move under `<details>`.
+- `src/lib/roleLanguage.ts` was deleted. Its old `ROLE_PACK` keys are not compatible with the current stage cards.
+- Regression coverage lives in `stageCards.test.ts`, `projectSnapshotForRole.test.ts`, and `App.test.tsx`: role changes reorder the primary cost cards and move low-affinity cards into the auxiliary section.
 
-The earlier note that `stageWorkspace` stays in a fixed order is no longer current.
+The earlier note that `stageWorkspace` stays in a fixed order or only shows badges is no longer current.
 
 ---
 
 ## 7. 작업 순서 요약
 
 ```text
-Phase 0  죽은 roleLanguage 정리 + role-views로 승격        (0.5d)
+Phase 0  죽은 roleLanguage 삭제 + role-projection registry 승격 (0.5d)
 Phase 1  RoleProjectionSnapshot 타입 + 빌더 (순수함수)      (1~1.5d)
 Phase 2  projectSnapshotForRole + 3개 view + 가드레일 테스트 (2~3d)
 Phase 3  stageWorkspace/우측패널/리포트에 주입 + 컴포넌트 테스트 (2~3d)

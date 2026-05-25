@@ -712,33 +712,34 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Margin, loss customers, and operating decision/i)
   })
 
-  it('reorders real cost workspace cards by role without dropping cards', async () => {
+  it('reorders real cost workspace cards by role and folds low-affinity cards', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await user.click(lifecycleButton(/Cost/i))
 
     const workspace = screen.getByTestId('decision-workspace-panel')
-    const costPanel = () => within(workspace).getByTestId('workspace-panel-cost_attribution')
-    const marginPanel = () => within(workspace).getByTestId('workspace-panel-margin_risk')
-    const signalPanel = () => within(workspace).getByTestId('workspace-panel-operational_signals')
+    const primaryCards = () => within(workspace).getByTestId('stage-primary-cards')
+    const auxiliaryCards = () => within(workspace).getByTestId('stage-auxiliary-cards')
+    const costPanel = () => within(primaryCards()).getByTestId('workspace-panel-cost_attribution')
+    const marginPanel = () => within(primaryCards()).getByTestId('workspace-panel-margin_risk')
+    const signalPanel = () => within(primaryCards()).getByTestId('workspace-panel-operational_signals')
     const appearsBefore = (left: HTMLElement, right: HTMLElement) => Boolean(
       left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
     )
 
-    expect(within(workspace).getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
-    expect(within(workspace).getByRole('heading', { name: /2\. Cost Attribution/i })).toBeInTheDocument()
-    expect(within(workspace).getByRole('heading', { name: /3\. Margin Risk/i })).toBeInTheDocument()
     expect(appearsBefore(costPanel(), marginPanel())).toBe(true)
+    expect(auxiliaryCards()).not.toHaveAttribute('open')
+    expect(within(auxiliaryCards()).getByTestId('workspace-panel-operational_signals')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /CEO view/i }))
     expect(appearsBefore(marginPanel(), costPanel())).toBe(true)
-    expect(within(workspace).getByRole('heading', { name: /Operational Signal Summary/i })).toBeInTheDocument()
-    expect(within(workspace).getByRole('heading', { name: /2\. Cost Attribution/i })).toBeInTheDocument()
-    expect(within(workspace).getByRole('heading', { name: /3\. Margin Risk/i })).toBeInTheDocument()
+    expect(auxiliaryCards()).not.toHaveAttribute('open')
+    expect(within(auxiliaryCards()).getByTestId('workspace-panel-operational_signals')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Developer view/i }))
-    expect(appearsBefore(signalPanel(), marginPanel())).toBe(true)
+    expect(appearsBefore(signalPanel(), costPanel())).toBe(true)
+    expect(within(auxiliaryCards()).getByTestId('workspace-panel-margin_risk')).toBeInTheDocument()
   })
 
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {

@@ -25,6 +25,12 @@ import {
   type RoleProjectionPanelKey,
   type RoleViewModel,
 } from '../features/role-projection/lib/projectSnapshotForRole'
+import {
+  COST_STAGE_CARDS,
+  orderCardsForRole,
+  splitCardsByRoleAffinity,
+  type StageCard,
+} from '../features/role-projection/lib/stageCards'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
 import { runAgentRuntime, type AgentRunExecutionMode, type AgentRunResponse } from '../features/agent/lib/agentRunRuntime'
@@ -802,24 +808,8 @@ interface WorkspacePanelDefinition {
   node: ReactNode
 }
 
-function orderWorkspacePanels(
-  panels: WorkspacePanelDefinition[],
-  view: RoleViewModel,
-): WorkspacePanelDefinition[] {
-  return panels
-    .map((panel, index) => ({ panel, index }))
-    .sort((left, right) => {
-      const leftRank = view.panelOrder.indexOf(left.panel.key)
-      const rightRank = view.panelOrder.indexOf(right.panel.key)
-      const normalizedLeft = leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank
-      const normalizedRight = rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank
-      return normalizedLeft - normalizedRight || left.index - right.index
-    })
-    .map(item => item.panel)
-}
-
 function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
-  const visiblePanelOrder = view.panelOrder.filter(panel => panel !== 'debug_refs')
+  const visiblePanelOrder = orderCardsForRole(COST_STAGE_CARDS, view.role).map(card => card.key)
 
   return (
     <Surface
@@ -842,7 +832,7 @@ function RoleProjectionPanel({ view }: { view: RoleViewModel }) {
             {ROLE_PROJECTION_PANEL_LABELS[panel]}
           </Badge>
         ))}
-        {view.panelOrder.includes('debug_refs') && (
+        {view.audience === 'internal' && (
           <Badge tone="caution">{ROLE_PROJECTION_PANEL_LABELS.debug_refs}</Badge>
         )}
       </div>
@@ -2837,14 +2827,13 @@ function App() {
   const officialWatchtowerSummary = useMemo(() => officialWatchtowerCoverageSummary(), [])
   const roleProjection = useMemo(() => {
     const marginRow = planMargins[0]
-    const customerRow = customerMargins[0]
     const topFeature = attribution.feature?.rows[0]?.label ?? 'No feature data'
     return projectSnapshotForRole({
-      monthlyCostLabel: fmtCurrency(teamCostEstimate.monthlyCostUsd),
-      marginLabel: marginRow ? fmtPercent(marginRow.grossMarginPct) : 'No margin data',
-      topAgentShareLabel: fmtPercent(teamCostEstimate.topAgentShare),
-      featureLabel: topFeature,
-      customerLabel: customerRow?.customerId ?? 'No customer data',
+      monthlyCostUsd: teamCostEstimate.monthlyCostUsd,
+      grossMarginPct: marginRow?.grossMarginPct ?? Number.NaN,
+      topAgentShare: teamCostEstimate.topAgentShare,
+      topFeature,
+      lossCustomerCount: heavyUsers.lossCustomers.length,
       refs: [
         agentSnapshot.snapshotVersion,
         'tool:team.monthlyCostUsd',
@@ -2855,7 +2844,7 @@ function App() {
   }, [
     agentSnapshot.snapshotVersion,
     attribution.feature,
-    customerMargins,
+    heavyUsers.lossCustomers.length,
     planMargins,
     showInternal,
     state.role,
@@ -3877,16 +3866,54 @@ function App() {
     </div>
   ) : null
 
-  const renderWorkspacePanels = (panels: WorkspacePanelDefinition[]) => orderWorkspacePanels(panels, roleProjection)
-    .map((panel, index) => (
-      <div
-        key={panel.key}
-        data-testid={`workspace-panel-${panel.key}`}
-        className={index === 0 ? 'rounded-wds-lg ring-1 ring-primary-normal/30' : ''}
-      >
-        {panel.node}
-      </div>
-    ))
+  const renderWorkspacePanel = (panel: WorkspacePanelDefinition, index: number) => (
+    <div
+      key={panel.key}
+      data-testid={`workspace-panel-${panel.key}`}
+      className={index === 0 ? 'rounded-wds-lg ring-1 ring-primary-normal/30' : ''}
+    >
+      {panel.node}
+    </div>
+  )
+
+  const auxiliarySummary = roleProjection.role === 'developer'
+    ? 'Business detail'
+    : 'Technical detail (developer)'
+
+  const renderWorkspacePanels = (
+    panels: WorkspacePanelDefinition[],
+    cards?: readonly StageCard<RoleProjectionPanelKey>[],
+  ) => {
+    const panelsByKey = new Map(panels.map(panel => [panel.key, panel]))
+    const { primary, auxiliary } = cards
+      ? splitCardsByRoleAffinity(cards, roleProjection.role)
+      : { primary: panels, auxiliary: [] }
+    const renderCards = (items: readonly (StageCard<RoleProjectionPanelKey> | WorkspacePanelDefinition)[]) => items
+      .map(item => panelsByKey.get(item.key))
+      .filter((panel): panel is WorkspacePanelDefinition => Boolean(panel))
+      .map(renderWorkspacePanel)
+
+    return (
+      <>
+        <div data-testid="stage-primary-cards" className="grid gap-4">
+          {cards ? renderCards(primary) : panels.map(renderWorkspacePanel)}
+        </div>
+        {auxiliary.length > 0 && (
+          <details
+            data-testid="stage-auxiliary-cards"
+            className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4"
+          >
+            <summary className="cursor-pointer text-sm font-semibold text-label-normal">
+              {auxiliarySummary}
+            </summary>
+            <div className="mt-4 grid gap-4">
+              {renderCards(auxiliary)}
+            </div>
+          </details>
+        )}
+      </>
+    )
+  }
 
   const stageWorkspace = (
     <div className="grid gap-4">
@@ -3939,7 +3966,7 @@ function App() {
               />
             ),
           },
-        ])
+        ], COST_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'bottleneck' && (
