@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { COST_STAGE_CARDS, orderCardsForRole, splitCardsByRoleAffinity } from './stageCards'
+import {
+  COST_STAGE_CARDS,
+  DECISION_LOG_STAGE_CARDS,
+  OPTIMIZE_STAGE_CARDS,
+  orderCardsForRole,
+  splitCardsByRoleAffinity,
+} from './stageCards'
 
 describe('stage card role affinity', () => {
   it('orders cost stage cards by role affinity with stable tie order', () => {
@@ -32,6 +38,41 @@ describe('stage card role affinity', () => {
     expect(splitCardsByRoleAffinity(COST_STAGE_CARDS, 'ceo')).toMatchObject({
       primary: [{ key: 'margin_risk' }, { key: 'cost_attribution' }],
       auxiliary: [{ key: 'operational_signals' }],
+    })
+  })
+
+  it('reorders optimize stage cards per role and collapses low-affinity cards', () => {
+    expect(orderCardsForRole(OPTIMIZE_STAGE_CARDS, 'developer').map(card => card.key)).toEqual([
+      'optimization_review',
+      'pricing_simulator',
+      'report_output',
+    ])
+    expect(splitCardsByRoleAffinity(OPTIMIZE_STAGE_CARDS, 'developer')).toMatchObject({
+      primary: [{ key: 'optimization_review' }],
+      auxiliary: [{ key: 'pricing_simulator' }, { key: 'report_output' }],
+    })
+    expect(splitCardsByRoleAffinity(OPTIMIZE_STAGE_CARDS, 'pm')).toMatchObject({
+      primary: [{ key: 'pricing_simulator' }, { key: 'optimization_review' }, { key: 'report_output' }],
+      auxiliary: [],
+    })
+    expect(splitCardsByRoleAffinity(OPTIMIZE_STAGE_CARDS, 'ceo')).toMatchObject({
+      primary: [{ key: 'pricing_simulator' }, { key: 'report_output' }],
+      auxiliary: [{ key: 'optimization_review' }],
+    })
+  })
+
+  it('reorders decision-log stage cards per role and collapses low-affinity cards', () => {
+    expect(splitCardsByRoleAffinity(DECISION_LOG_STAGE_CARDS, 'developer')).toMatchObject({
+      primary: [{ key: 'operating_ledger' }, { key: 'decision_log' }],
+      auxiliary: [{ key: 'one_page_report' }],
+    })
+    expect(splitCardsByRoleAffinity(DECISION_LOG_STAGE_CARDS, 'pm')).toMatchObject({
+      primary: [{ key: 'one_page_report' }, { key: 'decision_log' }],
+      auxiliary: [{ key: 'operating_ledger' }],
+    })
+    expect(splitCardsByRoleAffinity(DECISION_LOG_STAGE_CARDS, 'ceo')).toMatchObject({
+      primary: [{ key: 'one_page_report' }, { key: 'decision_log' }],
+      auxiliary: [{ key: 'operating_ledger' }],
     })
   })
 })

@@ -18,6 +18,28 @@ export const COST_STAGE_CARDS: StageCard<CostStageCardKey>[] = [
   { key: 'margin_risk', affinity: { developer: 1, pm: 2, ceo: 3 } },
 ]
 
+export type OptimizeStageCardKey = Extract<
+  RoleProjectionPanelKey,
+  'pricing_simulator' | 'optimization_review' | 'report_output'
+>
+
+export const OPTIMIZE_STAGE_CARDS: StageCard<OptimizeStageCardKey>[] = [
+  { key: 'pricing_simulator', affinity: { developer: 1, pm: 3, ceo: 3 } },
+  { key: 'optimization_review', affinity: { developer: 3, pm: 2, ceo: 1 } },
+  { key: 'report_output', affinity: { developer: 1, pm: 2, ceo: 3 } },
+]
+
+export type DecisionLogStageCardKey = Extract<
+  RoleProjectionPanelKey,
+  'decision_log' | 'operating_ledger' | 'one_page_report'
+>
+
+export const DECISION_LOG_STAGE_CARDS: StageCard<DecisionLogStageCardKey>[] = [
+  { key: 'decision_log', affinity: { developer: 2, pm: 2, ceo: 2 } },
+  { key: 'operating_ledger', affinity: { developer: 3, pm: 1, ceo: 1 } },
+  { key: 'one_page_report', affinity: { developer: 1, pm: 3, ceo: 3 } },
+]
+
 const PRIMARY_AFFINITY_FLOOR: RoleAffinity = 2
 
 export function orderCardsForRole<Card extends StageCard>(

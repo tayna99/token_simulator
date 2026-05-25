@@ -27,6 +27,8 @@ import {
 } from '../features/role-projection/lib/projectSnapshotForRole'
 import {
   COST_STAGE_CARDS,
+  OPTIMIZE_STAGE_CARDS,
+  DECISION_LOG_STAGE_CARDS,
   orderCardsForRole,
   splitCardsByRoleAffinity,
   type StageCard,
@@ -4039,7 +4041,7 @@ function App() {
               </Surface>
             ),
           },
-        ])
+        ], OPTIMIZE_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'decision-log' && (
@@ -4081,7 +4083,7 @@ function App() {
               />
             ),
           },
-        ])
+        ], DECISION_LOG_STAGE_CARDS)
       )}
     </div>
   )
