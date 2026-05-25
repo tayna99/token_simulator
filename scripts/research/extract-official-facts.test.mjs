@@ -11,6 +11,7 @@ const SOURCE = {
   pricingRegion: 'international_singapore',
   sourceLanguage: 'en',
   officialSourceTrust: 'official_pricing',
+  parserStrategy: 'parseAlibabaModelStudio',
 }
 
 describe('extractOfficialFacts', () => {
@@ -41,10 +42,11 @@ describe('extractOfficialFacts', () => {
       }),
     ])
     expect(facts.pricingFacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ metric: 'input', amount: 1.2, currency: 'USD', unit: 'per_1m_tokens' }),
-      expect.objectContaining({ metric: 'output', amount: 4.8, currency: 'USD', unit: 'per_1m_tokens' }),
-      expect.objectContaining({ metric: 'cache_read', amount: 0.12, currency: 'USD', unit: 'per_1m_tokens' }),
+      expect.objectContaining({ metric: 'input', amount: 1.2, currency: 'USD', unit: 'per_1m_tokens', parserStrategy: 'parseAlibabaModelStudio' }),
+      expect.objectContaining({ metric: 'output', amount: 4.8, currency: 'USD', unit: 'per_1m_tokens', parserStrategy: 'parseAlibabaModelStudio' }),
+      expect.objectContaining({ metric: 'cache_read', amount: 0.12, currency: 'USD', unit: 'per_1m_tokens', parserStrategy: 'parseAlibabaModelStudio' }),
     ]))
+    expect(facts.pricingFacts.every(fact => fact.pricingRegion === 'international_singapore')).toBe(true)
     expect(facts.capabilityFacts).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'context_window_tokens', value: 1000000 }),
       expect.objectContaining({ kind: 'batch_discount_pct', value: 50 }),

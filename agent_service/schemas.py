@@ -93,12 +93,15 @@ class AgenticEvent(BaseModel):
     message: str
     agentId: str | None = None
     calledAgentTool: str | None = None
+    stance: str = "support"
     toolResultRefs: list[str] = Field(default_factory=list)
     riskCardIds: list[str] = Field(default_factory=list)
     usedTools: list[str] = Field(default_factory=list)
     usedCapabilityTools: list[str] = Field(default_factory=list)
     reviewerAgentIds: list[str] = Field(default_factory=list)
     evidenceRefs: list[str] = Field(default_factory=list)
+    evidenceWarnings: list[str] = Field(default_factory=list)
+    nextQuestion: str = ""
     basisRefs: list[str] = Field(default_factory=list)
     assetRefs: list[str] = Field(default_factory=list)
 
@@ -131,6 +134,7 @@ class AgentRunInput(BaseModel):
     modelReleaseCandidates: list[dict[str, Any]] = Field(default_factory=list)
     pricingFactCandidates: list[dict[str, Any]] = Field(default_factory=list)
     fxRateSnapshots: list[dict[str, Any]] = Field(default_factory=list)
+    ragCollections: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     trustInspection: dict[str, Any] | None = None
     formulaVersion: str = ""
     providerRegistryVersion: str = ""
@@ -157,6 +161,7 @@ class AgentRunResponse(BaseModel):
     riskCardIds: list[str] = Field(default_factory=list)
     decisionIds: list[str] = Field(default_factory=list)
     evidenceRefs: list[str] = Field(default_factory=list)
+    evidenceCoverage: dict[str, Any] = Field(default_factory=dict)
     assetRefs: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

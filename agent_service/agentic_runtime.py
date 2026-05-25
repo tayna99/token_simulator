@@ -237,6 +237,103 @@ def _payload_asset_refs(payload: AgentRunInput) -> list[str]:
     ])
 
 
+def _records_from_rag_collection(payload: AgentRunInput, key: str, fallback: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    records = payload.ragCollections.get(key, [])
+    if isinstance(records, Sequence) and not isinstance(records, (str, bytes)) and records:
+        return [record for record in records if isinstance(record, Mapping)]
+    return list(fallback)
+
+
+def _official_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
+    refs: list[str] = []
+    for item in records:
+        if item.get("snippetId"):
+            refs.append(str(item.get("snippetId")))
+        elif item.get("id"):
+            refs.append(str(item.get("id")) if str(item.get("id")).startswith("source:") else f"source:{item.get('id')}")
+        item_refs = item.get("refs")
+        if isinstance(item_refs, list):
+            refs.extend(str(ref) for ref in item_refs if ref)
+    return _unique(refs)
+
+
+def _benchmark_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
+    return _unique([
+        f"evidence:{item.get('evidenceId') or item.get('evidenceRef') or item.get('id')}"
+        for item in records
+        if item.get("evidenceId") or item.get("evidenceRef") or item.get("id")
+    ])
+
+
+def _decision_refs(records: Sequence[Mapping[str, Any]]) -> list[str]:
+    return _unique([
+        str(item.get("id")) if str(item.get("id")).startswith("decision:") else f"decision:{item.get('id')}"
+        for item in records
+        if item.get("id")
+    ])
+
+
+def _coverage_item(
+    *,
+    records: Sequence[Mapping[str, Any]],
+    refs: Sequence[str],
+    missing_warning: str,
+) -> dict[str, Any]:
+    found = bool(records) or bool(refs)
+    return {
+        "found": found,
+        "refs": _unique([str(ref) for ref in refs]),
+        "records": list(records),
+        "scores": [1.0 for _ in records],
+        "warnings": [] if found else [missing_warning],
+    }
+
+
+def _build_evidence_coverage(payload: AgentRunInput) -> dict[str, Any]:
+    official_records = _records_from_rag_collection(
+        payload,
+        "official_docs",
+        payload.officialSourceSnippets,
+    )
+    benchmark_records = _records_from_rag_collection(
+        payload,
+        "benchmark_evidence",
+        payload.benchmarkCards,
+    )
+    decision_records = _records_from_rag_collection(
+        payload,
+        "decision_history",
+        payload.decisionHistory,
+    )
+    return {
+        "officialDocs": _coverage_item(
+            records=official_records,
+            refs=_official_refs(official_records),
+            missing_warning="official_docs_unavailable",
+        ),
+        "benchmarkEvidence": _coverage_item(
+            records=benchmark_records,
+            refs=_benchmark_refs(benchmark_records),
+            missing_warning="baseline_unavailable",
+        ),
+        "decisionHistory": _coverage_item(
+            records=decision_records,
+            refs=_decision_refs(decision_records),
+            missing_warning="decision_history_unavailable",
+        ),
+    }
+
+
+def _coverage_warnings(evidence_coverage: Mapping[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for item in evidence_coverage.values():
+        if isinstance(item, Mapping):
+            item_warnings = item.get("warnings", [])
+            if isinstance(item_warnings, list):
+                warnings.extend(str(warning) for warning in item_warnings if warning)
+    return _unique(warnings)
+
+
 def _unique(items: Sequence[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -338,6 +435,8 @@ def route_operating_agents(
 def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None) -> AgentRunResponse:
     refs = _refs_from_tool_results(payload.toolResults)
     refs_label = ", ".join(refs) if refs else "deterministic snapshot"
+    evidence_coverage = _build_evidence_coverage(payload)
+    evidence_warnings = _coverage_warnings(evidence_coverage)
     route = route_operating_agents(
         active_stage=payload.activeStage,
         question=payload.question,
@@ -362,6 +461,9 @@ def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None
             "usedCapabilityTools": [],
             "reviewerAgentIds": [item for item in reviewer_ids if item != agent_id],
             "evidenceRefs": [],
+            "stance": "caution" if evidence_warnings else "support",
+            "evidenceWarnings": evidence_warnings,
+            "nextQuestion": "Which missing evidence ref should be added before adoption?" if evidence_warnings else "",
             "assetRefs": asset_refs,
         }
         for agent_id in route["calledAgentIds"]
@@ -378,6 +480,7 @@ def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None
         disagreements=[],
         decisionReadiness="needs_review",
         nextQuestions=[
+            *(["Which peer baseline should be added before adoption?"] if "baseline_unavailable" in evidence_warnings else []),
             "Confirm provider runtime availability before treating AI interpretation as LLM assisted.",
             "Review the cited deterministic refs before adopting a recommendation.",
         ],
@@ -394,9 +497,11 @@ def _fallback_response(payload: AgentRunInput, warnings: list[str] | None = None
             for card in payload.benchmarkCards
             if card.get("evidenceId") or card.get("evidenceRef")
         ],
+        evidenceCoverage=evidence_coverage,
         assetRefs=asset_refs,
         warnings=_unique([
             *(warnings or ["provider unavailable; deterministic fallback used"]),
+            *evidence_warnings,
             *(["trust pipeline requires review before snapshot use"] if route["reason"] == "trust pipeline requires review before snapshot use" else []),
         ]),
     )
@@ -1058,7 +1163,10 @@ def build_agent_tools(
     return tools
 
 
-def build_operating_agent_call_tools(payload: AgentRunInput):
+def build_operating_agent_call_tools(
+    payload: AgentRunInput,
+    agent_runner: Callable[[str, str], AgentRunResponse] | None = None,
+):
     """Return 11 Agent-as-Tool callables for supervisor-style orchestration."""
     operating_agents = payload.operatingAgents or [
         {"id": agent_id, "label": agent_id.replace("_", " ").title(), "role": "Operating agent"}
@@ -1071,14 +1179,21 @@ def build_operating_agent_call_tools(payload: AgentRunInput):
         allowed_tools = sorted(AGENT_TOOL_PERMISSION_MATRIX.get(agent_id, set()))
 
         def call_operating_agent(question: str = "") -> str:
-            return _json({
+            data: dict[str, Any] = {
                 "agentId": agent_id,
                 "label": profile.get("label", agent_id),
                 "role": profile.get("role", ""),
+                "authority": profile.get("authority", "read_only_operating_review"),
                 "question": question or payload.question,
                 "allowedCapabilityTools": allowed_tools,
                 "calledAgentTool": _agent_tool_name(agent_id),
-            })
+                "canMutate": False,
+                "requiredEvidenceKinds": profile.get("requiredEvidenceKinds", []),
+            }
+            if agent_runner is not None:
+                response = agent_runner(agent_id, question or payload.question)
+                data["response"] = response.model_dump(mode="json")
+            return _json(data)
 
         call_operating_agent.__name__ = _agent_tool_name(agent_id)
         call_operating_agent.__doc__ = f"Call {profile.get('label', agent_id)} as a read-only operating agent."
@@ -1218,6 +1333,79 @@ def _run_single_operating_agent(
     return _annotate_agent_response(agent_id=agent_id, response=response, route=route, payload=payload)
 
 
+def _supervisor_system_prompt(payload: AgentRunInput, route: Mapping[str, Any]) -> str:
+    return (
+        f"{AGENT_SYSTEM_PROMPT}\n"
+        "You are the Supervisor. Call operating agents through call_*_agent tools before synthesizing. "
+        "Do not answer from memory. Use at least one operating agent for every request. "
+        f"Default route: primary={route['primaryAgentId']}; reviewers={', '.join(route['reviewerAgentIds']) or 'none'}. "
+        "Return readiness, disagreements, and next questions from delegated evidence only."
+    )
+
+
+def _run_supervisor_agent_as_tool(
+    *,
+    payload: AgentRunInput,
+    route: Mapping[str, Any],
+    model: Any,
+    agent_factory: Callable[..., Any],
+) -> AgentRunResponse:
+    called_responses: dict[str, AgentRunResponse] = {}
+
+    def run_called_agent(agent_id: str, question: str) -> AgentRunResponse:
+        if agent_id in called_responses:
+            return called_responses[agent_id]
+        response = _run_single_operating_agent(
+            agent_id=agent_id,
+            payload=payload.model_copy(update={"question": question or payload.question}),
+            route=route,
+            model=model,
+            agent_factory=agent_factory,
+        )
+        called_responses[agent_id] = response
+        return response
+
+    supervisor_tools = build_operating_agent_call_tools(payload, agent_runner=run_called_agent)
+    supervisor = agent_factory(
+        model=model,
+        tools=supervisor_tools,
+        response_format=AgentRunResponse,
+        system_prompt=_supervisor_system_prompt(payload, route),
+    )
+    supervisor.invoke({
+        "messages": [
+            {
+                "role": "user",
+                "content": _json({
+                    "mode": payload.mode,
+                    "activeStage": payload.activeStage,
+                    "executionMode": payload.executionMode,
+                    "snapshotVersion": payload.snapshotVersion,
+                    "question": payload.question,
+                    "route": dict(route),
+                    "availableAgentTools": [_agent_tool_name(agent_id) for agent_id in OPERATING_AGENT_IDS],
+                }),
+            }
+        ]
+    })
+
+    required_agent_ids = (
+        list(route["calledAgentIds"])
+        if route["executionMode"] == "all_hands"
+        else ([] if called_responses else [route["primaryAgentId"]])
+    )
+    for agent_id in required_agent_ids:
+        if agent_id not in called_responses:
+            run_called_agent(agent_id, payload.question)
+
+    ordered_ids = _unique([
+        *[agent_id for agent_id in route["calledAgentIds"] if agent_id in called_responses],
+        *list(called_responses),
+    ])
+    responses = [called_responses[agent_id] for agent_id in ordered_ids]
+    return _merge_agent_responses(payload=payload, route=route, responses=responses)
+
+
 def _synthesize_supervisor_fields(
     *,
     payload: AgentRunInput,
@@ -1226,15 +1414,27 @@ def _synthesize_supervisor_fields(
     warnings: Sequence[str] = (),
 ) -> dict[str, Any]:
     refs = _refs_from_tool_results(payload.toolResults)
-    primary = str(route["primaryAgentId"])
-    reviewers = list(route["reviewerAgentIds"])
+    called_agent_ids = _unique([
+        response.primaryAgentId or str(route["primaryAgentId"])
+        for response in responses
+    ]) or list(route["calledAgentIds"])
+    primary = called_agent_ids[0] if called_agent_ids else str(route["primaryAgentId"])
+    reviewers = [agent_id for agent_id in called_agent_ids if agent_id != primary]
+    evidence_coverage = _build_evidence_coverage(payload)
     warning_list = _unique([*warnings, *[warning for response in responses for warning in response.warnings]])
+    warning_list = _unique([*warning_list, *_coverage_warnings(evidence_coverage)])
     missing_or_blocking = [
         warning for warning in warning_list
         if "missing" in warning or "unavailable" in warning or "uncited" in warning
     ]
-    readiness = "blocked" if any("uncited" in warning for warning in warning_list) else (
-        "needs_review" if missing_or_blocking or reviewers else "ready"
+    trust_blocked = bool(payload.trustInspection) and payload.trustInspection.get("status") == "blocked"
+    blocking_stance = any(
+        event.stance == "block"
+        for response in responses
+        for event in response.events
+    )
+    readiness = "blocked" if trust_blocked or blocking_stance or any("uncited" in warning for warning in warning_list) else (
+        "needs_review" if missing_or_blocking else "ready"
     )
     disagreements = [
         f"{reviewer} should review {primary}'s recommendation before adoption."
@@ -1246,9 +1446,11 @@ def _synthesize_supervisor_fields(
     ]
     if missing_or_blocking:
         next_questions.insert(0, "Which missing snapshot, benchmark, or evidence ref should be added before adoption?")
+    if "baseline_unavailable" in warning_list:
+        next_questions.insert(0, "Which peer baseline should be added before adoption?")
     return {
         "supervisorSummary": (
-            f"{primary} led {len(route['calledAgentIds'])} operating agent(s), "
+            f"{primary} led {len(called_agent_ids)} operating agent(s), "
             f"grounded in {', '.join(refs) or 'the deterministic snapshot'}."
         ),
         "disagreements": disagreements,
@@ -1270,8 +1472,16 @@ def _merge_agent_responses(
     evidence_refs = _unique([ref for response in responses for ref in response.evidenceRefs])
     asset_refs = _unique([ref for response in responses for ref in response.assetRefs] or _payload_asset_refs(payload))
     primary_response = responses[0] if responses else AgentRunResponse()
-    called_agent_ids = list(route["calledAgentIds"])
+    called_agent_ids = _unique([
+        response.primaryAgentId or event.agentId or ""
+        for response in responses
+        for event in (response.events or [])
+    ]) or [response.primaryAgentId for response in responses if response.primaryAgentId] or list(route["calledAgentIds"])
+    primary_agent_id = called_agent_ids[0] if called_agent_ids else route["primaryAgentId"]
+    reviewer_agent_ids = [agent_id for agent_id in called_agent_ids if agent_id != primary_agent_id]
     supervisor = _synthesize_supervisor_fields(payload=payload, route=route, responses=responses)
+    evidence_coverage = _build_evidence_coverage(payload)
+    coverage_warnings = _coverage_warnings(evidence_coverage)
     return AgentRunResponse(
         events=events,
         answer=primary_response.answer or f"Operating team answer is grounded in {', '.join(refs) or 'deterministic snapshot'}.",
@@ -1279,8 +1489,8 @@ def _merge_agent_responses(
         llmMode="provider-llm",
         **supervisor,
         calledAgentIds=called_agent_ids,
-        primaryAgentId=route["primaryAgentId"],
-        reviewerAgentIds=route["reviewerAgentIds"],
+        primaryAgentId=primary_agent_id,
+        reviewerAgentIds=reviewer_agent_ids,
         agentRoute=dict(route),
         snapshotVersion=payload.snapshotVersion,
         usedTools=used_tools,
@@ -1288,8 +1498,9 @@ def _merge_agent_responses(
         riskCardIds=risk_ids,
         decisionIds=_unique([decision_id for response in responses for decision_id in response.decisionIds]),
         evidenceRefs=evidence_refs,
+        evidenceCoverage=evidence_coverage,
         assetRefs=asset_refs,
-        warnings=_unique([warning for response in responses for warning in response.warnings]),
+        warnings=_unique([*[warning for response in responses for warning in response.warnings], *coverage_warnings]),
     )
 
 
@@ -1311,20 +1522,12 @@ def run_agentic_runtime(
     if model is None:
         return _fallback_response(payload)
 
-    max_workers = min(3, max(1, len(route["calledAgentIds"])))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        responses = list(executor.map(
-            lambda agent_id: _run_single_operating_agent(
-                agent_id=agent_id,
-                payload=payload,
-                route=route,
-                model=model,
-                agent_factory=agent_factory,
-            ),
-            route["calledAgentIds"],
-        ))
-
-    response = _merge_agent_responses(payload=payload, route=route, responses=responses)
+    response = _run_supervisor_agent_as_tool(
+        payload=payload,
+        route=route,
+        model=model,
+        agent_factory=agent_factory,
+    )
     warnings = _validate_grounding(response, refs)
     if warnings:
         return _fallback_response(payload, warnings)

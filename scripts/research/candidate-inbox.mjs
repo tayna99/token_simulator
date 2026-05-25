@@ -24,6 +24,14 @@ function isHighConfidence(candidate) {
     && (!Array.isArray(candidate.warnings) || candidate.warnings.length === 0)
 }
 
+function needsFxReview(candidate) {
+  return candidate.status === 'needs_fx_review' || candidate.pricingStatusSuggestion === 'needs_fx_review'
+}
+
+function needsRegionReview(candidate) {
+  return candidate.status === 'needs_region_review' || candidate.pricingRegion === 'unknown'
+}
+
 export function partitionCandidateInbox(candidates, options = {}) {
   const maxReviewCandidatesPerSource = options.maxReviewCandidatesPerSource ?? 5
   const unique = dedupe(candidates)
@@ -35,12 +43,22 @@ export function partitionCandidateInbox(candidates, options = {}) {
 
   const reviewCandidates = []
   const noisyCandidates = []
+  const needsFxReviewCandidates = []
+  const needsRegionReviewCandidates = []
   const warnings = []
 
   for (const [sourceId, sourceCandidates] of bySource.entries()) {
-    if (sourceCandidates.length > maxReviewCandidatesPerSource) {
-      const reviewable = sourceCandidates.filter(isHighConfidence)
-      const quarantined = sourceCandidates.filter(candidate => !isHighConfidence(candidate))
+    const fxReview = sourceCandidates.filter(needsFxReview)
+    const regionReview = sourceCandidates.filter(candidate => !needsFxReview(candidate) && needsRegionReview(candidate))
+    needsFxReviewCandidates.push(...fxReview)
+    needsRegionReviewCandidates.push(...regionReview)
+    const generalCandidates = sourceCandidates.filter(candidate => (
+      !needsFxReview(candidate) && !needsRegionReview(candidate)
+    ))
+
+    if (generalCandidates.length > maxReviewCandidatesPerSource) {
+      const reviewable = generalCandidates.filter(isHighConfidence)
+      const quarantined = generalCandidates.filter(candidate => !isHighConfidence(candidate))
       reviewCandidates.push(...reviewable)
       noisyCandidates.push(...quarantined.map(candidate => ({
         ...candidate,
@@ -50,13 +68,15 @@ export function partitionCandidateInbox(candidates, options = {}) {
         warnings.push(`${sourceId} exceeded review candidate limit; ${quarantined.length} candidates quarantined`)
       }
     } else {
-      reviewCandidates.push(...sourceCandidates)
+      reviewCandidates.push(...generalCandidates)
     }
   }
 
   return {
     reviewCandidates,
     noisyCandidates,
+    needsFxReview: needsFxReviewCandidates,
+    needsRegionReview: needsRegionReviewCandidates,
     warnings,
   }
 }

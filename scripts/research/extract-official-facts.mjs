@@ -86,6 +86,7 @@ function pricingFactsFrom(text, source) {
       modelOwner: source.modelOwner,
       servingProvider: source.servingProvider,
       pricingRegion: source.pricingRegion,
+      parserStrategy: source.parserStrategy,
       metric: normalizeMetric(match[1]),
       amount: Number(match[3]),
       currency: match[2] || defaultCurrency,

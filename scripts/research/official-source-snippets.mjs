@@ -46,3 +46,15 @@ export function buildOfficialSourceSnippets({ source, text, capturedAt, maxSnipp
 export function serializeOfficialSourceSnippetsJsonl(snippets) {
   return snippets.map(snippet => JSON.stringify(snippet)).join('\n') + (snippets.length ? '\n' : '')
 }
+
+export function officialSourceSnippetsToRagRecords(snippets) {
+  return snippets.map(snippet => ({
+    id: snippet.snippetId,
+    text: snippet.text,
+    sourceUrl: snippet.sourceUrl,
+    refs: snippet.refs,
+    collection: 'official_docs',
+    sourceId: snippet.sourceId,
+    capturedAt: snippet.capturedAt,
+  }))
+}

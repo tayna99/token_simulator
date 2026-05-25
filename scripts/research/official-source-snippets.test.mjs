@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildOfficialSourceSnippets, serializeOfficialSourceSnippetsJsonl } from './official-source-snippets.mjs'
+import {
+  buildOfficialSourceSnippets,
+  officialSourceSnippetsToRagRecords,
+  serializeOfficialSourceSnippetsJsonl,
+} from './official-source-snippets.mjs'
 
 const SOURCE = {
   id: 'google-gemini-pricing',
@@ -48,5 +52,23 @@ describe('official source snippets', () => {
       sourceId: 'google-gemini-pricing',
       refs: ['source:google-gemini-pricing'],
     })
+  })
+
+  it('converts captured source snippets into official_docs RAG records with refs intact', () => {
+    const snippets = buildOfficialSourceSnippets({
+      source: SOURCE,
+      text: 'Gemini 3.5 Flash input price is USD $1.50 / 1M tokens.',
+      capturedAt: '2026-05-24T00:00:00.000Z',
+    })
+
+    expect(officialSourceSnippetsToRagRecords(snippets)).toEqual([
+      expect.objectContaining({
+        id: snippets[0].snippetId,
+        text: snippets[0].text,
+        sourceUrl: SOURCE.url,
+        refs: ['source:google-gemini-pricing'],
+        collection: 'official_docs',
+      }),
+    ])
   })
 })

@@ -112,6 +112,56 @@ describe('runAgentRuntime', () => {
     expect(result.supervisorSummary).toContain('optimization_routing')
   })
 
+  it('normalizes evidence coverage and event stance from provider responses', async () => {
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'cost',
+      question: 'Is the cache decision ready?',
+      executionMode: 'stage_committee',
+      snapshotVersion: 'snapshot:evidence',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+      frontOperatingSystem: AGENTCOST_FRONT_OPERATING_SYSTEM,
+    }, {
+      runtime: 'server',
+      fetcher: vi.fn(async () => new Response(JSON.stringify({
+        events: [{
+          type: 'analysis',
+          message: 'Benchmark is missing; cite baseline_unavailable.',
+          toolResultRefs: [],
+          riskCardIds: [],
+          stance: 'caution',
+          evidenceWarnings: ['baseline_unavailable'],
+          nextQuestion: 'Which peer baseline should we add before adoption?',
+        }],
+        answer: 'Decision needs review.',
+        report: 'Decision needs review.',
+        llmMode: 'provider-llm',
+        decisionReadiness: 'needs_review',
+        evidenceCoverage: {
+          officialDocs: { found: true, refs: ['source:google-pricing'], records: [{ id: 'google-pricing', text: 'Cache pricing.' }], scores: [1], warnings: [] },
+          benchmarkEvidence: { found: false, refs: [], records: [], scores: [], warnings: ['baseline_unavailable'] },
+          decisionHistory: { found: true, refs: ['decision:cache-policy'], records: [{ id: 'cache-policy', text: 'Held cache policy.' }], scores: [1], warnings: [] },
+        },
+        warnings: ['baseline_unavailable'],
+      }), { status: 200 })),
+    })
+
+    expect(result.events[0].stance).toBe('caution')
+    expect(result.events[0].evidenceWarnings).toEqual(['baseline_unavailable'])
+    expect(result.events[0].nextQuestion).toMatch(/peer baseline/i)
+    expect(result.evidenceCoverage.officialDocs.refs).toEqual(['source:google-pricing'])
+    expect(result.evidenceCoverage.benchmarkEvidence.warnings).toContain('baseline_unavailable')
+    expect(result.decisionReadiness).toBe('needs_review')
+  })
+
   it('returns deterministic fallback when the server runtime fails', async () => {
     const result = await runAgentRuntime({
       mode: 'report',

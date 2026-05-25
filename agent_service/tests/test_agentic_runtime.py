@@ -56,6 +56,69 @@ class FakeAgent:
         }
 
 
+class SupervisorToolCallingFactory:
+    def __init__(self):
+        self.supervisor_tool_names = []
+        self.agent_tool_names = []
+
+    def __call__(self, **kwargs):
+        tools = kwargs["tools"]
+        return SupervisorToolCallingAgent(tools, self)
+
+
+class SupervisorToolCallingAgent:
+    def __init__(self, tools, factory):
+        self.tools = tools
+        self.factory = factory
+
+    def invoke(self, payload):
+        tool_names = [tool.name for tool in self.tools]
+        call_tools = [tool for tool in self.tools if tool.name.startswith("call_")]
+        if call_tools:
+            self.factory.supervisor_tool_names = tool_names
+            preferred = next(
+                tool for tool in call_tools
+                if tool.name == "call_cost_modeling_agent"
+            )
+            preferred.invoke({"question": "Inspect monthly cost evidence."})
+            return {
+                "structured_response": {
+                    "answer": "Supervisor called the Cost Modeling Agent.",
+                    "report": "Supervisor report cites delegated agent evidence.",
+                    "usedTools": [preferred.name],
+                    "toolResultRefs": ["tool:monthlyAiCogs"],
+                    "warnings": [],
+                }
+            }
+
+        self.factory.agent_tool_names.append(tool_names)
+        assert set(tool_names).isdisjoint(FORBIDDEN_AGENT_TOOL_NAMES)
+        return {
+            "structured_response": {
+                "events": [
+                    {
+                        "type": "analysis",
+                        "message": "Cost Modeling Agent checked tool:monthlyAiCogs.",
+                        "toolResultRefs": ["tool:monthlyAiCogs"],
+                        "riskCardIds": [],
+                        "usedTools": ["lookup_snapshot_value"],
+                        "stance": "support",
+                        "evidenceWarnings": [],
+                        "nextQuestion": "Should Finance Ops review margin policy next?",
+                    }
+                ],
+                "answer": "Cost evidence is grounded in tool:monthlyAiCogs.",
+                "report": "Cost Modeling Agent report grounded in tool:monthlyAiCogs.",
+                "usedTools": ["lookup_snapshot_value"],
+                "toolResultRefs": ["tool:monthlyAiCogs"],
+                "riskCardIds": [],
+                "decisionIds": [],
+                "evidenceRefs": [],
+                "warnings": [],
+            }
+        }
+
+
 def test_agent_tool_registry_is_read_only_and_extensible():
     tools = build_agent_tools(
         tool_results={"monthlyAiCogs": 4820},
@@ -314,8 +377,8 @@ def test_agentic_runtime_uses_create_agent_path_with_structured_response():
     assert fake_agent.invocations
     assert result.llmMode == "provider-llm"
     assert result.primaryAgentId == "cost_modeling"
-    assert result.reviewerAgentIds == ["cost_engine_qa", "finance_ops"]
-    assert result.calledAgentIds == ["cost_modeling", "cost_engine_qa", "finance_ops"]
+    assert result.reviewerAgentIds == []
+    assert result.calledAgentIds == ["cost_modeling"]
     assert result.snapshotVersion == "snapshot:test"
     assert result.usedTools == ["lookup_snapshot_value"]
     assert result.toolResultRefs == ["tool:monthlyAiCogs"]
@@ -326,6 +389,86 @@ def test_agentic_runtime_uses_create_agent_path_with_structured_response():
     assert result.decisionReadiness in {"ready", "needs_review", "blocked"}
     assert isinstance(result.disagreements, list)
     assert isinstance(result.nextQuestions, list)
+
+
+def test_supervisor_provider_path_calls_operating_agent_tools():
+    factory = SupervisorToolCallingFactory()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            question="What is breaking margin?",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:supervisor",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            benchmarkCards=[{"id": "bench-cost", "evidenceId": "benchmark-cost", "tags": ["cost"]}],
+            decisionHistory=[{"id": "decision-cost", "what": "Held routing change until QA"}],
+            officialSourceSnippets=[
+                {"snippetId": "source:openai-pricing#cost", "text": "Official pricing source", "refs": ["source:openai-pricing"]},
+            ],
+        ),
+        model=object(),
+        agent_factory=factory,
+    )
+
+    assert "call_cost_modeling_agent" in factory.supervisor_tool_names
+    assert factory.agent_tool_names
+    assert result.calledAgentIds == ["cost_modeling"]
+    assert result.events[0].agentId == "cost_modeling"
+    assert result.events[0].calledAgentTool == "call_cost_modeling_agent"
+    assert result.events[0].stance == "support"
+    assert result.evidenceCoverage["officialDocs"]["found"] is True
+    assert result.evidenceCoverage["benchmarkEvidence"]["found"] is True
+    assert result.evidenceCoverage["decisionHistory"]["found"] is True
+    assert result.decisionReadiness == "ready"
+
+
+def test_provider_all_hands_forces_all_11_agent_calls_even_if_supervisor_calls_one():
+    factory = SupervisorToolCallingFactory()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="report",
+            activeStage="cost",
+            question="Run all-hands review",
+            executionMode="all_hands",
+            snapshotVersion="snapshot:all-hands-provider",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+        ),
+        model=object(),
+        agent_factory=factory,
+    )
+
+    assert len(result.calledAgentIds) == 11
+    assert len(result.events) == 11
+    assert "call_cost_modeling_agent" in factory.supervisor_tool_names
+
+
+def test_missing_benchmark_keeps_baseline_unavailable_and_needs_review():
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="optimize",
+            question="Can we compare this optimization to a peer baseline?",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:no-benchmark",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            officialSourceSnippets=[
+                {"snippetId": "source:zai-pricing#glm-5", "text": "Official pricing source", "refs": ["source:zai-pricing"]},
+            ],
+            decisionHistory=[{"id": "decision-routing", "what": "Hold routing until QA"}],
+        )
+    )
+
+    assert result.evidenceCoverage["benchmarkEvidence"]["found"] is False
+    assert "baseline_unavailable" in result.evidenceCoverage["benchmarkEvidence"]["warnings"]
+    assert "baseline_unavailable" in result.warnings
+    assert result.decisionReadiness == "needs_review"
+    assert any("baseline" in question.lower() for question in result.nextQuestions)
 
 
 def test_agentic_runtime_fallback_runs_stage_committee_without_provider():

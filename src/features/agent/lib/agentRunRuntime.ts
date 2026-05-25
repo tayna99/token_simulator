@@ -34,14 +34,31 @@ export interface AgenticEvent {
   message: string
   agentId?: string | null
   calledAgentTool?: string | null
+  stance?: 'support' | 'caution' | 'block' | string
   toolResultRefs: string[]
   riskCardIds: string[]
   usedTools?: string[]
   usedCapabilityTools?: string[]
   reviewerAgentIds?: string[]
   evidenceRefs?: string[]
+  evidenceWarnings?: string[]
+  nextQuestion?: string
   basisRefs?: string[]
   assetRefs?: string[]
+}
+
+export interface AgentEvidenceCoverageItem {
+  found: boolean
+  refs: string[]
+  records: unknown[]
+  scores: number[]
+  warnings: string[]
+}
+
+export interface AgentEvidenceCoverage {
+  officialDocs: AgentEvidenceCoverageItem
+  benchmarkEvidence: AgentEvidenceCoverageItem
+  decisionHistory: AgentEvidenceCoverageItem
 }
 
 export interface AgentRunInput {
@@ -70,6 +87,7 @@ export interface AgentRunInput {
   modelReleaseCandidates?: unknown[]
   pricingFactCandidates?: unknown[]
   fxRateSnapshots?: unknown[]
+  ragCollections?: Partial<Record<'official_docs' | 'benchmark_evidence' | 'decision_history', unknown[]>>
   trustInspection?: TrustInspectionResult | null
   formulaVersion?: string
   providerRegistryVersion?: string
@@ -96,6 +114,7 @@ export interface AgentRunResponse {
   riskCardIds: string[]
   decisionIds: string[]
   evidenceRefs: string[]
+  evidenceCoverage: AgentEvidenceCoverage
   assetRefs: string[]
   warnings: string[]
 }
@@ -126,6 +145,48 @@ function unique(items: string[]): string[] {
 
 function frontOperatingAssetRefs(input: AgentRunInput): string[] {
   return (input.frontOperatingSystem?.assets ?? []).map(asset => asset.ref)
+}
+
+function refsFromRecords(records: unknown[], prefix: 'source' | 'evidence' | 'decision'): string[] {
+  return unique(records.flatMap(record => {
+    if (!isRecord(record)) return []
+    const refs = Array.isArray(record.refs) ? record.refs.filter(item => typeof item === 'string') : []
+    const id = typeof record.snippetId === 'string'
+      ? record.snippetId
+      : typeof record.evidenceId === 'string'
+        ? record.evidenceId
+        : typeof record.evidenceRef === 'string'
+          ? record.evidenceRef
+          : typeof record.id === 'string'
+            ? record.id
+            : ''
+    const normalizedId = id
+      ? (id.startsWith(`${prefix}:`) ? id : `${prefix}:${id}`)
+      : ''
+    return [...refs, normalizedId].filter(Boolean)
+  }))
+}
+
+function coverageItem(records: unknown[], refs: string[], missingWarning: string): AgentEvidenceCoverageItem {
+  const found = records.length > 0 || refs.length > 0
+  return {
+    found,
+    refs,
+    records,
+    scores: records.map(() => 1),
+    warnings: found ? [] : [missingWarning],
+  }
+}
+
+function evidenceCoverageFromInput(input: AgentRunInput): AgentEvidenceCoverage {
+  const officialRecords = input.ragCollections?.official_docs ?? input.officialSourceSnippets ?? []
+  const benchmarkRecords = input.ragCollections?.benchmark_evidence ?? input.benchmarkCards ?? []
+  const decisionRecords = input.ragCollections?.decision_history ?? input.decisionHistory ?? []
+  return {
+    officialDocs: coverageItem(officialRecords, refsFromRecords(officialRecords, 'source'), 'official_docs_unavailable'),
+    benchmarkEvidence: coverageItem(benchmarkRecords, refsFromRecords(benchmarkRecords, 'evidence'), 'baseline_unavailable'),
+    decisionHistory: coverageItem(decisionRecords, refsFromRecords(decisionRecords, 'decision'), 'decision_history_unavailable'),
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,6 +269,35 @@ function isAgenticEvent(value: unknown): value is AgenticEvent {
     && Array.isArray(candidate.riskCardIds)
 }
 
+function isEvidenceCoverageItem(value: unknown): value is AgentEvidenceCoverageItem {
+  if (!isRecord(value)) return false
+  return typeof value.found === 'boolean'
+    && Array.isArray(value.refs)
+    && Array.isArray(value.records)
+    && Array.isArray(value.scores)
+    && Array.isArray(value.warnings)
+}
+
+function normalizeCoverageItem(value: unknown, fallback: AgentEvidenceCoverageItem): AgentEvidenceCoverageItem {
+  if (!isEvidenceCoverageItem(value)) return fallback
+  return {
+    found: value.found,
+    refs: isStringArray(value.refs) ? value.refs : fallback.refs,
+    records: Array.isArray(value.records) ? value.records : fallback.records,
+    scores: value.scores.every(score => typeof score === 'number' && Number.isFinite(score)) ? value.scores : fallback.scores,
+    warnings: isStringArray(value.warnings) ? value.warnings : fallback.warnings,
+  }
+}
+
+function normalizeEvidenceCoverage(value: unknown, fallback: AgentEvidenceCoverage): AgentEvidenceCoverage {
+  if (!isRecord(value)) return fallback
+  return {
+    officialDocs: normalizeCoverageItem(value.officialDocs, fallback.officialDocs),
+    benchmarkEvidence: normalizeCoverageItem(value.benchmarkEvidence, fallback.benchmarkEvidence),
+    decisionHistory: normalizeCoverageItem(value.decisionHistory, fallback.decisionHistory),
+  }
+}
+
 function normalizeEvents(candidate: Partial<AgentRunResponse>, fallback: AgentRunResponse): AgenticEvent[] {
   const routeEvents = fallback.events
   if (!Array.isArray(candidate.events)) return routeEvents
@@ -222,12 +312,15 @@ function normalizeEvents(candidate: Partial<AgentRunResponse>, fallback: AgentRu
       calledAgentTool: event.calledAgentTool ?? fallbackEvent?.calledAgentTool ?? (
         fallback.primaryAgentId ? `call_${fallback.primaryAgentId}_agent` : null
       ),
+      stance: event.stance ?? fallbackEvent?.stance ?? 'support',
       toolResultRefs: event.toolResultRefs.length > 0 ? event.toolResultRefs : fallback.toolResultRefs,
       riskCardIds: event.riskCardIds,
       usedTools,
       usedCapabilityTools: isStringArray(event.usedCapabilityTools) ? event.usedCapabilityTools : usedTools,
       reviewerAgentIds: isStringArray(event.reviewerAgentIds) ? event.reviewerAgentIds : fallback.reviewerAgentIds,
       evidenceRefs: isStringArray(event.evidenceRefs) ? event.evidenceRefs : [],
+      evidenceWarnings: isStringArray(event.evidenceWarnings) ? event.evidenceWarnings : [],
+      nextQuestion: typeof event.nextQuestion === 'string' ? event.nextQuestion : '',
       basisRefs: isStringArray(event.basisRefs) ? event.basisRefs : [],
       assetRefs: isStringArray(event.assetRefs) ? event.assetRefs : fallback.assetRefs,
     }
@@ -256,6 +349,7 @@ function normalizeResponse(value: unknown, fallback: AgentRunResponse): AgentRun
     riskCardIds: isStringArray(candidate.riskCardIds) ? candidate.riskCardIds : [],
     decisionIds: isStringArray(candidate.decisionIds) ? candidate.decisionIds : [],
     evidenceRefs: isStringArray(candidate.evidenceRefs) ? candidate.evidenceRefs : [],
+    evidenceCoverage: normalizeEvidenceCoverage(candidate.evidenceCoverage, fallback.evidenceCoverage),
     assetRefs: isStringArray(candidate.assetRefs) ? candidate.assetRefs : fallback.assetRefs,
     warnings: isStringArray(candidate.warnings) ? candidate.warnings : [],
   }
@@ -265,6 +359,12 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
   const refs = toolRefsFrom(input)
   const refsLabel = refs.join(', ') || 'deterministic snapshot'
   const route = routeOperatingAgents(input)
+  const evidenceCoverage = evidenceCoverageFromInput(input)
+  const evidenceWarnings = unique([
+    ...evidenceCoverage.officialDocs.warnings,
+    ...evidenceCoverage.benchmarkEvidence.warnings,
+    ...evidenceCoverage.decisionHistory.warnings,
+  ])
   const agentLabel = (agentId: string) => {
     const agent = (input.operatingAgents ?? []).find(item => stringField(item, 'id') === agentId)
     return stringField(agent, 'label') || agentId
@@ -287,12 +387,15 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
       message: `${agentLabel(agentId)} fallback is grounded in ${refsLabel}.`,
       agentId,
       calledAgentTool: `call_${agentId}_agent`,
+      stance: evidenceWarnings.length > 0 ? 'caution' : 'support',
       toolResultRefs: refs,
       riskCardIds: [],
       usedTools: [],
       usedCapabilityTools: [],
       reviewerAgentIds: route.reviewerAgentIds.filter(reviewerId => reviewerId !== agentId),
       evidenceRefs: [],
+      evidenceWarnings,
+      nextQuestion: evidenceWarnings.includes('baseline_unavailable') ? 'Which peer baseline should be added before adoption?' : '',
       basisRefs: [],
       assetRefs,
     })),
@@ -303,6 +406,7 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
     disagreements: route.reviewerAgentIds.map(reviewerId => `${reviewerId} should review ${route.primaryAgentId}'s recommendation before adoption.`),
     decisionReadiness: 'needs_review',
     nextQuestions: [
+      ...(evidenceWarnings.includes('baseline_unavailable') ? ['Which peer baseline should be added before adoption?'] : []),
       'Confirm provider runtime availability before treating AI interpretation as LLM assisted.',
       'Review the cited deterministic refs before adopting a recommendation.',
     ],
@@ -316,8 +420,9 @@ function fallbackResponse(input: AgentRunInput, warning = 'agentic runtime unava
     riskCardIds: [],
     decisionIds: [],
     evidenceRefs: [],
+    evidenceCoverage,
     assetRefs,
-    warnings,
+    warnings: unique([...warnings, ...evidenceWarnings]),
   }
 }
 

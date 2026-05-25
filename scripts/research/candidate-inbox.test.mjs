@@ -35,4 +35,25 @@ describe('partitionCandidateInbox', () => {
     expect(inbox.reviewCandidates).toHaveLength(1)
     expect(inbox.noisyCandidates).toHaveLength(0)
   })
+
+  it('splits FX and region review candidates into explicit inbox queues', () => {
+    const inbox = partitionCandidateInbox([
+      candidate('qwen-cny', {
+        confidence: 'high',
+        warnings: [],
+        status: 'needs_fx_review',
+        modelFamily: 'qwen',
+      }),
+      candidate('yi-region', {
+        confidence: 'medium',
+        warnings: ['pricing_unavailable'],
+        status: 'needs_region_review',
+        modelFamily: 'yi',
+      }),
+    ])
+
+    expect(inbox.needsFxReview.map(item => item.candidateId)).toEqual(['qwen-cny'])
+    expect(inbox.needsRegionReview.map(item => item.candidateId)).toEqual(['yi-region'])
+    expect(inbox.reviewCandidates.map(item => item.candidateId)).toEqual([])
+  })
 })

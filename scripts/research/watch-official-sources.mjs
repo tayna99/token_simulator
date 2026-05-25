@@ -11,6 +11,7 @@ import { extractOfficialFacts } from './extract-official-facts.mjs'
 import { partitionCandidateInbox } from './candidate-inbox.mjs'
 import {
   buildOfficialSourceSnippets,
+  officialSourceSnippetsToRagRecords,
   serializeOfficialSourceSnippetsJsonl,
 } from './official-source-snippets.mjs'
 
@@ -108,6 +109,7 @@ async function main() {
 
   clearTimeout(timeout)
   const inbox = partitionCandidateInbox(allCandidates)
+  const officialDocsRagRecords = officialSourceSnippetsToRagRecords(snippets)
   mkdirSync(ARTIFACT_DIR, { recursive: true })
   const report = {
     generatedAt: capturedAt,
@@ -116,17 +118,27 @@ async function main() {
     changedSources,
     candidateCount: inbox.reviewCandidates.length,
     noisyCandidateCount: inbox.noisyCandidates.length,
+    needsFxReviewCount: inbox.needsFxReview.length,
+    needsRegionReviewCount: inbox.needsRegionReview.length,
     allCandidateCount: allCandidates.length,
     candidates: inbox.reviewCandidates,
     noisyCandidates: inbox.noisyCandidates,
+    needsFxReview: inbox.needsFxReview,
+    needsRegionReview: inbox.needsRegionReview,
     inboxWarnings: inbox.warnings,
     snippetCount: snippets.length,
+    officialDocsRagRecordCount: officialDocsRagRecords.length,
     errors,
   }
   saveJson(resolve(ARTIFACT_DIR, 'latest-report.json'), report)
   writeFileSync(
     resolve(ARTIFACT_DIR, 'official-source-snippets.jsonl'),
     serializeOfficialSourceSnippetsJsonl(snippets),
+    'utf8',
+  )
+  writeFileSync(
+    resolve(ARTIFACT_DIR, 'official-docs-rag.jsonl'),
+    officialDocsRagRecords.map(record => JSON.stringify(record)).join('\n') + (officialDocsRagRecords.length ? '\n' : ''),
     'utf8',
   )
   writeFileSync(
@@ -139,7 +151,10 @@ async function main() {
       `- Changed sources: ${changedSources.length}`,
       `- Review candidate count: ${report.candidateCount}`,
       `- Noisy candidate count: ${report.noisyCandidateCount}`,
+      `- Needs FX review: ${report.needsFxReviewCount}`,
+      `- Needs region review: ${report.needsRegionReviewCount}`,
       `- Snippet count: ${report.snippetCount}`,
+      `- Official docs RAG records: ${report.officialDocsRagRecordCount}`,
       `- Errors: ${errors.length}`,
       '',
       ...changedSources.map(source => `- changed: ${source.id} (${source.url})`),
@@ -156,7 +171,10 @@ async function main() {
     changed: changedSources.length,
     candidates: inbox.reviewCandidates.length,
     noisyCandidates: inbox.noisyCandidates.length,
+    needsFxReview: inbox.needsFxReview.length,
+    needsRegionReview: inbox.needsRegionReview.length,
     snippets: snippets.length,
+    officialDocsRagRecords: officialDocsRagRecords.length,
     errors: errors.length,
     artifact: 'artifacts/research/official-watch/latest-report.json',
   }, null, 2))
