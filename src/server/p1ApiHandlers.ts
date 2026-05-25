@@ -20,8 +20,10 @@ import {
 import {
   normalizeSdkLiteUsageEvent,
   approveExternalAction,
+  buildRetentionAutomationPlan,
   buildExternalActionDraft,
   executeExternalAction,
+  runRetentionJobs,
   type P1ExternalAction,
   type P1ExternalConnectorId,
   type P1ExternalConnectorMode,
@@ -35,6 +37,8 @@ import {
   type P1UsageAdapterSource,
   type P1VectorRagEvidenceResult,
   type P1VectorRagKind,
+  type RetentionJob,
+  type RetentionJobRunResult,
 } from '../features/p1/lib/p1OperatingSystem'
 import {
   buildRagContextBlocks,
@@ -82,6 +86,26 @@ export interface AgentApiResponse {
 }
 
 type PersistenceState = 'kv' | 'not_configured'
+type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
+
+export interface RuntimeStatusApiResponse {
+  agentRuntime: {
+    status: RuntimeCapabilityStatus
+    requiredEnv: string[]
+    missingEnv: string[]
+  }
+  persistence: {
+    status: RuntimeCapabilityStatus
+    requiredEnv: string[]
+    missingEnv: string[]
+  }
+  connectors: Record<'slack_webhook' | 'resend_email' | 'stripe_billing' | 'metronome', {
+    status: RuntimeCapabilityStatus
+    requiredEnv: string[]
+    missingEnv: string[]
+  }>
+  error?: string
+}
 
 export interface DecisionApiResponse {
   persistence: PersistenceState
@@ -109,6 +133,19 @@ export interface ReportRunShell {
     configSnapshotRef: string | null
     usageSnapshotRef: string | null
   }
+  artifacts: ReportArtifactRecord[]
+}
+
+export interface ReportArtifactRecord {
+  id: string
+  workspaceId: string
+  reportRunId: string
+  format: 'markdown' | 'json' | 'pdf'
+  contentType: 'text/markdown' | 'application/json' | 'application/pdf'
+  downloadPath: string
+  sizeBytes: number
+  createdAt: string
+  body: string
 }
 
 export interface ReportApiResponse {
@@ -166,6 +203,13 @@ export interface P1RagEvidenceApiResponse {
   error?: string
 }
 
+export interface ReportDownloadApiResponse {
+  persistence: PersistenceState
+  artifact: ReportArtifactRecord | null
+  content: string
+  error?: string
+}
+
 export interface RagIndexApiResponse {
   persistence: PersistenceState
   indexedCount: number
@@ -179,6 +223,13 @@ export interface P1ExternalActionsApiResponse {
   ledger: P1ExternalActionLedgerEntry[]
   action: P1ExternalAction | null
   execution: P1ExternalActionExecutionResult | null
+  error?: string
+}
+
+export interface RetentionRunApiResponse {
+  persistence: PersistenceState
+  jobs: RetentionJob[]
+  result: RetentionJobRunResult
   error?: string
 }
 
@@ -260,6 +311,19 @@ function contextEnv(context?: P1ApiContext): Record<string, string | undefined> 
   return context?.env ?? (globalThis as {
     process?: { env?: Record<string, string | undefined> }
   }).process?.env ?? {}
+}
+
+function capabilityFromEnv(
+  env: Record<string, string | undefined>,
+  requiredEnv: string[],
+  missingStatus: RuntimeCapabilityStatus = 'unavailable',
+) {
+  const missingEnv = requiredEnv.filter(key => !env[key])
+  return {
+    status: missingEnv.length === 0 ? 'provider_llm' as const : missingStatus,
+    requiredEnv,
+    missingEnv,
+  }
 }
 
 function normalizedWorkspaceId(body: unknown, query: Record<string, string | string[] | undefined> = {}): string | null {
@@ -393,15 +457,69 @@ function emptyReportRun(
   persistence: PersistenceState = 'not_configured',
   configSnapshotRef: string | null = null,
   usageSnapshotRef: string | null = null,
+  workspaceId = 'workspace-demo',
 ): ReportRunShell {
+  const id = `report-run-${period}`
+  const createdAt = new Date().toISOString()
+  const snapshotRefs = { decisionIds, configSnapshotRef, usageSnapshotRef }
   return {
-    id: `report-run-${period}`,
+    id,
     period,
     decisionIds,
     persistence,
-    createdAt: new Date().toISOString(),
-    snapshotRefs: { decisionIds, configSnapshotRef, usageSnapshotRef },
+    createdAt,
+    snapshotRefs,
+    artifacts: buildReportArtifacts({ workspaceId, reportRunId: id, period, decisionIds, snapshotRefs, createdAt }),
   }
+}
+
+function artifactSize(body: string): number {
+  return new TextEncoder().encode(body).length
+}
+
+function buildReportArtifacts(input: {
+  workspaceId: string
+  reportRunId: string
+  period: string
+  decisionIds: string[]
+  snapshotRefs: ReportRunShell['snapshotRefs']
+  createdAt: string
+}): ReportArtifactRecord[] {
+  const markdown = [
+    `# ${input.reportRunId}`,
+    '',
+    `Period: ${input.period}`,
+    `Decision refs: ${input.decisionIds.join(', ') || 'none'}`,
+    `Config snapshot: ${input.snapshotRefs.configSnapshotRef ?? 'none'}`,
+    `Usage snapshot: ${input.snapshotRefs.usageSnapshotRef ?? 'none'}`,
+  ].join('\n')
+  const json = JSON.stringify({
+    reportRunId: input.reportRunId,
+    workspaceId: input.workspaceId,
+    period: input.period,
+    decisionIds: input.decisionIds,
+    snapshotRefs: input.snapshotRefs,
+    createdAt: input.createdAt,
+  }, null, 2)
+  const pdf = ['%PDF-1.4', `% AgentCost report artifact ${input.reportRunId}`, markdown, '%%EOF'].join('\n')
+  const basePath = `/api/reports/${input.reportRunId}/download`
+  const rows = [
+    { format: 'markdown' as const, contentType: 'text/markdown' as const, body: markdown },
+    { format: 'json' as const, contentType: 'application/json' as const, body: json },
+    { format: 'pdf' as const, contentType: 'application/pdf' as const, body: pdf },
+  ]
+
+  return rows.map(row => ({
+    id: `report-artifact:${input.reportRunId}:${row.format}`,
+    workspaceId: input.workspaceId,
+    reportRunId: input.reportRunId,
+    format: row.format,
+    contentType: row.contentType,
+    downloadPath: `${basePath}?artifactId=report-artifact:${input.reportRunId}:${row.format}`,
+    sizeBytes: artifactSize(row.body),
+    createdAt: input.createdAt,
+    body: row.body,
+  }))
 }
 
 function coerceDecisions(value: unknown): Decision[] {
@@ -550,6 +668,27 @@ export async function handleConfigurationApi(
     if (isStorageNotConfigured(error)) return { status: 503, body: { ...base, error: 'storage_not_configured' } }
     return { status: 500, body: { ...base, error: 'configuration_persistence_failed' } }
   }
+}
+
+export async function handleRuntimeStatusApi(
+  method: string,
+  _body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<RuntimeStatusApiResponse>> {
+  const env = contextEnv(context)
+  const connector = (requiredEnv: string[]) => capabilityFromEnv(env, requiredEnv, 'connector_not_configured')
+  const body: RuntimeStatusApiResponse = {
+    agentRuntime: capabilityFromEnv(env, ['OPENAI_API_KEY', 'AGENT_SERVICE_URL']),
+    persistence: capabilityFromEnv(env, ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY']),
+    connectors: {
+      slack_webhook: connector(['SLACK_WEBHOOK_URL']),
+      resend_email: connector(['RESEND_API_KEY']),
+      stripe_billing: connector(['STRIPE_SECRET_KEY']),
+      metronome: connector(['METRONOME_API_KEY']),
+    },
+  }
+  if (method !== 'GET') return { status: 405, body: { ...body, error: 'Method not allowed' } }
+  return { status: 200, body }
 }
 
 export async function handleUsageImportApi(
@@ -1101,6 +1240,47 @@ export async function handleP1ExternalActionsApi(
   }
 }
 
+export async function handleRetentionRunApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<RetentionRunApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const emptyResult = runRetentionJobs({ jobs: [], storedArtifactIds: [], executedAt: (context.now?.() ?? new Date()).toISOString() })
+  const base: RetentionRunApiResponse = { persistence: 'not_configured', jobs: [], result: emptyResult }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  const store = contextStore(context)
+  const jobsKey = workspaceKey(workspaceId, 'retention-jobs')
+
+  try {
+    if (method === 'GET') {
+      const jobs = await store.getJson<RetentionJob[]>(jobsKey) ?? []
+      return { status: 200, body: { persistence: store.persistence, jobs, result: emptyResult } }
+    }
+    if (method !== 'POST') {
+      return { status: 405, body: { ...base, persistence: store.persistence, error: 'Method not allowed' } }
+    }
+    const plan = buildRetentionAutomationPlan({
+      workspaceId,
+      hasRawUpload: isObject(body) && body.hasRawUpload === true,
+      hasRawPrompt: isObject(body) && body.hasRawPrompt === true,
+      hasApiKey: isObject(body) && body.hasApiKey === true,
+      hasPii: isObject(body) && body.hasPii === true,
+    })
+    const result = runRetentionJobs({
+      jobs: plan.jobs,
+      storedArtifactIds: plan.storedArtifacts,
+      executedAt: (context.now?.() ?? new Date()).toISOString(),
+    })
+    const jobs = [...result.completedJobs, ...result.blockedJobs, ...plan.jobs.filter(job => job.status !== 'scheduled')]
+    await store.setJson(jobsKey, jobs)
+    return { status: 202, body: { persistence: store.persistence, jobs, result } }
+  } catch (error) {
+    if (isStorageNotConfigured(error)) return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+    return { status: 500, body: { ...base, error: 'retention_run_failed' } }
+  }
+}
+
 function failedShare(summary: UsageImportSummary): number {
   if (summary.rows.length === 0) return 0
   const failed = summary.rows.filter(row => ['failed', 'error', 'timeout', 'retry'].includes((row.status ?? '').toLowerCase())).length
@@ -1196,7 +1376,7 @@ export async function handleReportsApi(
     const decisionIds = isObject(body) ? stringArray(body.decisionIds) : []
     const configSnapshotRef = isObject(body) && typeof body.configSnapshotRef === 'string' ? body.configSnapshotRef : null
     const usageSnapshotRef = isObject(body) && typeof body.usageSnapshotRef === 'string' ? body.usageSnapshotRef : null
-    const reportRun = emptyReportRun(period, decisionIds, store.persistence, configSnapshotRef, usageSnapshotRef)
+    const reportRun = emptyReportRun(period, decisionIds, store.persistence, configSnapshotRef, usageSnapshotRef, workspaceId)
     const existing = await store.getJson<ReportRunShell[]>(key) ?? []
     const reportRuns = [reportRun, ...existing]
     await store.setJson(key, reportRuns)
@@ -1207,6 +1387,34 @@ export async function handleReportsApi(
       return { status: 503, body: { persistence: 'not_configured', reportRun: fallbackRun, reportRuns: [], error: 'storage_not_configured' } }
     }
     return { status: 500, body: { persistence: 'not_configured', reportRun: fallbackRun, reportRuns: [], error: 'report_persistence_failed' } }
+  }
+}
+
+export async function handleReportDownloadApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<ReportDownloadApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const base: ReportDownloadApiResponse = { persistence: 'not_configured', artifact: null, content: '' }
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+  if (method !== 'GET') return { status: 405, body: { ...base, error: 'Method not allowed' } }
+
+  const reportId = queryValue(context.query ?? {}, 'reportId') ?? (isObject(body) && typeof body.reportId === 'string' ? body.reportId : '')
+  const artifactId = queryValue(context.query ?? {}, 'artifactId') ?? (isObject(body) && typeof body.artifactId === 'string' ? body.artifactId : '')
+  const store = contextStore(context)
+
+  try {
+    const reportRuns = await store.getJson<ReportRunShell[]>(workspaceKey(workspaceId, 'reports')) ?? []
+    const reportRun = reportRuns.find(item => item.id === reportId)
+    const artifact = reportRun?.artifacts.find(item => item.id === artifactId) ?? null
+    if (!reportRun || !artifact) {
+      return { status: 404, body: { ...base, persistence: store.persistence, error: 'report_artifact_not_found' } }
+    }
+    return { status: 200, body: { persistence: store.persistence, artifact, content: artifact.body } }
+  } catch (error) {
+    if (isStorageNotConfigured(error)) return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+    return { status: 500, body: { ...base, error: 'report_download_failed' } }
   }
 }
 

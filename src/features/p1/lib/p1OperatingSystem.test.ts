@@ -17,6 +17,7 @@ import {
   retrieveP1VectorRagEvidence,
   normalizeP1UsageAdapterExport,
   retrieveP1RagEvidence,
+  runRetentionJobs,
   selectBenchmarkBasis,
 } from './p1OperatingSystem'
 
@@ -493,7 +494,31 @@ describe('p1OperatingSystem', () => {
     expect(unavailable.status).toBe('baseline_unavailable')
     expect(peer.basis).toBe('verified_public_evidence')
     expect(retention.tasks.map(task => task.id)).toContain('raw_upload_deletion_reminder')
+    expect(retention.jobs.map(job => job.id)).toContain('retention-job:workspace-demo:raw-upload-delete')
     expect(retention.storedArtifacts).not.toContain('raw_prompt')
     expect(retention.storedArtifacts).toContain('normalized_usage_snapshot')
+  })
+
+  it('runs retention jobs and records deletion plus audit export refs', () => {
+    const retention = buildRetentionAutomationPlan({
+      workspaceId: 'workspace-demo',
+      hasRawUpload: true,
+      hasRawPrompt: true,
+      hasApiKey: false,
+      hasPii: false,
+    })
+
+    const result = runRetentionJobs({
+      jobs: retention.jobs,
+      storedArtifactIds: retention.storedArtifacts,
+      executedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    expect(result.completedJobs.map(job => job.id)).toEqual(expect.arrayContaining([
+      'retention-job:workspace-demo:audit-export',
+      'retention-job:workspace-demo:raw-upload-delete',
+    ]))
+    expect(result.deletedArtifactIds).toEqual(['raw_upload'])
+    expect(result.auditExportRefs).toEqual(['audit-export:workspace-demo:2026-05-25'])
   })
 })

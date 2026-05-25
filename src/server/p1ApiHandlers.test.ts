@@ -5,6 +5,9 @@ import {
   handleDecisionsApi,
   handleTeamCostCalibrationApi,
   handleReportsApi,
+  handleReportDownloadApi,
+  handleRetentionRunApi,
+  handleRuntimeStatusApi,
   handleRiskCardsApi,
   handleP1RagEvidenceApi,
   handleRagIndexApi,
@@ -233,7 +236,70 @@ describe('P1 API handlers', () => {
       configSnapshotRef: 'config:p1:workspace-demo',
       usageSnapshotRef: 'usage:p1:workspace-demo:2026-05',
     })
+    expect(response.body.reportRun.artifacts.map(artifact => artifact.format)).toEqual(['markdown', 'json', 'pdf'])
     expect(loaded.body.reportRuns).toHaveLength(1)
+  })
+
+  it('serves persisted report artifacts for download', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleReportsApi('POST', {
+      workspaceId: 'workspace-demo',
+      period: '2026-05',
+      decisionIds: ['decision-1'],
+      configSnapshotRef: 'config:p1:workspace-demo',
+      usageSnapshotRef: 'usage:p1:workspace-demo:2026-05',
+    }, { store })
+    const markdownArtifact = response.body.reportRun.artifacts.find(artifact => artifact.format === 'markdown')
+    const downloaded = await handleReportDownloadApi('GET', undefined, {
+      store,
+      query: {
+        workspaceId: 'workspace-demo',
+        reportId: response.body.reportRun.id,
+        artifactId: markdownArtifact?.id,
+      },
+    })
+
+    expect(downloaded.status).toBe(200)
+    expect(downloaded.body.artifact?.contentType).toBe('text/markdown')
+    expect(downloaded.body.content).toContain('report-run-2026-05')
+    expect(downloaded.body.artifact?.downloadPath).toContain('/api/reports/report-run-2026-05/download')
+  })
+
+  it('runs and persists retention jobs for a workspace', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleRetentionRunApi('POST', {
+      workspaceId: 'workspace-demo',
+      hasRawUpload: true,
+      hasRawPrompt: true,
+      hasApiKey: false,
+      hasPii: false,
+    }, { store, now: () => new Date('2026-05-25T00:00:00.000Z') })
+    const listed = await handleRetentionRunApi('GET', undefined, { store, query: { workspaceId: 'workspace-demo' } })
+
+    expect(response.status).toBe(202)
+    expect(response.body.result.deletedArtifactIds).toEqual(['raw_upload'])
+    expect(response.body.result.auditExportRefs).toEqual(['audit-export:workspace-demo:2026-05-25'])
+    expect(listed.body.jobs.map(job => job.status)).toContain('completed')
+  })
+
+  it('reports runtime capability status from production env', async () => {
+    const missing = await handleRuntimeStatusApi('GET', undefined, { env: {} })
+    const connected = await handleRuntimeStatusApi('GET', undefined, {
+      env: {
+        SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+        OPENAI_API_KEY: 'sk-test',
+        AGENT_SERVICE_URL: 'http://127.0.0.1:8000',
+        RESEND_API_KEY: 're_test',
+      },
+    })
+
+    expect(missing.body.agentRuntime.status).toBe('unavailable')
+    expect(missing.body.persistence.status).toBe('unavailable')
+    expect(connected.body.agentRuntime.status).toBe('provider_llm')
+    expect(connected.body.persistence.status).toBe('provider_llm')
+    expect(connected.body.connectors.resend_email.status).toBe('provider_llm')
+    expect(connected.body.connectors.stripe_billing.status).toBe('connector_not_configured')
   })
 
   it('serves risk cards through the future server RAG endpoint', async () => {

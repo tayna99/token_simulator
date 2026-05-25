@@ -326,6 +326,25 @@ export interface RetentionAutomationPlan {
     label: string
     status: 'scheduled' | 'not_needed'
   }>
+  jobs: RetentionJob[]
+}
+
+export interface RetentionJob {
+  id: string
+  workspaceId: string
+  kind: 'delete_artifact' | 'export_audit'
+  status: 'scheduled' | 'not_needed' | 'completed' | 'blocked'
+  artifactId?: string
+  scheduledFor: string
+  completedAt?: string
+  auditExportRef?: string
+}
+
+export interface RetentionJobRunResult {
+  completedJobs: RetentionJob[]
+  blockedJobs: RetentionJob[]
+  deletedArtifactIds: string[]
+  auditExportRefs: string[]
 }
 
 export interface DataRoomArtifactInventoryItem {
@@ -970,22 +989,42 @@ export function buildRetentionAutomationPlan(input: {
   hasApiKey: boolean
   hasPii: boolean
 }): RetentionAutomationPlan {
+  const normalizedWorkspaceId = workspaceId(input.workspaceId)
   const excludedArtifacts = [
     ...(input.hasRawPrompt ? ['raw_prompt'] : []),
     ...(input.hasApiKey ? ['api_key'] : []),
     ...(input.hasPii ? ['pii_original'] : []),
   ]
+  const storedArtifacts = [
+    'normalized_usage_snapshot',
+    'schema_mapping_profile',
+    'trust_inspection_result',
+    'report_artifact',
+    'decision_ledger_row',
+    'agent_run_metadata',
+  ]
+  const scheduledFor = new Date().toISOString()
+  const jobs: RetentionJob[] = [
+    {
+      id: `retention-job:${normalizedWorkspaceId}:audit-export`,
+      workspaceId: normalizedWorkspaceId,
+      kind: 'export_audit',
+      status: 'scheduled',
+      scheduledFor,
+    },
+    ...(input.hasRawUpload ? [{
+      id: `retention-job:${normalizedWorkspaceId}:raw-upload-delete`,
+      workspaceId: normalizedWorkspaceId,
+      kind: 'delete_artifact' as const,
+      status: 'scheduled' as const,
+      artifactId: 'raw_upload',
+      scheduledFor,
+    }] : []),
+  ]
 
   return {
-    workspaceId: input.workspaceId,
-    storedArtifacts: [
-      'normalized_usage_snapshot',
-      'schema_mapping_profile',
-      'trust_inspection_result',
-      'report_artifact',
-      'decision_ledger_row',
-      'agent_run_metadata',
-    ],
+    workspaceId: normalizedWorkspaceId,
+    storedArtifacts,
     excludedArtifacts,
     tasks: [
       {
@@ -1004,6 +1043,42 @@ export function buildRetentionAutomationPlan(input: {
         status: 'scheduled',
       },
     ],
+    jobs,
+  }
+}
+
+export function runRetentionJobs(input: {
+  jobs: RetentionJob[]
+  storedArtifactIds: string[]
+  executedAt?: string
+}): RetentionJobRunResult {
+  const executedAt = input.executedAt ?? new Date().toISOString()
+  const completedJobs: RetentionJob[] = []
+  const blockedJobs: RetentionJob[] = []
+  const deletedArtifactIds: string[] = []
+  const auditExportRefs: string[] = []
+
+  for (const job of input.jobs) {
+    if (job.status !== 'scheduled') continue
+    if (job.kind === 'delete_artifact') {
+      if (!job.artifactId || input.storedArtifactIds.includes(job.artifactId)) {
+        blockedJobs.push({ ...job, status: 'blocked' })
+        continue
+      }
+      completedJobs.push({ ...job, status: 'completed', completedAt: executedAt })
+      deletedArtifactIds.push(job.artifactId)
+    } else {
+      const auditExportRef = `audit-export:${job.workspaceId}:${executedAt.slice(0, 10)}`
+      completedJobs.push({ ...job, status: 'completed', completedAt: executedAt, auditExportRef })
+      auditExportRefs.push(auditExportRef)
+    }
+  }
+
+  return {
+    completedJobs,
+    blockedJobs,
+    deletedArtifactIds: unique(deletedArtifactIds),
+    auditExportRefs: unique(auditExportRefs),
   }
 }
 
