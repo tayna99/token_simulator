@@ -164,4 +164,103 @@ describe('P1 Vercel API routes', () => {
       stats: { collection: 'official_docs', itemCount: 1 },
     })
   }, 30000)
+
+  it('routes runtime capability status through /api/runtime/status', async () => {
+    const { default: handler } = await import('../../api/runtime/status')
+    const { result, response } = responseCollector()
+
+    await handler({ method: 'GET', body: undefined, query: {} }, response)
+
+    expect(result.statusCode).toBe(200)
+    expect(result.body).toMatchObject({
+      agentRuntime: expect.objectContaining({ status: expect.any(String) }),
+      persistence: expect.objectContaining({ requiredEnv: expect.arrayContaining(['SUPABASE_URL']) }),
+    })
+  })
+
+  it('routes retention runner through /api/retention/run', async () => {
+    vi.doMock('./storage/kvStore', () => ({
+      createKvStoreFromEnv: () => ({
+        persistence: 'kv',
+        values: new Map<string, unknown>(),
+        async getJson<T>(key: string) {
+          return this.values.get(key) as T | undefined
+        },
+        async setJson(key: string, value: unknown) {
+          this.values.set(key, value)
+        },
+      }),
+      isStorageNotConfigured: () => false,
+    }))
+
+    const { default: handler } = await import('../../api/retention/run')
+    const { result, response } = responseCollector()
+
+    await handler({
+      method: 'POST',
+      body: { workspaceId: 'workspace-demo', hasRawUpload: true },
+      query: {},
+    }, response)
+
+    expect(result.statusCode).toBe(202)
+    expect(result.body).toMatchObject({
+      persistence: 'kv',
+      result: { deletedArtifactIds: ['raw_upload'] },
+    })
+  })
+
+  it('routes report artifact downloads through /api/reports/[id]/download', async () => {
+    const values = new Map<string, unknown>()
+    vi.doMock('./storage/kvStore', () => ({
+      createKvStoreFromEnv: () => ({
+        persistence: 'kv',
+        async getJson<T>(key: string) {
+          return values.get(key) as T | undefined
+        },
+        async setJson(key: string, value: unknown) {
+          values.set(key, value)
+        },
+      }),
+      isStorageNotConfigured: () => false,
+    }))
+
+    const { default: reportsHandler } = await import('../../api/reports')
+    const { default: downloadHandler } = await import('../../api/reports/[id]/download')
+    const created = responseCollector()
+
+    await reportsHandler({
+      method: 'POST',
+      body: {
+        workspaceId: 'workspace-demo',
+        period: '2026-05',
+        decisionIds: ['decision-1'],
+      },
+      query: {},
+    }, created.response)
+
+    const report = created.result.body as {
+      reportRun: {
+        id: string
+        artifacts: Array<{ id: string; format: string }>
+      }
+    }
+    const markdownArtifact = report.reportRun.artifacts.find(artifact => artifact.format === 'markdown')
+    const downloaded = responseCollector()
+
+    await downloadHandler({
+      method: 'GET',
+      body: undefined,
+      query: {
+        id: report.reportRun.id,
+        workspaceId: 'workspace-demo',
+        artifactId: markdownArtifact?.id,
+      },
+    }, downloaded.response)
+
+    expect(downloaded.result.statusCode).toBe(200)
+    expect(downloaded.result.body).toMatchObject({
+      artifact: { contentType: 'text/markdown' },
+      content: expect.stringContaining('report-run-2026-05'),
+    })
+  })
 })
