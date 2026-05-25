@@ -178,6 +178,19 @@
 
 ---
 
+## 2026-05-25 Implementation Status
+
+Role projection is now wired into the real stage workspace card order.
+
+- `projectSnapshotForRole(...).panelOrder` is applied through `orderWorkspacePanels` in `App.tsx`.
+- Stage cards keep their existing content and are reordered, not duplicated or dropped.
+- The first role-prioritized card receives the visible emphasis ring.
+- Regression coverage lives in `App.test.tsx`: CEO view moves `margin_risk` before `cost_attribution`, Developer view moves `operational_signals` before `margin_risk`, and required cards remain present after role switching.
+
+The earlier note that `stageWorkspace` stays in a fixed order is no longer current.
+
+---
+
 ## 7. 작업 순서 요약
 
 ```text
