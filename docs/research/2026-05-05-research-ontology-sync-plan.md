@@ -23,22 +23,22 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 현재 Grok evidence는 margin/pricing 방향을 강화했다. 다음 evidence는 아래 표현이 있는 글을 계속 우선 수집한다.
 
-- cost per customer
-- gross margin
-- usage-based pricing
-- AI SaaS margin
-- PM, CEO, Finance, CFO
+- cost per customer(고객당 원가)
+- gross margin(매출총이익률)
+- usage-based pricing(사용량 기반 과금)
+- AI SaaS margin(AI SaaS 마진)
+- PM, CEO, Finance, CFO(제품/대표/재무 의사결정자)
 
 보조 키워드는 아래처럼 둔다.
 
-- cost per report
-- cost per request
-- customer usage
-- production cost
-- pricing decision
-- cost per user
-- unit economics
-- effective margin
+- cost per report(리포트당 원가)
+- cost per request(요청당 원가)
+- customer usage(고객별 사용량)
+- production cost(운영/생산 원가)
+- pricing decision(가격정책 결정)
+- cost per user(사용자당 원가)
+- unit economics(단위 수익성)
+- effective margin(실제 마진)
 
 ## Business Keyword Frequency Tracking(비즈니스 키워드 빈도 추적)
 
@@ -71,26 +71,26 @@ Evidence Board -> Pain Taxonomy -> Product Ontology -> MVP Feature
 
 ### P0 유지/강화
 
-- CSV usage import
+- CSV usage import(CSV 사용량 가져오기)
 - 기능별 비용 Top 분석
 - 고객/비즈니스 단위 원가
 - 기능별 판매가와 gross margin
-- heavy-user profitability
-- usage-based / credit / hybrid pricing simulation
+- heavy-user profitability(많이 쓰는 고객의 수익성)
+- usage-based / credit / hybrid pricing simulation(사용량/크레딧/혼합 과금 시뮬레이션)
 - raw cost vs effective cost(표면 비용과 재시도/검수 비용까지 반영한 실제 비용)
 - PM/CEO/개발자용 보고서
 
 ### P1 보류
 
 - provider별 가격표 override
-- usage/billing reconciliation
+- usage/billing reconciliation(사용량과 청구서 대조)
 - AI COGS 분리 리포트
 
 ### P2 또는 archive(보관 후보) 유지
 
 - 예산/쿼터 가드레일
 - 개발자 진단 화면
-- quota/session limit explainer
+- quota/session limit explainer(쿼터/세션 제한 설명)
 - ontology 화면
 
 ## 다음 실행 순서

@@ -61,8 +61,8 @@ v2.0이 추가로 답하는 질문:
 
 발표용 포지션 후보:
 
-- AI SaaS Cost & Margin Workspace
-- AI Agent Unit Economics Workspace
+- AI SaaS Cost & Margin Workspace(비용·마진 의사결정 워크스페이스)
+- AI Agent Unit Economics Workspace(AI Agent 단위 수익성 워크스페이스)
 - 한국어: AI 기능을 운영하는 SaaS 팀이 LLM 사용량을 고객별·기능별·플랜별 원가로 바꾸고, gross margin과 가격정책까지 판단하게 해주는 워크스페이스
 
 ---
@@ -385,7 +385,7 @@ deterministic 엔진이 책임지는 계산:
 
 AI Agent가 책임지는 해석/작문:
 
-- **Report Output**: Developer breakdown / PM report / CEO·CFO 1-pager / Board-ready summary
+- **Report Output(리포트 출력)**: Developer breakdown(개발자 상세 분해) / PM report(제품 리포트) / CEO·CFO 1-pager(대표·재무 1페이지 요약) / Board-ready summary(이사회·투자자 공유용 요약)
 
 CEO/CFO용 문장 템플릿:
 

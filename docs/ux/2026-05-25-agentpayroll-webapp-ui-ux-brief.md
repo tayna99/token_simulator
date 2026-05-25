@@ -4,21 +4,21 @@
 
 ## 1. 제품 한 문장
 
-AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세션·agent-run 단위로 원가/마진화하고, RAG 근거·Watchtower 검토·rate card·report·external action까지 연결해 "무엇을 승인/보류/수정해야 하는지"를 운영자가 결정하게 만드는 AI 비용·마진 운영 웹앱이다.
+AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세션·agent-run(에이전트 실행) 단위로 원가/마진화하고, RAG(검색으로 근거 문서를 붙여 답하는 방식) 근거·Watchtower(공식 가격/모델 변화를 감시하는 내부 검토함) 검토·rate card(요금표 초안)·report(보고서)·external action(외부 시스템 실행)까지 연결해 "무엇을 승인/보류/수정해야 하는지"를 운영자가 결정하게 만드는 AI 비용·마진 운영 웹앱이다.
 
 ## 2. 핵심 UX 원칙
 
-- 데모라도 production path 위에서만 성공으로 보인다.
-- Supabase/Auth/pgvector/report/agent_service가 없으면 fake dashboard 대신 `unavailable`을 보여준다.
+- 데모라도 production path(실제 운영 경로) 위에서만 성공으로 보인다.
+- Supabase/Auth/pgvector(Postgres 안의 벡터 검색 확장)/report/agent_service가 없으면 fake dashboard(가짜 대시보드) 대신 `unavailable`을 보여준다.
 - RAG는 숫자를 만들지 않는다. RAG는 근거이고, 숫자는 calculator/fact ledger에서만 온다.
-- 모든 실행은 gate-first다. approval, idempotency, rollback metadata, ledger가 없으면 실행 CTA가 아니라 blocked state를 보여준다.
+- 모든 실행은 gate-first(조건 확인 먼저)다. approval(승인), idempotency(중복 실행 방지), rollback metadata(되돌릴 정보), ledger(기록 장부)가 없으면 실행 CTA가 아니라 blocked state를 보여준다.
 - 기본 persona는 `developer`다.
 - 제품명은 `AgentPayroll`이다.
 - report 첫 CTA는 PDF다.
 - Trust Gate는 숨겨진 보안 기능이 아니라 첫 번째 안심 장치다. 업로드 직후 raw prompt/API key/PII/사용 범위를 먼저 말해 구매 장벽을 낮춘다.
-- 역할별 화면은 하나의 진실, 세 개의 렌즈다. Developer/PM/CEO는 같은 snapshot id와 KPI를 보되 질문과 카드 우선순위만 다르다.
-- PDF는 export 부가기능이 아니라 가치 증명물이다. "대시보드에 머무르게 하기"보다 "대표/고객에게 공유 가능한 리포트"를 흐름의 종착점으로 둔다.
-- 초기 MVP는 billing push보다 decision draft를 판다. connector 실행은 admin readiness의 보조/잠금 섹션으로 낮추고, primary outcome은 Rate Card Draft + human decision이다.
+- 역할별 화면은 하나의 진실, 세 개의 렌즈다. Developer/PM/CEO는 같은 snapshot id(분석 시점 묶음 ID)와 KPI(핵심 지표)를 보되 질문과 카드 우선순위만 다르다.
+- PDF는 export(내보내기) 부가기능이 아니라 가치 증명물이다. "대시보드에 머무르게 하기"보다 "대표/고객에게 공유 가능한 리포트"를 흐름의 종착점으로 둔다.
+- 초기 MVP는 billing push(과금 시스템 반영)보다 decision draft(결정 초안)를 판다. connector 실행은 admin readiness(관리자 준비도)의 보조/잠금 섹션으로 낮추고, primary outcome(주요 결과)은 Rate Card Draft + human decision(사람의 결정)이다.
 
 ## 3. 주요 사용자
 
@@ -38,7 +38,7 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 | `/login` | Supabase Auth login | seeded demo account 직접 입력 | auth/env/session error |
 | `/w/[workspaceId]` | 메인 운영 workspace | production checks + KPI + decision flow | `production_demo_unavailable` |
 | `/w/[workspaceId]/admin` | 운영 readiness/admin | corpus, connector, retention, billing status | 권한 없음, env 누락 |
-| `/reports/[id]` | persisted artifact 조회 | PDF first + Markdown/JSON 보조 | artifact 없음 |
+| `/reports/[id]` | persisted artifact(저장된 결과물) 조회 | PDF first + Markdown/JSON 보조 | artifact 없음 |
 
 ## 5. 메인 Workspace 레이아웃
 
@@ -70,7 +70,7 @@ Design/Import stage의 첫 성공 순간은 비용 차트가 아니라 "이 데�
   - "이 데이터는 원가/마진 분석에 필요한 범위로만 사용됩니다."
 - `ready`: 원가/마진 분석으로 진행할 수 있음을 보여준다.
 - `needs_mapping`: PII/plan/customer/revenue 매핑 검토가 필요하며, fake success를 만들지 않는다.
-- `blocked`: usage snapshot, decision history corpus, report artifact로 넘어가지 않는다고 명시한다.
+- `blocked`: usage snapshot(사용량 분석 묶음), decision history corpus(결정 이력 문서 묶음), report artifact(보고서 결과물)로 넘어가지 않는다고 명시한다.
 - 상세 보안/retention 정보는 보조 패널로 두되, 첫 화면은 신뢰와 다음 행동 중심으로 쓴다.
 
 ## 7. Role Projection

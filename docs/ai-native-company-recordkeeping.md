@@ -1,8 +1,8 @@
-# AI-Native Company Recordkeeping Guide
+# AI-Native Company Recordkeeping Guide(AI-native 회사 기록 관리 가이드)
 
 작성일: 2026-05-26
 대상 저장소: `C:\token_simulator`
-목적: PDF의 AI-Native 조직 업무 지침을 `token_simulator`의 실제 문서, 계획, 커밋 기록에 맞춰 사람이 읽고 AI가 이어서 실행할 수 있는 Markdown 기록 양식으로 바꾼다.
+목적: PDF의 AI-Native(AI를 운영 방식의 기본으로 삼는) 조직 업무 지침을 `token_simulator`의 실제 문서, 계획, 커밋 기록에 맞춰 사람이 읽고 AI가 이어서 실행할 수 있는 Markdown 기록 양식으로 바꾼다.
 
 ---
 
@@ -15,8 +15,8 @@ AI-Native 회사의 기록은 "나중에 읽을 문서"가 아니라 "다음 실
 | 현재 자료 | 이미 담고 있는 것 | AI-readable 기록으로 바꾸는 방법 |
 |---|---|---|
 | `PM.md` | 제품 정체성, 핵심 고객, 결정 원칙, 남은 리스크 | PM 결정마다 `ADR-*` decision record로 분리 |
-| `docs/PRD-current-state-2026-05-25.md` | 현재 구현 상태, gap, 상태 모델, production demo 규칙 | 섹션별로 `Work Item`과 `Guardrail`에 연결 |
-| `docs/METRICS_THRESHOLDS.md` | Fact Ledger/Judgment Ledger, threshold snapshot | `policy_snapshot`과 `eval_case`의 기준값으로 저장 |
+| `docs/PRD-current-state-2026-05-25.md` | 현재 구현 상태, gap(남은 차이), 상태 모델, production demo(운영 경로 데모) 규칙 | 섹션별로 `Work Item`과 `Guardrail`에 연결 |
+| `docs/METRICS_THRESHOLDS.md` | Fact Ledger(사실 장부)/Judgment Ledger(판단 장부), threshold snapshot(기준값 묶음) | `policy_snapshot`과 `eval_case`의 기준값으로 저장 |
 | `docs/superpowers/plans/*.md` | 구현 순서, 파일 범위, 검증 명령, 커밋 단위 | `Work Item`의 `input`, `acceptance`, `verification`으로 저장 |
 | git commit | 실제로 변경된 파일과 완료된 단위 | `work_item_id`, `decision_id`, `verification`을 commit body에 연결 |
 
@@ -65,7 +65,7 @@ docs/company-memory/
 
 ## 3. 공통 상태 모델
 
-`token_simulator`는 Decision Log, export gate, connector readiness, production demo unavailable 같은 상태를 이미 중요하게 다룬다. 회사 기록도 같은 방식으로 상태를 고정한다.
+`token_simulator`는 Decision Log(결정 기록), export gate(내보내기 전 확인문), connector readiness(외부 연결 준비도), production demo unavailable(운영 데모 불가) 같은 상태를 이미 중요하게 다룬다. 회사 기록도 같은 방식으로 상태를 고정한다.
 
 | 상태 | 의미 | 다음 행동 |
 |---|---|---|
@@ -181,7 +181,7 @@ related_work_items:
 # Decision Log 없이는 report export를 열지 않는다
 
 ## Context
-AgentPayroll은 단순 계산기가 아니라 AI SaaS 운영 의사결정 워크스페이스다. 리포트는 예쁜 산출물이 아니라 "어떤 결정을 어떤 근거로 내렸는지"를 증명하는 artifact다.
+AgentPayroll은 단순 계산기가 아니라 AI SaaS 운영 의사결정 워크스페이스다. 리포트는 예쁜 산출물이 아니라 "어떤 결정을 어떤 근거로 내렸는지"를 증명하는 artifact(공유 가능한 결과물 파일)다.
 
 ## Options
 1. 사용자가 계산 결과만 보고 즉시 PDF export 가능.
@@ -198,7 +198,7 @@ AgentPayroll은 단순 계산기가 아니라 AI SaaS 운영 의사결정 워크
 
 ## Consequences
 - 장점: report가 실제 운영 판단의 증거가 된다.
-- 장점: billing/rate card 실행 전 human approval chain이 보존된다.
+- 장점: billing(과금)/rate card(요금표 초안) 실행 전 human approval chain(사람 승인 흐름)이 보존된다.
 - 단점: 사용자는 한 번 더 선택해야 하므로 first-run friction이 생긴다.
 
 ## State Transition
@@ -208,7 +208,7 @@ decision_required -> blocked_export
 ```
 
 ## Review Policy
-- decision choice, actor, timestamp, threshold snapshot, fact source snapshot을 함께 저장한다.
+- decision choice(결정 선택), actor(행위자), timestamp(시각), threshold snapshot(기준값 묶음), fact source snapshot(사실 출처 묶음)을 함께 저장한다.
 - AI summary는 decision reason 초안일 뿐 최종 승인 기록이 아니다.
 ```
 
@@ -285,7 +285,7 @@ permissions:
 # Agent Run: Money Leak Run implementation
 
 ## Task
-Money Leak Run에서 명시적 Adopt/Reject/Hold 선택 전에는 report export가 열리지 않게 한다.
+Money Leak Run(돈이 새는 지점 진단 실행)에서 명시적 Adopt/Reject/Hold 선택 전에는 report export(보고서 내보내기)가 열리지 않게 한다.
 
 ## Context Read
 - `PM.md`
@@ -296,7 +296,7 @@ Money Leak Run에서 명시적 Adopt/Reject/Hold 선택 전에는 report export�
 - decision candidate에서 default choice 제거
 - pure state machine test 추가
 - UI decision gate 추가
-- report artifact에 selected decision/trust state 반영
+- report artifact(보고서 결과물)에 selected decision(선택된 결정)/trust state(신뢰 상태) 반영
 
 ## Tool / Command Log
 | command | purpose | result |
@@ -313,7 +313,7 @@ Money Leak Run에서 명시적 Adopt/Reject/Hold 선택 전에는 report export�
   - `b1d3e21`
 
 ## Human Review Required
-- [ ] export gate wording이 고객에게 너무 무겁지 않은지 확인
+- [ ] export gate wording(내보내기 잠금 문구)이 고객에게 너무 무겁지 않은지 확인
 - [ ] decision choice가 실제 report artifact에 저장되는지 확인
 - [ ] production-connected 상태와 deterministic preview 상태가 섞이지 않는지 확인
 
@@ -347,10 +347,10 @@ related_work_items:
 # Eval: report export requires explicit decision
 
 ## Scenario
-사용자가 Money Leak Run diagnosis를 봤지만 아직 Adopt/Reject/Hold를 선택하지 않았다.
+사용자가 Money Leak Run diagnosis(진단)를 봤지만 아직 Adopt/Reject/Hold를 선택하지 않았다.
 
 ## Expected
-- report export CTA는 locked 상태다.
+- report export CTA(보고서 내보내기 버튼)는 locked 상태다.
 - blocked reason은 `decision_required`다.
 - AI summary는 결정처럼 렌더되지 않는다.
 
@@ -394,7 +394,7 @@ source_docs:
 # Production truth first
 
 ## Rule
-production env, Supabase/Auth/Postgres/pgvector, connector ledger, or provider run proof가 없으면 실행 완료처럼 렌더하지 않는다.
+production env(운영 환경), Supabase/Auth/Postgres/pgvector(Postgres 안의 벡터 검색 확장), connector ledger(외부 연결 실행 장부), provider run proof(제공사 실행 증거)가 없으면 실행 완료처럼 렌더하지 않는다.
 
 ## Allowed States
 - `unavailable`
@@ -404,7 +404,7 @@ production env, Supabase/Auth/Postgres/pgvector, connector ledger, or provider r
 - `stale`
 
 ## Forbidden
-- fixture, memory fallback, request body seed를 production evidence처럼 표시
+- fixture(테스트용 고정 데이터), memory fallback(메모리 대체 경로), request body seed(요청 본문 시드)를 production evidence(운영 증거)처럼 표시
 - RAG snippet을 Fact Ledger 승인 없이 숫자 권위로 사용
 - LLM이 비용, 마진, 절감액을 직접 계산
 
@@ -465,8 +465,8 @@ status: "draft"
 ## Still Open
 | work_item | blocker | next action |
 |---|---|---|
-| production demo tenant | Supabase/Auth/RAG/report path not fully connected | define seed + readiness smoke |
-| Watchtower review workflow | accepted fact owner unclear | create review inbox owner decision |
+| production demo tenant | Supabase/Auth/RAG/report path가 완전히 연결되지 않음 | seed + readiness smoke(준비도 짧은 점검) 정의 |
+| Watchtower review workflow | accepted fact owner(승인된 사실 담당자)가 불명확함 | review inbox owner decision 생성 |
 
 ## Metrics
 | metric | current | target | note |
@@ -479,9 +479,9 @@ status: "draft"
 - ADR-2026-05-25-decision-log-before-export
 
 ## Risks
-- TS/Python runtime contracts may drift.
-- role projection may change emphasis but must not change deterministic numbers.
-- demo/static seed data must not appear as production-connected evidence.
+- TS/Python runtime contracts(실행 계약)이 어긋날 수 있다.
+- role projection(역할별 화면 투영)은 강조점을 바꿀 수 있지만 deterministic numbers(결정론 계산 숫자)는 바꾸면 안 된다.
+- demo/static seed data(데모/정적 시드 데이터)는 production-connected evidence(운영 연결 증거)처럼 보이면 안 된다.
 
 ## Next Week
 1. Close production demo tenant missing checklist.
@@ -515,4 +515,3 @@ status: "draft"
 - 어떤 결정이 어떤 구현을 잠그고 있는가?
 - 어떤 상태에서 사람이 승인해야 하는가?
 - 어떤 커밋이 어떤 Work Item을 닫았는가?
-

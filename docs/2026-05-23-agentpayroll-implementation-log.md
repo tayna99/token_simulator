@@ -12,29 +12,29 @@
 
 1. **Python `agent_service/` 추가**
    - FastAPI 기반 `/health`, `/api/agent`, `/api/team-cost-agent` 서비스를 만들었다.
-   - TS가 계산한 숫자를 Python이 해석 이벤트로 바꾸는 P0 fixed pipeline이다.
+   - TS가 계산한 숫자를 Python이 해석 이벤트로 바꾸는 P0 fixed pipeline(정해진 순서의 고정 처리 흐름)이다.
 
 2. **LangChain 1.0 structured output 연결**
    - `init_chat_model`과 `with_structured_output` 흐름을 `interpreter.py`에 넣었다.
    - API key가 없으면 deterministic fallback을 유지한다.
 
-3. **provider live smoke harness 추가**
+3. **provider live smoke harness(실제 제공사 연결을 짧게 확인하는 검증 장치) 추가**
    - `agent_service/scripts/smoke_provider.py`를 추가했다.
    - 실제 provider key가 있을 때만 live smoke를 돌리고, 일반 pytest에는 live call을 넣지 않는다.
 
-4. **P1 dormant `create_agent + @tool` 골격 추가**
+4. **P1 dormant(비활성 대기) `create_agent + @tool` 골격 추가**
    - `interactive_agent.py`에 risk card 조회, snapshot 조회, decision history 조회 도구를 둔 비활성 확장 모듈을 만들었다.
-   - 비용 계산, 마진 계산, savings 추정, budget delta 계산 도구는 금지했다.
+   - 비용 계산, 마진 계산, savings(절감액) 추정, budget delta(예산 차이) 계산 도구는 금지했다.
 
 5. **Python agent service 테스트 추가**
    - interpreter, pipeline, main API, team-cost pipeline, smoke skip/live 조건, dormant tool catalog 테스트를 추가했다.
    - 현재 기준 `uv run pytest`는 16개 테스트가 통과한다.
 
-6. **Vercel/API fallback shell 추가**
+6. **Vercel/API fallback shell(대체 실행 껍데기) 추가**
    - `api/agent.ts`, `api/team-cost-agent.ts`, `api/decisions.ts`, `api/reports.ts`, `api/usage/import.ts` 등을 추가했다.
    - Python 별도 서비스와 Vercel fallback shell을 분리했다.
 
-7. **P1 persistence/server handlers 추가**
+7. **P1 persistence/server handlers(저장/서버 처리기) 추가**
    - `src/server/p1ApiHandlers.ts`, `kvStore.ts` 등을 추가했다.
    - decision, configuration, usage, report, calibration 저장 흐름을 테스트 가능한 서버 핸들러로 만들었다.
 
@@ -47,7 +47,7 @@
    - 팀 비용 숫자는 계속 TS 결정론 경로에서 계산된다.
 
 10. **병목 탐지 엔진 추가**
-    - `bottleneckAnalysis.ts`에서 예산 초과, top agent 집중, cache candidate, agent loop, retry, output-heavy, human review bottleneck 등을 탐지한다.
+    - `bottleneckAnalysis.ts`에서 예산 초과, top agent(가장 비용이 큰 에이전트) 집중, cache candidate(캐싱 후보), agent loop(에이전트 반복 호출), retry(재시도), output-heavy(출력이 과도하게 큰 상태), human review bottleneck(사람 검수 병목) 등을 탐지한다.
     - 이 단계는 "어디서 비용이 새는가"를 찾는 deterministic 판단 레이어다.
 
 11. **최적화 정책 엔진 추가**
@@ -56,9 +56,9 @@
 
 12. **Team-cost LangGraph/runtime 추가**
     - `teamCostGraph`, `teamCostRuntime`, `teamCostLlmRuntime`, `teamCostAgentRuntime` 등을 추가했다.
-    - local deterministic fallback과 server Python runtime을 전환할 수 있다.
+    - local deterministic fallback(로컬 결정론 대체 경로)과 server Python runtime(서버 Python 실행 환경)을 전환할 수 있다.
 
-13. **Risk Card/Risk Auditor 추가**
+13. **Risk Card/Risk Auditor(위험 카드/위험 검토자) 추가**
     - `riskCards.ts`와 관련 테스트를 추가했다.
     - 추천 채택 전에 risk card가 붙어야 하는 구조를 만들었다.
 
@@ -66,7 +66,7 @@
     - `decisionLog.ts`, `decisionStore.ts`를 추가했다.
     - 채택, 거부, 운영 결정 기록을 저장, 불러오기, 삭제, export할 수 있다.
 
-15. **Pricing scenario engine 추가**
+15. **Pricing scenario engine(가격 시나리오 엔진) 추가**
     - flat, usage, credit, hybrid, cap, overage 정책별 마진 시나리오를 계산하는 엔진과 테스트를 추가했다.
     - 가격 정책별 "남는 돈" 비교의 기반이다.
 
@@ -78,16 +78,16 @@
     - plan margin, customer profitability, heavy-user detection, effective cost 계산을 추가했다.
     - 고객과 플랜 단위로 손해, 얇은 마진, heavy user를 볼 수 있는 기반이다.
 
-18. **Operational Signal Summary 추가**
-    - token spike, failed share, missing dimension, top session/agent run 같은 운영 신호 요약을 추가했다.
+18. **Operational Signal Summary(운영 신호 요약) 추가**
+    - token spike(토큰 급증), failed share(실패 비중), missing dimension(누락된 분석 축), top session/agent run 같은 운영 신호 요약을 추가했다.
     - 비용 계산 전에 살펴야 할 운영 이상 신호를 보여준다.
 
 19. **Deliverable/accountability/Plan vs Actual 추가**
-    - deliverable cost attribution, performance summary, agent accountability, calibration loop를 추가했다.
+    - deliverable(산출물) cost attribution(비용 귀속), performance summary(성과 요약), agent accountability(에이전트 책임 추적), calibration loop(보정 루프)를 추가했다.
     - "AI 팀이 실제로 한 일"과 "예상 대비 실제"를 연결한다.
 
 20. **App.tsx를 3-pane 운영 콘솔로 확장**
-    - 좌측 lifecycle nav, 중앙 workspace, 우측 AI interpretation/risk/decision panel 구조가 들어갔다.
+    - 좌측 lifecycle nav(생애주기 내비게이션), 중앙 workspace(작업공간), 우측 AI interpretation/risk/decision panel(AI 해석/위험/결정 패널) 구조가 들어갔다.
     - 앱 본체는 landing page가 아니라 Montage/WDS 운영 콘솔 방향으로 정리됐다.
 
 21. **PRODUCT_UX.md 추가/정리**
@@ -114,7 +114,7 @@
 
 26. **`docs/METRICS_THRESHOLDS.md` 추가**
     - Fact Ledger와 Judgment Ledger를 분리해 문서화했다.
-    - 기준값, 출처, 신뢰도, 조정 가능 여부, P1 vLLM serving economics를 정리했다.
+    - 기준값, 출처, 신뢰도, 조정 가능 여부, P1 vLLM serving economics(서빙 경제성)를 정리했다.
 
 27. **마진 기준 하드코딩 제거**
     - `unitEconomics.ts`, `margin.ts`의 `0.4` thin margin 기준을 `ThresholdPolicy` 주입 방식으로 바꿨다.
@@ -141,7 +141,7 @@
     - 조정값은 deterministic flag 재계산에 반영된다.
 
 33. **Decision Log UI에 policy/fact/AI mode 표시**
-    - 결정 기록 row에서 policy version, fact source count, AI mode를 확인할 수 있게 했다.
+    - 결정 기록 row(장부 행)에서 policy version(정책 버전), fact source count(사실 출처 수), AI mode를 확인할 수 있게 했다.
     - 결정 기록이 단순 결과 목록이 아니라 감사 가능한 ledger가 된다.
 
 34. **Threshold/Policy 테스트 추가**

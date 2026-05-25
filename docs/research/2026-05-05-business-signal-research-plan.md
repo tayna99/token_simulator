@@ -70,14 +70,14 @@ npm run research:validate
 
 예시 키워드:
 
-- usage limit
-- session limit
-- token cost
-- burning tokens
-- wrong token count
-- cost tracking
-- provider cost
-- prompt caching bug
+- usage limit(사용량 제한)
+- session limit(세션 제한)
+- token cost(토큰 비용)
+- burning tokens(토큰을 많이 태우는 상황)
+- wrong token count(잘못된 토큰 집계)
+- cost tracking(비용 추적)
+- provider cost(모델 제공자 비용)
+- prompt caching bug(프롬프트 캐싱 버그)
 
 기록 위치:
 
@@ -85,9 +85,9 @@ npm run research:validate
 
 평가 기준:
 
-- `frequency_signal`
-- `pain_tag`
-- `possible_feature`
+- `frequency_signal`(반복/공감/중요도 신호)
+- `pain_tag`(고통 분류 태그)
+- `possible_feature`(연결 가능한 기능 후보)
 
 주의:
 
@@ -101,22 +101,22 @@ npm run research:validate
 
 핵심 키워드:
 
-- cost per customer
-- gross margin
-- usage-based pricing
-- AI SaaS margin
-- PM / CEO / Finance / CFO
+- cost per customer(고객당 원가)
+- gross margin(매출총이익률)
+- usage-based pricing(사용량 기반 과금)
+- AI SaaS margin(AI SaaS 마진)
+- PM / CEO / Finance / CFO(제품/대표/재무 의사결정자)
 
 보조 키워드:
 
-- cost per report
-- cost per request
-- cost per user
-- unit economics
-- pricing decision
-- customer usage
-- production cost
-- effective margin
+- cost per report(리포트당 원가)
+- cost per request(요청당 원가)
+- cost per user(사용자당 원가)
+- unit economics(단위 수익성)
+- pricing decision(가격정책 결정)
+- customer usage(고객별 사용량)
+- production cost(운영/생산 원가)
+- effective margin(실제 마진)
 
 기록 위치:
 
@@ -125,7 +125,7 @@ npm run research:validate
 
 평가 기준:
 
-- `wtp_score`
+- `wtp_score`(지불 의향 점수)
 - buyer persona(구매자 유형)
 - business metric(사업 지표) 명확성
 - 리포트 공유 대상
@@ -349,9 +349,9 @@ npm run research:validate
 
 산출물:
 
-- Top Pain 10
-- Stream A Top 5
-- Stream B Top 5
+- Top Pain 10(상위 고통 10개)
+- Stream A Top 5(많이 보이는 불만 상위 5개)
+- Stream B Top 5(돈 되는 신호 상위 5개)
 - MVP P0/P1/P2 재정렬
 
 판정:
@@ -364,7 +364,7 @@ npm run research:validate
 
 산출물:
 
-- Developer Token Cost Pain Report v1
+- Developer Token Cost Pain Report v1(개발자 토큰 비용 고통 리포트 v1)
 - PM/CEO용 1-page 샘플 원가/마진 리포트
 - 인터뷰 질문지
 
@@ -381,21 +381,21 @@ npm run research:validate
 
 ### 지금 유지할 P0
 
-- CSV usage import
+- CSV usage import(CSV 사용량 가져오기)
 - 기능별 비용 Top 분석
 - 비즈니스 단위 원가
 - 기능별 판매가와 gross margin
-- raw cost vs effective cost
+- raw cost vs effective cost(표면 비용과 실제 비용 비교)
 - PM/CEO/개발자용 보고서
 
 ### 아직 만들지 않을 것
 
 - 예산/쿼터 가드레일
 - 개발자 진단 화면
-- Gateway/Proxy
+- Gateway/Proxy(요청 관문/대리 서버)
 - Jarvis형 assistant
 - ontology 화면
-- anomaly detection
+- anomaly detection(이상 징후 탐지)
 
 ### 리서치 결과에 따라 바꿀 것
 

@@ -70,14 +70,14 @@ Group B: Paid Value
 
 | 파일 | 역할 | 제품 주장 사용 |
 | --- | --- | --- |
-| [evidence_board.csv](evidence_board.csv) | URL, 날짜, quote가 확인된 공식 검증 원장 | 가능 |
+| [evidence_board.csv](evidence_board.csv) | URL, 날짜, quote(원문 인용)가 확인된 공식 검증 원장 | 가능 |
 | [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv) | quote 없음, 접근 제한, 중복, Group C 후보 보관 | 불가. 검증 후 승격 |
 
 공식 Evidence Board에 들어가려면 다음이 필요하다.
 
 - URL
-- published date
-- exact short quote
+- published date(게시일)
+- exact short quote(짧은 원문 인용)
 - persona
 - group
 - pain_tag 1~3개
@@ -90,23 +90,23 @@ Forbes/Metronome처럼 후보 가치는 있지만 quote를 직접 확인하지 �
 
 ## 4. 시장 구분과 제품 레이어
 
-### Layer 1: Group A Entry Point
+### Layer 1: Group A Entry Point(진입점)
 
 개발자/운영자가 자주 겪는 반복 pain이다. 이 레이어는 제품을 써볼 이유를 만든다.
 
-대표 signal:
+대표 signal(신호):
 
 - token cost spike
 - cache miss / cache TTL 문제
 - quota 소진
-- provider dashboard 지연
+- provider dashboard(공급자 대시보드) 지연
 - session/agent loop 비용 폭증
 
 제품 역할:
 
 - CSV/log import의 필요성을 만든다.
 - 비용이 왜 튀었는지 usage/spike 요약으로 설명한다.
-- 실시간 budget guardrail은 아직 research-gated로 둔다.
+- 실시간 budget guardrail(예산 초과를 막는 안전장치)은 아직 research-gated(리서치로 검증된 뒤 재도입할)로 둔다.
 
 ### Layer 2: Core Engine
 
@@ -124,10 +124,10 @@ Core Engine이 귀속해야 하는 축:
 제품 역할:
 
 - request/token/cost를 여러 attribution dimension으로 묶는다.
-- 비용을 cost object와 business denominator로 바꾼다.
+- 비용을 cost object(비즈니스 원가 단위)와 business denominator(원가를 나눌 기준값)로 바꾼다.
 - Group A의 운영 문제를 Group B의 마진/가격 판단으로 연결한다.
 
-### Layer 3: Group B Paid Value
+### Layer 3: Group B Paid Value(유료 가치)
 
 AI SaaS의 원가·마진·가격정책 문제다. 이쪽이 MVP의 중심이다.
 
@@ -136,7 +136,7 @@ AI SaaS의 원가·마진·가격정책 문제다. 이쪽이 MVP의 중심이다
 - gross margin 압박
 - 고객별 수익성 불명확
 - heavy user 손실
-- AI COGS 미분리
+- AI COGS(매출원가) 미분리
 - usage-based / credit / hybrid pricing 필요
 - CEO/CFO/Finance/Board 보고 필요
 
@@ -148,8 +148,8 @@ AI SaaS의 원가·마진·가격정책 문제다. 이쪽이 MVP의 중심이다
 
 대표 사례:
 
-- 내부 RAG 비용 관리
-- dev team LLM spend tracking
+- 내부 RAG(검색으로 근거 문서를 붙여 답하는 방식) 비용 관리
+- dev team LLM spend tracking(개발팀 LLM 지출 추적)
 - Claude/OpenAI bill surprise
 - cache 최적화
 - 팀 예산 알림
@@ -160,7 +160,7 @@ Group C의 v2 가능성:
 
 - 내부 RAG 비용 대시보드
 - dev team LLM spend tracking
-- bill surprise 알림
+- bill surprise(예상 밖 청구) 알림
 - cache/token waste 최적화
 - 팀/프로젝트/API key별 비용 리포트
 
@@ -168,9 +168,9 @@ Group C의 v2 가능성:
 
 | 구분 | 대상 | 얻는 가치 |
 | --- | --- | --- |
-| Primary buyer | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin, 가격정책 판단, Board reporting |
-| Primary user | AI SaaS developer, backend, ML, infra | CSV/log import, feature mapping, cost attribution, 모델/캐싱/라우팅 판단 |
-| Secondary user | PM, RevOps, CS/Ops | 기능별 원가, rollout 판단, CS escalation 비용 이해 |
+| Primary buyer | Founder, CEO, CFO, Finance | 고객별 수익성, gross margin, 가격정책 판단, Board reporting(이사회 보고) |
+| Primary user | AI SaaS developer, backend, ML, infra | CSV/log import, feature mapping(기능 매핑), cost attribution(비용 귀속), 모델/캐싱/라우팅 판단 |
+| Secondary user | PM, RevOps, CS/Ops | 기능별 원가, rollout(출시·확대 적용) 판단, CS escalation(고객지원 이관) 비용 이해 |
 | Expansion user | 내부 AI 도구 운영팀 | 팀별 비용 추적, bill surprise 방지, cache 최적화 |
 
 ## 6. MVP 목표
@@ -190,7 +190,7 @@ MVP에서 중요한 것은 예쁜 대시보드가 아니라 **의사결정 가�
 4. business denominator와 판매가 입력
 5. customer/feature/plan/session 단위 원가 계산
 6. 고객별 수익성, 플랜별 gross margin, heavy-user 손실 확인
-7. Token/Pricing Simulator에서 volume, model, pricing, heavy-user scenario를 바꿔본다.
+7. Token/Pricing Simulator에서 volume(사용량 규모), model, pricing, heavy-user scenario(많이 쓰는 고객 가정)를 바꿔본다.
 8. seat / usage / credit / hybrid / cap / overage 시뮬레이션
 9. CEO/CFO/PM/Developer report 출력
 ```
@@ -201,9 +201,9 @@ MVP에서 중요한 것은 예쁜 대시보드가 아니라 **의사결정 가�
 
 초기 MVP 입력 방식:
 
-- CSV upload
-- CSV paste
-- 샘플 CSV template
+- CSV upload(파일 업로드)
+- CSV paste(붙여넣기)
+- 샘플 CSV template(양식)
 
 권장 CSV 컬럼:
 
@@ -232,7 +232,7 @@ timestamp,feature,model,input_tokens,output_tokens
 
 ## 9. MVP 핵심 기능
 
-### 9.1 Usage Import
+### 9.1 Usage Import(사용량 가져오기)
 
 CSV를 통해 LLM 사용량을 가져온다.
 
@@ -244,7 +244,7 @@ CSV를 통해 LLM 사용량을 가져온다.
 - total_cost가 있으면 사용하고, 없으면 모델 단가로 계산
 - import 후 feature/customer/model/plan/session별 집계 미리보기
 
-### 9.2 Operational Signal Summary
+### 9.2 Operational Signal Summary(운영 신호 요약)
 
 Group A의 운영 문제를 제품 진입점으로 보여준다.
 
@@ -252,11 +252,11 @@ Group A의 운영 문제를 제품 진입점으로 보여준다.
 
 - token spike 후보 표시
 - cache miss 또는 cacheable context 비중 표시
-- quota나 provider dashboard 지연은 수동/CSV 한계로 assumption임을 표시
+- quota나 provider dashboard 지연은 수동/CSV 한계로 assumption(가정)임을 표시
 - session/agent run 비용 상위 항목 표시
 - 이 섹션의 목적은 alert가 아니라 "어떤 로그를 더 봐야 하는지"를 안내하는 것이다.
 
-### 9.3 Attribution Cost Engine
+### 9.3 Attribution Cost Engine(비용 귀속 엔진)
 
 Core Engine은 비용을 여러 기준으로 재분류한다.
 
@@ -275,7 +275,7 @@ Core Engine은 비용을 여러 기준으로 재분류한다.
 
 > 운영 로그에서 발생한 비용이 어떤 고객, 기능, 모델, 플랜, 세션에 귀속되는가?
 
-### 9.4 Feature-Level Cost
+### 9.4 Feature-Level Cost(기능별 원가)
 
 어떤 기능이 비용을 먹는지 보여준다.
 
@@ -285,13 +285,13 @@ Core Engine은 비용을 여러 기준으로 재분류한다.
 - 기능별 요청 수
 - 기능별 input/output token 비용
 - 전체 비용 기여도
-- Top cost feature 강조
+- Top cost feature(가장 비용이 큰 기능) 강조
 
 핵심 질문:
 
 > 어떤 기능부터 최적화해야 하는가?
 
-### 9.5 Customer-Level Cost
+### 9.5 Customer-Level Cost(고객별 원가)
 
 고객별 AI 원가를 보여준다.
 
@@ -299,15 +299,15 @@ Core Engine은 비용을 여러 기준으로 재분류한다.
 
 - 고객별 월 LLM cost
 - 고객별 요청 수
-- 고객별 cost per request
-- top-decile customer cost vs median
+- 고객별 cost per request(요청당 원가)
+- top-decile customer cost vs median(상위 10% 고객 원가와 중앙값 비교)
 - heavy-user 후보 표시
 
 핵심 질문:
 
 > 어떤 고객이 많이 쓸수록 손해인가?
 
-### 9.6 Plan-Level Margin
+### 9.6 Plan-Level Margin(요금제별 마진)
 
 플랜별로 원가와 마진이 맞는지 보여준다.
 
@@ -323,7 +323,7 @@ Core Engine은 비용을 여러 기준으로 재분류한다.
 
 > 어떤 플랜이 사용량이 늘수록 손해가 되는가?
 
-### 9.7 Unit Economics
+### 9.7 Unit Economics(단위 경제성)
 
 비즈니스 단위당 원가를 계산한다.
 
@@ -334,7 +334,7 @@ rawCostPerMetric = rawMonthlyCost / denominator
 effectiveCostPerMetric = effectiveMonthlyCost / denominator
 ```
 
-denominator 예시:
+denominator(원가를 나눌 기준값) 예시:
 
 - monthly reports
 - monthly tickets
@@ -342,7 +342,7 @@ denominator 예시:
 - monthly customers
 - monthly transactions
 
-### 9.8 Gross Margin
+### 9.8 Gross Margin(매출총이익률)
 
 판매 가격과 원가를 비교한다.
 
@@ -357,21 +357,21 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 - 기능별 판매 가격 입력
 - 고객/기능/플랜/workflow 단위 gross margin
 - margin이 낮거나 음수인 항목 강조
-- raw margin과 effective margin 분리
+- raw margin(순수 API 비용 기준 마진)과 effective margin(품질·운영 부담 포함 마진) 분리
 
-### 9.9 Heavy-User Profitability
+### 9.9 Heavy-User Profitability(많이 쓰는 고객의 수익성)
 
 상위 사용 고객이 수익성에 미치는 영향을 보여준다.
 
 요구사항:
 
-- top 10% customers cost share
+- top 10% customers cost share(상위 10% 고객의 비용 비중)
 - top-decile customer cost vs median
 - heavy user가 전체 margin에 미치는 영향
 - flat pricing에서 손해 가능성 표시
 - 특정 plan에 heavy user가 집중되는지 표시
 
-### 9.10 Pricing & Token Simulator
+### 9.10 Pricing & Token Simulator(가격정책·토큰 시뮬레이터)
 
 가격정책과 토큰 사용량 변화가 원가, 고객별 수익성, gross margin에 어떤 영향을 주는지 비교한다. 이 기능은 MVP의 핵심 엔진이다.
 
@@ -380,23 +380,23 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 - 요청 수가 2배가 되면 월 COGS와 gross margin은 어떻게 바뀌는가?
 - 평균 출력 토큰이 30% 늘면 어떤 기능이 손해가 되는가?
 - heavy user 상위 10%가 더 많이 쓰면 어떤 고객/플랜이 깨지는가?
-- 현재 seat pricing을 usage-based, credit, hybrid pricing으로 바꾸면 margin이 개선되는가?
+- 현재 seat pricing(좌석 기준 가격정책)을 usage-based, credit, hybrid pricing으로 바꾸면 margin이 개선되는가?
 - 후보 모델로 바꾸면 raw cost는 줄지만 effective margin은 나빠지지 않는가?
-- plan별 included usage, cap, overage를 바꾸면 손해 고객 수가 줄어드는가?
+- plan별 included usage(포함 사용량), cap, overage를 바꾸면 손해 고객 수가 줄어드는가?
 
 지원할 시나리오:
 
-- seat-based
-- usage-based
-- credit-based
-- hybrid pricing
-- model switch
-- request volume growth
-- average input/output token growth
-- heavy-user concentration
-- plan mix change
-- session/agent loop reduction
-- cache/batch/output cap savings
+- seat-based(좌석 기준)
+- usage-based(사용량 기준)
+- credit-based(크레딧 기준)
+- hybrid pricing(혼합 가격정책)
+- model switch(모델 교체)
+- request volume growth(요청량 증가)
+- average input/output token growth(평균 입력/출력 토큰 증가)
+- heavy-user concentration(많이 쓰는 고객 집중)
+- plan mix change(요금제 구성 변화)
+- session/agent loop reduction(세션/에이전트 반복 실행 감소)
+- cache/batch/output cap savings(캐시·배치·출력 상한 절감)
 
 요구사항:
 
@@ -407,7 +407,7 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 - 현재 vs 시뮬레이션 결과를 월 비용, 고객당 원가, 플랜별 margin, gross margin, 손해 고객 수로 비교
 - 시뮬레이션은 "예측"이 아니라 "사용자 입력 가정 기반 what-if"로 표시
 
-### 9.11 Raw Cost vs Effective Cost
+### 9.11 Raw Cost vs Effective Cost(순수 비용 vs 실제 체감 비용)
 
 싼 모델이 진짜 싼지 확인한다.
 
@@ -419,15 +419,15 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 
 요구사항:
 
-- retry rate
-- human review rate
-- CS escalation rate
-- review cost per case
-- CS cost per escalation
-- 기능별 assumption template
+- retry rate(재시도율)
+- human review rate(사람 검수율)
+- CS escalation rate(고객지원 이관율)
+- review cost per case(검수 1건당 비용)
+- CS cost per escalation(이관 1건당 비용)
+- 기능별 assumption template(가정 템플릿)
 - 모델 교체 전후 effective margin 비교
-- 사용자 override UI
-- raw cost, quality burden, effective cost를 분리 표시
+- 사용자 override UI(가정값을 직접 덮어쓰는 화면)
+- raw cost, quality burden(품질 때문에 생기는 부담), effective cost를 분리 표시
 
 기본 assumption template:
 
@@ -439,9 +439,9 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 | 리포트 생성 | 6% | 4% | 0.5% | 긴 출력과 검수 가능성 |
 | 코드 생성 | 10% | 0% | 0% | 재시도는 많지만 CS 비용은 낮게 가정 |
 
-이 값은 실제 eval harness가 붙기 전까지 assumption으로 표시한다. 사용자는 모든 값을 직접 수정할 수 있어야 한다.
+이 값은 실제 eval harness(평가 자동화 장치)가 붙기 전까지 assumption으로 표시한다. 사용자는 모든 값을 직접 수정할 수 있어야 한다.
 
-### 9.12 Report Output
+### 9.12 Report Output(리포트 출력)
 
 역할별 리포트를 제공한다.
 
@@ -449,9 +449,9 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 
 리포트 유형:
 
-- Developer: token, model, feature breakdown
+- Developer: token, model, feature breakdown(기능별 분해)
 - PM: 기능별/플랜별 원가, rollout, 가격정책 영향
-- CEO/CFO/Finance: gross margin, 손해 고객, pricing risk, next action
+- CEO/CFO/Finance: gross margin, 손해 고객, pricing risk(가격정책 리스크), next action(다음 조치)
 
 리포트는 복사 가능한 문장 형태여야 한다.
 
@@ -459,10 +459,10 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 
 | 템플릿 | 포함 내용 |
 | --- | --- |
-| CEO/CFO 1-pager | 월 AI COGS, gross margin 영향, 플랜별 margin, heavy-user risk, pricing recommendation, next action |
+| CEO/CFO 1-pager | 월 AI COGS, gross margin 영향, 플랜별 margin, heavy-user risk, pricing recommendation(가격정책 추천), next action |
 | PM 기능별 원가 리포트 | 기능별 비용 Top, 기능별/플랜별 margin, rollout 우선순위, 품질 리스크 |
-| Developer breakdown | feature/model/customer/plan/session별 token, input/output cost, effective cost assumptions, savings levers |
-| Board-ready summary | AI unit economics, margin trend, customer concentration, plan risk, pricing model risk |
+| Developer breakdown | feature/model/customer/plan/session별 token, input/output cost, effective cost assumptions, savings levers(절감 수단) |
+| Board-ready summary | AI unit economics, margin trend(마진 추세), customer concentration(고객 집중도), plan risk, pricing model risk |
 
 CEO/CFO용 리포트에는 최소한 아래 문장이 생성되어야 한다.
 
@@ -472,13 +472,13 @@ CEO/CFO용 리포트에는 최소한 아래 문장이 생성되어야 한다.
 [대안 가격정책]으로 바꾸면 예상 gross margin은 A%에서 B%로 개선됩니다.
 ```
 
-Board-ready summary에는 최소한 아래 관점이 포함되어야 한다.
+Board-ready summary(이사회에 바로 공유할 수 있는 요약)에는 최소한 아래 관점이 포함되어야 한다.
 
 - AI COGS가 별도 비용층으로 생겼는가?
-- AI infrastructure 비용이 gross margin erosion을 만들고 있는가?
-- customer-level cost와 contribution margin이 보이는가?
-- pricing alignment가 usage-driven cost와 맞는가?
-- margin improvement roadmap이 있는가?
+- AI infrastructure(인프라) 비용이 gross margin erosion(매출총이익률 침식)을 만들고 있는가?
+- customer-level cost와 contribution margin(공헌이익률)이 보이는가?
+- pricing alignment(가격정책과 비용 구조의 정렬)가 usage-driven cost(사용량에 따라 늘어나는 비용)와 맞는가?
+- margin improvement roadmap(마진 개선 계획)이 있는가?
 
 ## 10. MVP에서 하지 않을 것
 
@@ -499,7 +499,7 @@ Board-ready summary에는 최소한 아래 관점이 포함되어야 한다.
 
 현재 구매 pain은 실시간 알림보다 **마진/가격정책 판단**에 더 강하다.
 
-## 11. Research-Gated 기능
+## 11. Research-Gated(리서치로 검증된 뒤 재도입할) 기능
 
 | 기능 | 재검토 조건 |
 | --- | --- |
@@ -526,26 +526,26 @@ MVP가 성공하려면 사용자가 다음 질문에 답할 수 있어야 한다
 
 ## 13. 제품 내 핵심 지표
 
-- monthly LLM cost
-- cost by feature
-- cost by customer
-- cost by model
-- cost by plan
-- cost by session
-- cost by agent run
-- cost per request
-- cost per report / ticket / workflow
-- AI COGS
+- monthly LLM cost(월간 LLM 비용)
+- cost by feature(기능별 비용)
+- cost by customer(고객별 비용)
+- cost by model(모델별 비용)
+- cost by plan(요금제별 비용)
+- cost by session(세션별 비용)
+- cost by agent run(에이전트 실행별 비용)
+- cost per request(요청당 비용)
+- cost per report / ticket / workflow(리포트·티켓·워크플로우당 비용)
+- AI COGS(매출원가)
 - gross margin
-- plan gross margin
+- plan gross margin(요금제별 매출총이익률)
 - top-decile customer cost vs median
 - heavy-user cost share
 - raw cost vs effective cost
-- pricing scenario margin
-- input/output cost split
-- cache/batch/output-cap potential savings
+- pricing scenario margin(가격 시나리오별 마진)
+- input/output cost split(입력·출력 비용 분해)
+- cache/batch/output-cap potential savings(캐시·배치·출력 상한으로 가능한 절감액)
 
-## 14. WTP 검증 기준
+## 14. WTP(지불 의향) 검증 기준
 
 강한 구매 신호:
 
@@ -591,7 +591,7 @@ MVP 방향 유지 조건:
 - 모델명, 브랜드명, 가격, 토큰 숫자는 자동 번역으로 깨지지 않게 보호한다.
 - 비용 절감률만 보여주지 않고 quality/risk/effective cost를 함께 보여준다.
 - quote가 검증되지 않은 자료는 제품 주장에 쓰지 않는다.
-- Group C는 expansion evidence로 관리하되 MVP 포지션에 섞지 않는다.
+- Group C는 expansion evidence(확장 시장 근거)로 관리하되 MVP 포지션에 섞지 않는다.
 
 ## 17. 결론
 

@@ -1,6 +1,6 @@
-# AgentCost AI-Native Company 앞단 운영 장치 설계
+# AgentCost AI-Native Company(AI를 운영 방식의 기본으로 삼는 회사) 앞단 운영 장치 설계
 
-> 목적: 이 문서는 AgentCost를 단순 서비스형 MVP가 아니라 **AI-native company의 초기 운영체제**로 만들기 위해, 기존 운영 플레이북 앞단에 붙여야 할 장치들을 정리한 실행 문서다.  
+> 목적: 이 문서는 AgentCost를 단순 서비스형 MVP(최소 기능 서비스 실험)가 아니라 **AI-native company의 초기 운영체제**로 만들기 위해, 기존 운영 플레이북 앞단에 붙여야 할 장치들을 정리한 실행 문서다.
 > 핵심은 고객 문의 이후의 처리뿐 아니라, **고객 유입 → 선별 → 데이터 게이트 → 유료 전환 → 운영 자산화 → 학습 루프**까지 닫힌 구조를 만드는 것이다.
 
 ---
@@ -11,15 +11,15 @@
 
 하지만 AI-native company로 만들려면, 그 앞단에 다음 장치들이 더 붙어야 한다.
 
-- ICP 필터
-- Lead Magnet
-- Self-Assessment
-- Data Readiness Gate
+- ICP 필터(이상적 고객 조건으로 거르는 장치)
+- Lead Magnet(잠재 고객을 끌어오는 진단 콘텐츠)
+- Self-Assessment(자가 진단)
+- Data Readiness Gate(데이터 준비도 확인문)
 - 샘플 리포트
 - 유료 진입 상품 사다리
-- Operating Asset Registry
-- Human Approval Gate
-- Learning Loop
+- Operating Asset Registry(운영 자산 저장소)
+- Human Approval Gate(사람 승인 단계)
+- Learning Loop(반복 학습 루프)
 
 한 줄로 정리하면 다음과 같다.
 
@@ -35,7 +35,7 @@
 
 ### 2.1 ICP 필터 장치
 
-ICP 필터 장치는 **“누가 좋은 고객인가”를 자동으로 판별하는 장치**다.
+ICP(Ideal Customer Profile, 이상적 고객 조건) 필터 장치는 **“누가 좋은 고객인가”를 자동으로 판별하는 장치**다.
 
 #### 입력값
 
@@ -74,7 +74,7 @@ AI가 홈페이지, 문의 내용, 답변 내용을 보고 다음 질문에 답�
 문의가 그냥 오길 기다리면 안 된다.  
 고객이 자기 문제를 인식하게 만드는 앞단 콘텐츠가 필요하다.
 
-이 장치는 단순 블로그가 아니라 **문의 전환용 진단 콘텐츠**다.
+이 Lead Magnet(잠재 고객이 스스로 문제를 느끼고 연락하게 만드는 콘텐츠)은 단순 블로그가 아니라 **문의 전환용 진단 콘텐츠**다.
 
 #### 콘텐츠 예시
 
@@ -82,7 +82,7 @@ AI가 홈페이지, 문의 내용, 답변 내용을 보고 다음 질문에 답�
 - OpenAI 비용이 늘었는데 매출은 그대로라면 봐야 할 지표
 - AI SaaS 정액제가 위험해지는 순간
 - 고객별 LLM 원가를 모르면 생기는 문제
-- AI COGS 1장 진단 샘플 리포트
+- AI COGS(매출원가) 1장 진단 샘플 리포트
 
 #### AI에게 위임 가능한 일
 
@@ -130,7 +130,7 @@ AI가 홈페이지, 문의 내용, 답변 내용을 보고 다음 질문에 답�
 
 ### 2.4 Data Readiness Gate
 
-AI-native company의 앞문은 단순 문의 폼이 아니라 **데이터 준비도 게이트**여야 한다.
+AI-native company의 앞문은 단순 문의 폼이 아니라 **Data Readiness Gate(데이터 준비도 게이트)**여야 한다.
 
 고객이 CSV를 올리기 전, 어떤 데이터를 받고 어떤 데이터를 받지 않는지 명확히 안내해야 한다.
 
@@ -193,7 +193,7 @@ retry_count
 1. 1페이지 Executive Summary
 2. 기능별 비용 breakdown
 3. 고객별 비용 breakdown
-4. 요금제별 gross margin
+4. 요금제별 gross margin(매출총이익률)
 5. 손해 고객 여부
 6. 추천 액션 3개
 7. Decision Log 예시
@@ -229,7 +229,7 @@ retry_count
 
 ### 2.7 Operating Asset Registry
 
-AI-native company가 되려면 운영하면서 생기는 것들을 자산으로 저장해야 한다.
+AI-native company가 되려면 운영하면서 생기는 것들을 Operating Asset Registry(운영 자산 저장소)에 자산으로 저장해야 한다.
 
 이걸 안 만들면 매번 새로 일하게 된다.  
 이걸 만들면 5번째 고객부터 속도가 붙는다.
@@ -290,7 +290,7 @@ AI-native company가 되려면 운영하면서 생기는 것들을 자산으로 
 
 ### 2.8 Human Approval Gate
 
-AI-native company에서 중요한 것은 자동화 자체가 아니라 **승인 구조**다.
+AI-native company에서 중요한 것은 자동화 자체가 아니라 **Human Approval Gate(사람 승인 구조)**다.
 
 AI가 초안을 만들고, 사람은 판단·승인·예외 처리를 맡아야 한다.
 
@@ -321,7 +321,7 @@ AI가 초안을 만들고, 사람은 판단·승인·예외 처리를 맡아야 
 
 ### 2.9 Learning Loop 장치
 
-Learning Loop가 가장 중요하다.
+Learning Loop(반복 학습 루프)가 가장 중요하다.
 
 각 고객이 끝날 때마다 반드시 기록을 남겨야 한다.  
 이 기록이 쌓이면 SaaS 로드맵이 나온다.

@@ -117,7 +117,7 @@ pricing simulation, CEO/CFO report
 
 ## 7. 해결할 문제
 
-### 7.1 Entry Point Pain
+### 7.1 Entry Point Pain(진입점 고통)
 
 개발자와 운영자가 자주 보는 문제다.
 
@@ -129,7 +129,7 @@ pricing simulation, CEO/CFO report
 
 이 pain은 제품 진입점이다. 하지만 여기서만 머물면 고액 지불 의향은 약할 수 있다.
 
-### 7.2 Core Engine Pain
+### 7.2 Core Engine Pain(핵심 엔진이 해결할 고통)
 
 운영 로그가 있어도 비즈니스 원가로 해석되지 않는 문제다.
 
@@ -141,7 +141,7 @@ pricing simulation, CEO/CFO report
 
 이 레이어가 제품의 핵심이다.
 
-### 7.3 Paid Value Pain
+### 7.3 Paid Value Pain(돈을 낼 만한 고통)
 
 돈을 낼 가능성이 큰 문제다.
 
@@ -190,10 +190,10 @@ CEO/CFO / PM / Developer / Board-ready summary
 
 토큰 사용량은 가능하면 아래에서 가져온다.
 
-- provider usage log
-- API response usage field
-- gateway export
-- observability export
+- provider usage log(제공자 사용량 로그)
+- API response usage field(API 응답의 사용량 필드)
+- gateway export(게이트웨이 내보내기 파일)
+- observability export(관측 도구 내보내기 파일)
 - CSV log
 
 사용자가 직접 입력해야 하는 값은 business denominator다.
@@ -232,7 +232,7 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 ## 12. MVP 기능 요구사항
 
-### 12.1 Usage Import
+### 12.1 Usage Import(사용량 가져오기)
 
 목표:
 
@@ -240,16 +240,16 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 요구사항:
 
-- CSV upload
-- CSV paste
-- sample CSV template
+- CSV upload(CSV 파일 업로드)
+- CSV paste(CSV 내용 붙여넣기)
+- sample CSV template(샘플 CSV 템플릿)
 - 필수 컬럼 검증
 - 선택 컬럼 인식
 - total_cost가 있으면 사용
 - total_cost가 없으면 모델 단가 기반 계산
 - input/output token 분리
 
-### 12.2 Operational Signal Summary
+### 12.2 Operational Signal Summary(운영 신호 요약)
 
 목표:
 
@@ -263,7 +263,7 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 - session/agent-run 비용 상위 항목
 - 알림 기능이 아니라 "어떤 로그를 더 봐야 하는지"를 안내
 
-### 12.3 Attribution Cost Engine
+### 12.3 Attribution Cost Engine(비용 귀속 엔진)
 
 목표:
 
@@ -271,12 +271,12 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 귀속 축:
 
-- customer
-- feature
-- model
-- plan
-- session
-- agent run
+- customer(고객)
+- feature(기능)
+- model(모델)
+- plan(요금제)
+- session(사용자 작업 세션)
+- agent run(AI agent 실행 단위)
 
 요구사항:
 
@@ -286,7 +286,7 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 - top cost item 표시
 - missing dimension 안내
 
-### 12.4 Feature-Level Cost
+### 12.4 Feature-Level Cost(기능별 원가)
 
 목표:
 
@@ -300,7 +300,7 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 - 전체 비용 기여도
 - Top cost feature 강조
 
-### 12.5 Customer-Level Cost
+### 12.5 Customer-Level Cost(고객별 원가)
 
 목표:
 
@@ -311,10 +311,10 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 - 고객별 월 LLM cost
 - 고객별 요청 수
 - 고객별 cost per request
-- top-decile customer cost vs median
+- top-decile customer cost vs median(상위 10% 고객 비용과 중앙값 비교)
 - heavy-user 후보 표시
 
-### 12.6 Plan-Level Gross Margin
+### 12.6 Plan-Level Gross Margin(요금제별 매출총이익률)
 
 목표:
 
@@ -328,7 +328,7 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 - free/pro/team/enterprise plan 손실 가능성 표시
 - heavy user가 특정 plan에 몰리는지 표시
 
-### 12.7 Unit Economics
+### 12.7 Unit Economics(단위 수익성)
 
 목표:
 
@@ -350,7 +350,7 @@ rawCostPerMetric = rawMonthlyCost / denominator
 effectiveCostPerMetric = effectiveMonthlyCost / denominator
 ```
 
-### 12.8 Gross Margin
+### 12.8 Gross Margin(매출총이익률)
 
 목표:
 
@@ -369,7 +369,7 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 - raw margin과 effective margin 분리
 - margin이 낮거나 음수인 항목 강조
 
-### 12.9 Heavy-User Profitability
+### 12.9 Heavy-User Profitability(많이 쓰는 고객의 수익성)
 
 목표:
 
@@ -377,13 +377,13 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 
 요구사항:
 
-- top 10% customers cost share
-- top-decile customer cost vs median
+- top 10% customers cost share(상위 10% 고객의 비용 비중)
+- top-decile customer cost vs median(상위 10% 고객 비용과 중앙값 비교)
 - heavy user가 전체 margin에 미치는 영향
 - flat pricing에서 손해 가능성 표시
 - 특정 plan에 heavy user가 집중되는지 표시
 
-### 12.10 Pricing & Token Simulator
+### 12.10 Pricing & Token Simulator(가격정책·토큰 시뮬레이터)
 
 목표:
 
@@ -391,21 +391,21 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 
 지원 시나리오:
 
-- seat-based pricing
-- usage-based pricing
-- credit-based pricing
-- hybrid pricing
-- overage pricing
-- usage cap
-- AI add-on
-- tier upgrade
-- model switch
-- request volume growth
+- seat-based pricing(좌석당 과금)
+- usage-based pricing(사용량 기반 과금)
+- credit-based pricing(크레딧 기반 과금)
+- hybrid pricing(기본료+사용량 혼합 과금)
+- overage pricing(초과 사용 과금)
+- usage cap(사용량 상한)
+- AI add-on(AI 기능 추가 요금)
+- tier upgrade(상위 요금제로 이동)
+- model switch(모델 교체)
+- request volume growth(요청량 증가)
 - 평균 input/output token 증가
-- heavy-user concentration
-- plan mix change
-- session/agent loop reduction
-- cache/batch/output cap savings
+- heavy-user concentration(많이 쓰는 고객 집중)
+- plan mix change(요금제 구성 변화)
+- session/agent loop reduction(세션/에이전트 반복 감소)
+- cache/batch/output cap savings(캐시/배치/출력 상한 절감)
 
 출력:
 
@@ -415,9 +415,9 @@ grossMargin = (sellingPrice - effectiveUnitCost) / sellingPrice
 - 플랜별 gross margin
 - 손해 고객 수
 - 예상 margin 개선
-- pricing recommendation
+- pricing recommendation(가격정책 추천)
 
-### 12.11 Raw Cost vs Effective Cost
+### 12.11 Raw Cost vs Effective Cost(표면 비용과 실제 비용)
 
 목표:
 
@@ -431,17 +431,17 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 
 입력:
 
-- retry rate
-- human review rate
-- CS escalation rate
-- review cost per case
-- CS cost per escalation
+- retry rate(재시도율)
+- human review rate(사람 검수율)
+- CS escalation rate(고객지원 에스컬레이션율)
+- review cost per case(건당 검수 비용)
+- CS cost per escalation(건당 고객지원 에스컬레이션 비용)
 
 주의:
 
 초기 MVP에서는 실제 품질 평가가 아니라 assumption 기반 what-if로 표시한다.
 
-### 12.12 Report Output
+### 12.12 Report Output(리포트 출력)
 
 목표:
 
@@ -451,10 +451,10 @@ effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost
 
 | 리포트 | 포함 내용 |
 | --- | --- |
-| Developer breakdown | token, model, feature, customer, plan, session, agent-run breakdown |
+| Developer breakdown(개발자 상세 분해) | token, model, feature, customer, plan, session, agent-run breakdown |
 | PM report | 기능별 원가, rollout 영향, 가격정책 영향, 품질 리스크 |
 | CEO/CFO 1-pager | AI COGS, gross margin, 손해 고객, pricing risk, next action |
-| Board-ready summary | AI unit economics, margin trend, customer concentration, plan risk, pricing model risk |
+| Board-ready summary(이사회/투자자 공유용 요약) | AI unit economics, margin trend, customer concentration, plan risk, pricing model risk |
 
 CEO/CFO용 문장 예시:
 
@@ -472,7 +472,7 @@ CEO/CFO용 문장 예시:
 - 개발자 진단 전용 화면
 - Slack/Email 알림
 - SDK 자동 수집
-- Gateway / Proxy
+- Gateway / Proxy(요청 관문/대리 서버)
 - 실시간 provider price sync
 - 실제 eval harness 연동
 - ontology 화면
@@ -514,7 +514,7 @@ MVP가 성공하려면 사용자가 다음 질문에 답할 수 있어야 한다
 
 - CSV import 성공률
 - 필수 컬럼 오류율
-- customer/feature/plan attribution coverage
+- customer/feature/plan attribution coverage(고객/기능/요금제 비용 귀속 범위)
 - 보고서 복사/다운로드 횟수
 - pricing simulation 실행 횟수
 - 사용자가 입력한 business denominator 수
@@ -550,58 +550,58 @@ WTP 확인 질문:
 
 ## 18. 로드맵
 
-### Phase 0: Research Foundation
+### Phase 0: Research Foundation(리서치 기반)
 
 상태: 진행 중
 
 - Evidence Board 38개
 - 후보 evidence 44개
-- Pain Taxonomy
-- Token Cost Ontology
+- Pain Taxonomy(고객 고통 분류 체계)
+- Token Cost Ontology(토큰 비용 온톨로지)
 - PRD
 - 경쟁 제품 비교
-- CFO/CEO/Board reporting expression library
+- CFO/CEO/Board reporting expression library(재무/대표/이사회 보고 표현 라이브러리)
 
-### Phase 1: MVP Dashboard
-
-목표:
-
-- CSV import
-- attribution table
-- feature/customer/model/plan/session cost
-- unit economics
-- gross margin
-- pricing simulator
-- report output
-
-### Phase 2: Better Decision Engine
+### Phase 1: MVP Dashboard(MVP 대시보드)
 
 목표:
 
-- raw vs effective cost
-- retry/review/CS cost assumptions
-- invoice reconciliation
-- model switching / routing scenario
-- plan-level overage/credit simulation
+- CSV import(CSV 가져오기)
+- attribution table(비용 귀속 표)
+- feature/customer/model/plan/session cost(기능/고객/모델/요금제/세션별 비용)
+- unit economics(단위 수익성)
+- gross margin(매출총이익률)
+- pricing simulator(가격정책 시뮬레이터)
+- report output(리포트 출력)
 
-### Phase 3: Data Collection Automation
-
-목표:
-
-- SDK wrapper
-- gateway/proxy export
-- observability integration
-- recurring report
-
-### Phase 4: Enterprise / Finance Workflow
+### Phase 2: Better Decision Engine(더 나은 의사결정 엔진)
 
 목표:
 
-- CFO monthly package
-- Board deck export
-- customer profitability monitoring
-- pricing policy recommendation
-- contract/plan design support
+- raw vs effective cost(표면 비용과 실제 비용)
+- retry/review/CS cost assumptions(재시도/검수/고객지원 비용 가정)
+- invoice reconciliation(청구서 대조)
+- model switching / routing scenario(모델 교체/라우팅 시나리오)
+- plan-level overage/credit simulation(요금제별 초과 과금/크레딧 시뮬레이션)
+
+### Phase 3: Data Collection Automation(데이터 수집 자동화)
+
+목표:
+
+- SDK wrapper(SDK 래퍼)
+- gateway/proxy export(게이트웨이/프록시 내보내기)
+- observability integration(관측 도구 연동)
+- recurring report(반복 리포트)
+
+### Phase 4: Enterprise / Finance Workflow(기업/재무 업무 흐름)
+
+목표:
+
+- CFO monthly package(재무 책임자용 월간 패키지)
+- Board deck export(이사회/투자자용 발표자료 내보내기)
+- customer profitability monitoring(고객별 수익성 모니터링)
+- pricing policy recommendation(가격정책 추천)
+- contract/plan design support(계약/요금제 설계 지원)
 
 ## 19. 주요 파일
 

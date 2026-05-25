@@ -1,86 +1,86 @@
-# AgentCost Front Operating System Implementation Plan
+# AgentCost Front Operating System(고객 앞단 운영 체계) 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **agentic worker(에이전트형 작업자)용:** REQUIRED SUB-SKILL(필수 하위 스킬): 이 계획을 task-by-task(작업 단위)로 구현하려면 superpowers:subagent-driven-development(권장) 또는 superpowers:executing-plans를 사용한다. 단계 추적은 checkbox(`- [ ]`) 문법을 사용한다.
 
 **Goal:** `docs/AgentCost_AI_Native_Front_Operating_System.md`의 9개 앞단 운영 장치를 AgentCost 웹앱 안에 고객 선별, 데이터 게이트, 유료 진입, 샘플 리포트, 승인, 학습 루프까지 이어지는 P0 운영 흐름으로 구현한다.
 
-**Architecture:** 비용과 마진 계산은 계속 `src/lib/calculator.ts`와 기존 usage/pricing/domain 모듈이 소유한다. 새 front-operating 모듈은 ICP 점수, Self-Assessment, Data Readiness, 상품 사다리, 운영 자산, 승인 게이트, 학습 기록만 순수 TypeScript 규칙으로 만든다. UI는 기존 `CustomerDashboardEntryPanel` 아래에 붙는 운영 앞문 패널로 시작하고, 실제 CSV 분석은 기존 `UsageImportPanel`, `ImportTrustCheckPanel`, Decision/Approval Log로 연결한다.
+**아키텍처:** 비용과 마진 계산은 계속 `src/lib/calculator.ts`와 기존 usage/pricing/domain module(사용량/가격/도메인 로직 묶음)이 소유한다. 새 front-operating module은 ICP(이상적 고객 프로필) 점수, Self-Assessment(자가 진단), Data Readiness(데이터 준비도), 상품 사다리, 운영 자산, 승인 gate(관문), learning record(학습 기록)만 순수 TypeScript 규칙으로 만든다. UI는 기존 `CustomerDashboardEntryPanel` 아래에 붙는 운영 앞문 panel로 시작하고, 실제 CSV 분석은 기존 `UsageImportPanel`, `ImportTrustCheckPanel`, Decision/Approval Log(결정/승인 기록)로 연결한다.
 
-**Tech Stack:** Vite 6, React 18, TypeScript 5, Tailwind CSS 3, Vitest 4, Testing Library, 기존 `src/shared/ui/primitives`, 기존 `src/lib/format.ts`.
+**기술 스택:** Vite 6, React 18, TypeScript 5, Tailwind CSS 3, Vitest 4, Testing Library, 기존 `src/shared/ui/primitives`, 기존 `src/lib/format.ts`.
 
 ---
 
-## Spec Coverage
+## Spec Coverage(스펙 충족 범위)
 
 이 계획은 스펙의 9개 장치를 다음 P0 산출물로 매핑한다.
 
 - ICP 필터: `scoreLeadFit()` 순수 함수와 UI 점수 카드.
-- Lead Magnet: P0에서는 콘텐츠 생성 자동화가 아니라 전환용 메시지/CTA 카탈로그로 구현한다.
-- Self-Assessment: 8개 질문과 결과 판정 함수, UI 체크리스트.
-- Data Readiness Gate: 받는 컬럼, 받지 않는 데이터, 분석 가능/제한 범위, Trust check 연결.
+- Lead Magnet(고객 관심을 끄는 무료 진입 장치): P0에서는 콘텐츠 생성 자동화가 아니라 전환용 메시지/CTA 카탈로그로 구현한다.
+- Self-Assessment(자가 진단): 8개 질문과 결과 판정 함수, UI 체크리스트.
+- Data Readiness Gate(데이터 준비도 관문): 받는 컬럼, 받지 않는 데이터, 분석 가능/제한 범위, Trust check(신뢰/보안 검사) 연결.
 - 샘플 리포트: 공개 더미 기반 `AI Cost Snapshot` 섹션 목록과 기존 `OnePageReportPanel` 진입.
 - 유료 진입 상품 사다리: Free Fit Check, Data Readiness Check, AI Cost Snapshot, Monthly Review.
-- Operating Asset Registry: 앞단 운영 자산 카탈로그와 localStorage 기록 저장소.
-- Human Approval Gate: AI 가능 작업과 사람 승인 필수 작업의 명시적 matrix.
-- Learning Loop: 고객 종료 후 9개 질문 기록과 제품화 backlog 후보 생성.
+- Operating Asset Registry(운영 자산 목록): 앞단 운영 자산 카탈로그와 localStorage 기록 저장소.
+- Human Approval Gate(사람 승인 관문): AI 가능 작업과 사람 승인 필수 작업의 명시적 matrix(표).
+- Learning Loop(배운 내용을 다음 실험에 반영하는 반복 루프): 고객 종료 후 9개 질문 기록과 제품화 backlog(다음 작업 후보 목록) 후보 생성.
 
 구현하지 않는 범위는 명시적으로 P1이다.
 
 - 실제 결제, 이메일 발송, LinkedIn 발행, Notion/Airtable 동기화.
-- LLM이 홈페이지를 크롤링해 ICP를 자동 판정하는 기능.
+- LLM(대규모 언어 모델)이 홈페이지를 crawling(자동 탐색)해 ICP를 자동 판정하는 기능.
 - 서버/DB 기반 리드 관리. 현재 프로젝트 헌법상 클라이언트 사이드 only를 유지한다.
 
-## File Structure
+## 파일 구조
 
-- Create: `src/features/front-operating/lib/frontOperatingSystem.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingSystem.ts`
   - ICP, Self-Assessment, Data Readiness, Offer Ladder, Approval Gate, Learning Loop 순수 규칙.
   - 비용 계산을 하지 않으며, 표시용 숫자는 UI에서 `format.ts` helper만 사용한다.
 
-- Create: `src/features/front-operating/lib/frontOperatingSystem.test.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingSystem.test.ts`
   - A/B/C ICP, Self-Assessment 결과, Data Readiness scope, 운영 자산, 승인 게이트, Learning Loop를 검증한다.
 
-- Create: `src/features/front-operating/lib/frontOperatingStore.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingStore.ts`
   - client-only localStorage 저장소. 리드 intake, self-assessment, learning loop 기록을 저장/로드/내보내기한다.
 
-- Create: `src/features/front-operating/lib/frontOperatingStore.test.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingStore.test.ts`
   - invalid JSON drop, stable export filename, append 저장을 검증한다.
 
-- Create: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
+- 생성: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
   - 고객용 앞문 패널. ICP fit, Self-Assessment, Data Gate, Sample Report, Offer Ladder, Approval Gate, Learning Loop를 한 화면에서 보여준다.
 
-- Create: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+- 생성: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
   - 렌더, `rerender` state sync, 체크박스 변경, CTA callback을 검증한다.
 
-- Modify: `src/lib/format.ts`
+- 수정: `src/lib/format.ts`
   - KRW 상품 사다리 표시를 위한 `fmtKrw`, `fmtKrwRange`를 추가한다. 컴포넌트에서 `₩`, `toLocaleString`, 숫자 문자열 조합을 직접 하지 않는다.
 
-- Modify: `src/lib/format.test.ts`
+- 수정: `src/lib/format.test.ts`
   - KRW formatter와 NaN guard 테스트를 추가한다.
 
-- Modify: `src/features/trust/lib/dataIntakePolicy.ts`
+- 수정: `src/features/trust/lib/dataIntakePolicy.ts`
   - Data Readiness Gate의 권장 컬럼과 금지 컬럼을 상수로 노출한다.
 
-- Modify: `src/features/trust/lib/securityMiddleware.test.ts`
+- 수정: `src/features/trust/lib/securityMiddleware.test.ts`
   - raw prompt/API key/PII 금지와 recommended attribution column 경고를 유지 검증한다.
 
-- Modify: `src/app/App.tsx`
+- 수정: `src/app/App.tsx`
   - `CustomerDashboardEntryPanel` 아래에 `FrontOperatingSystemPanel`을 배치한다.
   - CTA는 기존 flow만 연다: sample/report는 기존 SparkClaw/report 경로, data gate는 existing import stage, decision log는 existing decision-log stage.
 
-- Modify: `src/app/App.test.tsx`
+- 수정: `src/app/App.test.tsx`
   - app shell에서 front operating panel이 보이는지, SparkClaw sample/report/data gate CTA가 기존 stage를 여는지 검증한다.
 
 ---
 
-### Task 1: KRW Formatting Boundary
+### Task 1: KRW Formatting Boundary(원화 표시 경계)
 
-**Files:**
-- Modify: `src/lib/format.ts`
-- Modify: `src/lib/format.test.ts`
+**파일:**
+- 수정: `src/lib/format.ts`
+- 수정: `src/lib/format.test.ts`
 
-- [ ] **Step 1: Write failing formatter tests**
+- [ ] **Step 1: 실패하는 formatter test 작성**
 
-Append these tests to `src/lib/format.test.ts` and update the import.
+이 test를 `src/lib/format.test.ts`에 추가하고 import를 업데이트한다.
 
 ```ts
 import { fmtCurrency, fmtPercent, fmtTokens, fmtPricePerMillion, fmtDelta, fmtNumber, fmtKrw, fmtKrwRange } from './format'
@@ -108,15 +108,15 @@ describe('fmtKrwRange', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and confirm failure**
+- [ ] **Step 2: focused test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/lib/format.test.ts`
+실행: `npm run test:run -- src/lib/format.test.ts`
 
-Expected: FAIL with missing `fmtKrw` / `fmtKrwRange` exports.
+기대 결과: `fmtKrw` / `fmtKrwRange` export가 없어서 FAIL.
 
-- [ ] **Step 3: Add format helpers in the shared boundary**
+- [ ] **Step 3: shared boundary(공유 경계)에 format helper 추가**
 
-Append this code to `src/lib/format.ts`.
+이 코드를 `src/lib/format.ts`에 추가한다.
 
 ```ts
 export function fmtKrw(n: number): string {
@@ -134,13 +134,13 @@ export function fmtKrwRange(min: number, max: number): string {
 }
 ```
 
-- [ ] **Step 4: Run the focused test and confirm pass**
+- [ ] **Step 4: focused test를 실행하고 통과 확인**
 
-Run: `npm run test:run -- src/lib/format.test.ts`
+실행: `npm run test:run -- src/lib/format.test.ts`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: commit**
 
 ```bash
 git add src/lib/format.ts src/lib/format.test.ts
@@ -149,15 +149,15 @@ git commit -m "feat: add KRW formatting helpers"
 
 ---
 
-### Task 2: Front Operating Domain Rules
+### Task 2: Front Operating Domain Rule(앞단 운영 도메인 규칙)
 
-**Files:**
-- Create: `src/features/front-operating/lib/frontOperatingSystem.ts`
-- Create: `src/features/front-operating/lib/frontOperatingSystem.test.ts`
+**파일:**
+- 생성: `src/features/front-operating/lib/frontOperatingSystem.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingSystem.test.ts`
 
-- [ ] **Step 1: Write failing domain tests**
+- [ ] **Step 1: 실패하는 domain test 작성**
 
-Create `src/features/front-operating/lib/frontOperatingSystem.test.ts`.
+`src/features/front-operating/lib/frontOperatingSystem.test.ts`를 만든다.
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -301,15 +301,15 @@ describe('frontOperatingSystem', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: test를 실행해 실패 확인**
 
-Run: `npm run test:run -- src/features/front-operating/lib/frontOperatingSystem.test.ts`
+실행: `npm run test:run -- src/features/front-operating/lib/frontOperatingSystem.test.ts`
 
-Expected: FAIL because `frontOperatingSystem.ts` does not exist.
+기대 결과: `frontOperatingSystem.ts`가 없기 때문에 FAIL.
 
-- [ ] **Step 3: Create the pure rule module**
+- [ ] **Step 3: pure rule module(순수 규칙 모듈) 생성**
 
-Create `src/features/front-operating/lib/frontOperatingSystem.ts`.
+`src/features/front-operating/lib/frontOperatingSystem.ts`를 만든다.
 
 ```ts
 export type LeadFitGrade = 'A' | 'B' | 'C'
@@ -552,13 +552,13 @@ export function createLearningLoopRecord(input: LearningLoopInput, now = new Dat
 }
 ```
 
-- [ ] **Step 4: Run domain tests**
+- [ ] **Step 4: domain test 실행**
 
-Run: `npm run test:run -- src/features/front-operating/lib/frontOperatingSystem.test.ts`
+실행: `npm run test:run -- src/features/front-operating/lib/frontOperatingSystem.test.ts`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: commit**
 
 ```bash
 git add src/features/front-operating/lib/frontOperatingSystem.ts src/features/front-operating/lib/frontOperatingSystem.test.ts
@@ -567,15 +567,15 @@ git commit -m "feat: add front operating system rules"
 
 ---
 
-### Task 3: Local Operating Records Store
+### Task 3: Local Operating Records Store(로컬 운영 기록 저장소)
 
-**Files:**
-- Create: `src/features/front-operating/lib/frontOperatingStore.ts`
-- Create: `src/features/front-operating/lib/frontOperatingStore.test.ts`
+**파일:**
+- 생성: `src/features/front-operating/lib/frontOperatingStore.ts`
+- 생성: `src/features/front-operating/lib/frontOperatingStore.test.ts`
 
-- [ ] **Step 1: Write failing store tests**
+- [ ] **Step 1: 실패하는 store test 작성**
 
-Create `src/features/front-operating/lib/frontOperatingStore.test.ts`.
+`src/features/front-operating/lib/frontOperatingStore.test.ts`를 만든다.
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -629,15 +629,15 @@ describe('frontOperatingStore', () => {
 })
 ```
 
-- [ ] **Step 2: Run store tests and confirm failure**
+- [ ] **Step 2: store test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/features/front-operating/lib/frontOperatingStore.test.ts`
+실행: `npm run test:run -- src/features/front-operating/lib/frontOperatingStore.test.ts`
 
-Expected: FAIL because `frontOperatingStore.ts` does not exist.
+기대 결과: `frontOperatingStore.ts`가 없기 때문에 FAIL.
 
-- [ ] **Step 3: Create client-side store**
+- [ ] **Step 3: client-side store(브라우저 쪽 저장소) 생성**
 
-Create `src/features/front-operating/lib/frontOperatingStore.ts`.
+`src/features/front-operating/lib/frontOperatingStore.ts`를 만든다.
 
 ```ts
 export const FRONT_OPERATING_STORAGE_KEY = 'token-simulator:front-operating-records'
@@ -701,13 +701,13 @@ export function exportFrontOperatingFileName(nowIso = new Date().toISOString()):
 }
 ```
 
-- [ ] **Step 4: Run store tests**
+- [ ] **Step 4: store test 실행**
 
-Run: `npm run test:run -- src/features/front-operating/lib/frontOperatingStore.test.ts`
+실행: `npm run test:run -- src/features/front-operating/lib/frontOperatingStore.test.ts`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: commit**
 
 ```bash
 git add src/features/front-operating/lib/frontOperatingStore.ts src/features/front-operating/lib/frontOperatingStore.test.ts
@@ -716,15 +716,15 @@ git commit -m "feat: persist front operating records locally"
 
 ---
 
-### Task 4: Data Readiness Gate Policy Surface
+### Task 4: Data Readiness Gate Policy Surface(데이터 준비도 정책 표면)
 
-**Files:**
-- Modify: `src/features/trust/lib/dataIntakePolicy.ts`
-- Modify: `src/features/trust/lib/securityMiddleware.test.ts`
+**파일:**
+- 수정: `src/features/trust/lib/dataIntakePolicy.ts`
+- 수정: `src/features/trust/lib/securityMiddleware.test.ts`
 
-- [ ] **Step 1: Write failing policy expectations**
+- [ ] **Step 1: 실패하는 policy expectation(정책 기대값) 작성**
 
-Update the imports at the top of `src/features/trust/lib/securityMiddleware.test.ts`.
+`src/features/trust/lib/securityMiddleware.test.ts` 상단 import를 업데이트한다.
 
 ```ts
 import {
@@ -734,7 +734,7 @@ import {
 } from './dataIntakePolicy'
 ```
 
-Then append this test inside the existing `describe('inspectUsageImportSecurity', () => { ... })` block.
+그다음 기존 `describe('inspectUsageImportSecurity', () => { ... })` block 안에 이 test를 추가한다.
 
 ```ts
 it('documents the AgentCost data readiness gate columns', () => {
@@ -762,15 +762,15 @@ it('documents the AgentCost data readiness gate columns', () => {
 })
 ```
 
-- [ ] **Step 2: Run trust tests and confirm failure**
+- [ ] **Step 2: trust test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/features/trust/lib/securityMiddleware.test.ts`
+실행: `npm run test:run -- src/features/trust/lib/securityMiddleware.test.ts`
 
-Expected: FAIL because the new constants do not exist.
+기대 결과: 새 constant(상수)가 없기 때문에 FAIL.
 
-- [ ] **Step 3: Add policy constants**
+- [ ] **Step 3: policy constant 추가**
 
-Modify `src/features/trust/lib/dataIntakePolicy.ts`.
+`src/features/trust/lib/dataIntakePolicy.ts`를 수정한다.
 
 ```ts
 export const AGENTCOST_ACCEPTED_USAGE_COLUMNS = [
@@ -796,13 +796,13 @@ export const AGENTCOST_REJECTED_USAGE_COLUMNS = [
 ] as const
 ```
 
-- [ ] **Step 4: Run trust tests**
+- [ ] **Step 4: trust test 실행**
 
-Run: `npm run test:run -- src/features/trust/lib/securityMiddleware.test.ts`
+실행: `npm run test:run -- src/features/trust/lib/securityMiddleware.test.ts`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: commit**
 
 ```bash
 git add src/features/trust/lib/dataIntakePolicy.ts src/features/trust/lib/securityMiddleware.test.ts
@@ -813,13 +813,13 @@ git commit -m "feat: expose AgentCost data readiness policy"
 
 ### Task 5: Front Operating UI Panel
 
-**Files:**
-- Create: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
-- Create: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+**파일:**
+- 생성: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
+- 생성: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
 
-- [ ] **Step 1: Write failing component tests**
+- [ ] **Step 1: 실패하는 component test 작성**
 
-Create `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`.
+`src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`를 만든다.
 
 ```tsx
 import { render, screen } from '@testing-library/react'
@@ -901,15 +901,15 @@ describe('FrontOperatingSystemPanel', () => {
 })
 ```
 
-- [ ] **Step 2: Run component test and confirm failure**
+- [ ] **Step 2: component test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+실행: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
 
-Expected: FAIL because component does not exist.
+기대 결과: component가 없기 때문에 FAIL.
 
-- [ ] **Step 3: Create the component**
+- [ ] **Step 3: component 생성**
 
-Create `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`.
+`src/features/front-operating/components/FrontOperatingSystemPanel.tsx`를 만든다.
 
 ```tsx
 import { useEffect, useMemo, useState } from 'react'
@@ -1080,13 +1080,13 @@ export function FrontOperatingSystemPanel({
 }
 ```
 
-- [ ] **Step 4: Run component tests**
+- [ ] **Step 4: component test 실행**
 
-Run: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+실행: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: commit**
 
 ```bash
 git add src/features/front-operating/components/FrontOperatingSystemPanel.tsx src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx
@@ -1095,15 +1095,15 @@ git commit -m "feat: add front operating system panel"
 
 ---
 
-### Task 6: App Shell Integration
+### Task 6: App Shell Integration(앱 껍데기 통합)
 
-**Files:**
-- Modify: `src/app/App.tsx`
-- Modify: `src/app/App.test.tsx`
+**파일:**
+- 수정: `src/app/App.tsx`
+- 수정: `src/app/App.test.tsx`
 
-- [ ] **Step 1: Write failing app-shell test**
+- [ ] **Step 1: 실패하는 app-shell test 작성**
 
-Append this test to `src/app/App.test.tsx`.
+이 test를 `src/app/App.test.tsx`에 추가한다.
 
 ```tsx
 it('renders the AgentCost front operating system and routes its CTAs into the existing workspace', async () => {
@@ -1124,24 +1124,24 @@ it('renders the AgentCost front operating system and routes its CTAs into the ex
 })
 ```
 
-- [ ] **Step 2: Run app test and confirm failure**
+- [ ] **Step 2: app test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/app/App.test.tsx`
+실행: `npm run test:run -- src/app/App.test.tsx`
 
-Expected: FAIL because the panel is not integrated.
+기대 결과: panel이 통합되지 않았기 때문에 FAIL.
 
-- [ ] **Step 3: Import the panel and lead type**
+- [ ] **Step 3: panel과 lead type import**
 
-Add to `src/app/App.tsx` imports.
+`src/app/App.tsx` import에 추가한다.
 
 ```ts
 import { FrontOperatingSystemPanel } from '../features/front-operating/components/FrontOperatingSystemPanel'
 import type { LeadFitInput } from '../features/front-operating/lib/frontOperatingSystem'
 ```
 
-- [ ] **Step 4: Add default demo lead near existing constants**
+- [ ] **Step 4: 기존 constant 근처에 default demo lead 추가**
 
-Add near the other top-level constants.
+다른 top-level constant 근처에 추가한다.
 
 ```ts
 const DEFAULT_AGENTCOST_FRONT_LEAD: LeadFitInput = {
@@ -1155,9 +1155,9 @@ const DEFAULT_AGENTCOST_FRONT_LEAD: LeadFitInput = {
 }
 ```
 
-- [ ] **Step 5: Mount the panel under the customer entry panel**
+- [ ] **Step 5: customer entry panel 아래에 panel mount**
 
-In the JSX, place this immediately after `CustomerDashboardEntryPanel`.
+JSX에서 `CustomerDashboardEntryPanel` 바로 뒤에 배치한다.
 
 ```tsx
 <FrontOperatingSystemPanel
@@ -1174,13 +1174,13 @@ In the JSX, place this immediately after `CustomerDashboardEntryPanel`.
 />
 ```
 
-- [ ] **Step 6: Run the focused app test**
+- [ ] **Step 6: focused app test 실행**
 
-Run: `npm run test:run -- src/app/App.test.tsx`
+실행: `npm run test:run -- src/app/App.test.tsx`
 
-Expected: PASS. If existing tests fail from text count changes, fix only assertions that are tightly coupled to old first-screen text and keep behavior assertions intact.
+기대 결과: PASS. 기존 test가 text count(문구 개수) 변경 때문에 실패하면, 오래된 첫 화면 문구에 강하게 묶인 assertion(검증문)만 고치고 behavior assertion(동작 검증)은 유지한다.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: commit**
 
 ```bash
 git add src/app/App.tsx src/app/App.test.tsx
@@ -1189,17 +1189,17 @@ git commit -m "feat: wire front operating flow into app shell"
 
 ---
 
-### Task 7: Learning Loop Record Action
+### Task 7: Learning Loop Record Action(학습 루프 기록 동작)
 
-**Files:**
-- Modify: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
-- Modify: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
-- Modify: `src/app/App.tsx`
-- Modify: `src/app/App.test.tsx`
+**파일:**
+- 수정: `src/features/front-operating/components/FrontOperatingSystemPanel.tsx`
+- 수정: `src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+- 수정: `src/app/App.tsx`
+- 수정: `src/app/App.test.tsx`
 
-- [ ] **Step 1: Add failing callback test**
+- [ ] **Step 1: 실패하는 callback test 추가**
 
-Extend the component test.
+component test를 확장한다.
 
 ```tsx
 it('emits a learning loop record for operating asset storage', async () => {
@@ -1225,27 +1225,27 @@ it('emits a learning loop record for operating asset storage', async () => {
 })
 ```
 
-- [ ] **Step 2: Run component test and confirm failure**
+- [ ] **Step 2: component test를 실행하고 실패 확인**
 
-Run: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
+실행: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx`
 
-Expected: FAIL because `onRecordLearning` is not a prop yet.
+기대 결과: `onRecordLearning`이 아직 prop(컴포넌트 속성)이 아니므로 FAIL.
 
-- [ ] **Step 3: Add callback prop and record button**
+- [ ] **Step 3: callback prop과 record button 추가**
 
-Update component props.
+component prop을 업데이트한다.
 
 ```ts
 onRecordLearning?: (record: LearningLoopRecord) => void
 ```
 
-Import these symbols.
+이 symbol(이름)을 import한다.
 
 ```ts
 import { createLearningLoopRecord, type LearningLoopRecord } from '../lib/frontOperatingSystem'
 ```
 
-Add this handler inside the component.
+component 안에 이 handler를 추가한다.
 
 ```ts
 const handleRecordLearning = () => {
@@ -1264,22 +1264,22 @@ const handleRecordLearning = () => {
 }
 ```
 
-Add this button in the Approval + Learning Loop section.
+Approval + Learning Loop section에 이 button을 추가한다.
 
 ```tsx
 <Button size="sm" onClick={handleRecordLearning}>Record Learning Loop</Button>
 ```
 
-- [ ] **Step 4: Wire local storage append in App**
+- [ ] **Step 4: App에서 local storage append 연결**
 
-Import store helper.
+store helper를 import한다.
 
 ```ts
 import { appendFrontOperatingRecord } from '../features/front-operating/lib/frontOperatingStore'
 import type { LearningLoopRecord } from '../features/front-operating/lib/frontOperatingSystem'
 ```
 
-Add handler inside `App`.
+`App` 안에 handler를 추가한다.
 
 ```ts
 const handleRecordFrontOperatingLearning = (record: LearningLoopRecord) => {
@@ -1294,21 +1294,21 @@ const handleRecordFrontOperatingLearning = (record: LearningLoopRecord) => {
 }
 ```
 
-Pass it into the panel.
+panel에 전달한다.
 
 ```tsx
 onRecordLearning={handleRecordFrontOperatingLearning}
 ```
 
-- [ ] **Step 5: Add app-shell storage assertion**
+- [ ] **Step 5: app-shell storage assertion 추가**
 
-Update `src/app/App.test.tsx` imports.
+`src/app/App.test.tsx` import를 업데이트한다.
 
 ```ts
 import { FRONT_OPERATING_STORAGE_KEY } from '../features/front-operating/lib/frontOperatingStore'
 ```
 
-Append this test inside `describe('App AI team operations workspace', () => { ... })`.
+이 test를 `describe('App AI team operations workspace', () => { ... })` 안에 추가한다.
 
 ```tsx
 it('records front operating learning loop entries from the app shell', async () => {
@@ -1324,13 +1324,13 @@ it('records front operating learning loop entries from the app shell', async () 
 
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [ ] **Step 6: focused test 실행**
 
-Run: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx src/features/front-operating/lib/frontOperatingStore.test.ts src/app/App.test.tsx`
+실행: `npm run test:run -- src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx src/features/front-operating/lib/frontOperatingStore.test.ts src/app/App.test.tsx`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: commit**
 
 ```bash
 git add src/features/front-operating/components/FrontOperatingSystemPanel.tsx src/features/front-operating/components/FrontOperatingSystemPanel.test.tsx src/app/App.tsx src/app/App.test.tsx
@@ -1339,41 +1339,41 @@ git commit -m "feat: record front operating learning loop"
 
 ---
 
-### Task 8: Final Verification
+### Task 8: 최종 검증
 
-**Files:**
-- No new source files unless verification finds a scoped regression.
+**파일:**
+- 검증 중 scoped regression(범위가 분명한 회귀)이 발견되지 않으면 새 source file은 없다.
 
-- [ ] **Step 1: Run all tests**
+- [ ] **Step 1: 전체 test 실행**
 
-Run: `npm run test:run`
+실행: `npm run test:run`
 
-Expected: PASS.
+기대 결과: PASS.
 
-- [ ] **Step 2: Run production build**
+- [ ] **Step 2: production build 실행**
 
-Run: `npm run build`
+실행: `npm run build`
 
-Expected: PASS and `dist/` generated.
+기대 결과: PASS 및 `dist/` 생성.
 
-- [ ] **Step 3: Run preview smoke**
+- [ ] **Step 3: preview smoke(미리보기 간단 점검) 실행**
 
-Run: `npm run preview`
+실행: `npm run preview`
 
-Open: `http://127.0.0.1:4173/token_simulator/`
+열기: `http://127.0.0.1:4173/token_simulator/`
 
-Manual smoke:
+Manual smoke(수동 간단 점검):
 
-- First screen shows customer dashboard and AgentCost front operating system panel.
-- ICP fit shows `A급` for SparkClaw demo.
-- Self-Assessment checkbox changes the result without page reload.
-- Open Data Gate moves to Design/Import.
-- Open Sample Report moves to Optimize/report area.
-- Open Decision Log moves to Decision Log.
-- Admin-only internals still remain hidden unless the existing admin/debug gate is active.
-- Browser auto-translate protection remains: root `translate="no"` and existing `notranslate` meta are not removed.
+- 첫 화면이 customer dashboard와 AgentCost front operating system panel을 보여준다.
+- ICP fit은 SparkClaw demo에 대해 `A급`을 보여준다.
+- Self-Assessment checkbox 변경 시 page reload(페이지 새로고침) 없이 결과가 바뀐다.
+- Open Data Gate는 Design/Import로 이동한다.
+- Open Sample Report는 Optimize/report 영역으로 이동한다.
+- Open Decision Log는 Decision Log로 이동한다.
+- Admin-only internal(관리자 전용 내부 화면)은 기존 admin/debug gate가 활성화되지 않으면 계속 숨겨진다.
+- Browser auto-translate protection(브라우저 자동번역 보호)이 유지된다: root `translate="no"`와 기존 `notranslate` meta를 제거하지 않는다.
 
-- [ ] **Step 4: Commit verification fixes if any**
+- [ ] **Step 4: verification fix가 있으면 commit**
 
 ```bash
 git add <only files changed by this task>
@@ -1382,7 +1382,7 @@ git commit -m "fix: stabilize front operating system verification"
 
 ---
 
-## Execution Notes
+## 실행 메모
 
 - 현재 작업트리는 dirty 상태일 수 있다. 실행자는 각 task마다 `git status --short`로 스코프를 확인하고, 이 계획에 적힌 파일만 stage한다.
 - 컴포넌트 안에서 비용, 마진, 절감액 산술을 추가하지 않는다.
@@ -1391,17 +1391,17 @@ git commit -m "fix: stabilize front operating system verification"
 - 영어 문장성 블록을 새로 추가하면 `lang="en"`을 붙인다.
 - 테스트는 static render만으로 끝내지 않는다. `rerender` 또는 user interaction으로 상태 변경 후 UI가 갱신되는지 검증한다.
 
-## Self-Review
+## Self-Review(자가 검토)
 
 - Spec coverage: 9개 장치가 Task 2, Task 4, Task 5, Task 7에 모두 연결되어 있다.
-- Boundary coverage: 계산은 새 모듈이 하지 않고, 표시 숫자는 Task 1의 `format.ts` helper를 통해서만 렌더링한다.
-- P0/P1 separation: 실제 발송, 결제, 외부 CRM/DB, LLM 자동 판정은 P1로 남긴다.
-- Type consistency: `LeadFitInput`, `SelfAssessmentAnswers`, `LearningLoopRecord`, `FrontOperatingRecord`는 각 task에서 동일한 이름으로 사용한다.
-- Placeholder scan: 계획 안에 미정 파일명이나 미정 함수명은 없다.
+- Boundary coverage(경계 충족): 계산은 새 module이 하지 않고, 표시 숫자는 Task 1의 `format.ts` helper를 통해서만 렌더링한다.
+- P0/P1 separation(P0/P1 분리): 실제 발송, 결제, 외부 CRM/DB, LLM 자동 판정은 P1로 남긴다.
+- Type consistency(타입 일관성): `LeadFitInput`, `SelfAssessmentAnswers`, `LearningLoopRecord`, `FrontOperatingRecord`는 각 task에서 동일한 이름으로 사용한다.
+- Placeholder scan(빈자리 점검): 계획 안에 미정 파일명이나 미정 함수명은 없다.
 
-Plan complete and saved to `docs/superpowers/plans/2026-05-24-agentcost-front-operating-system.md`.
+계획은 완료되었고 `docs/superpowers/plans/2026-05-24-agentcost-front-operating-system.md`에 저장되어 있다.
 
-Two execution options:
+실행 옵션은 두 가지다.
 
-1. Subagent-Driven (recommended): use `superpowers:subagent-driven-development`, one fresh worker per task, review between tasks.
-2. Inline Execution: use `superpowers:executing-plans`, execute tasks in this session with checkpoints.
+1. Subagent-Driven(권장): `superpowers:subagent-driven-development`를 사용하고, task마다 새 worker를 쓰며 task 사이에 review한다.
+2. Inline Execution(현재 세션 실행): `superpowers:executing-plans`를 사용하고, checkpoint(중간 확인 지점)를 두며 이 세션에서 task를 실행한다.
