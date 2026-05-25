@@ -16,8 +16,16 @@ export function hashOfficialSourceText(text) {
   return createHash('sha256').update(normalizeOfficialSourceText(text)).digest('hex')
 }
 
-export function officialWatchExitCode({ errorCount, changedSourceCount, dryRun, failOnChange = false }) {
+export function officialWatchExitCode({
+  errorCount,
+  changedSourceCount,
+  coverageWarningCount = 0,
+  dryRun,
+  failOnChange = false,
+  failOnCoverage = false,
+}) {
   if (errorCount > 0) return 2
+  if (failOnCoverage && dryRun && coverageWarningCount > 0) return 1
   if (failOnChange && dryRun && changedSourceCount > 0) return 1
   return 0
 }

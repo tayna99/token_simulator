@@ -30,6 +30,27 @@ const args = new Set(process.argv.slice(2))
 const UPDATE_BASELINE = args.has('--update')
 const DRY_RUN = !UPDATE_BASELINE
 const FAIL_ON_CHANGE = args.has('--fail-on-change')
+const FAIL_ON_COVERAGE = args.has('--fail-on-coverage')
+
+const REQUIRED_OFFICIAL_SOURCE_PROVIDER_OWNERS = [
+  'openai',
+  'anthropic',
+  'google',
+  'alibaba_qwen',
+  'moonshot_kimi',
+  'deepseek',
+  'zai_glm',
+  'minimax',
+  'bytedance_doubao',
+  'baidu_ernie',
+  'tencent_hunyuan',
+  'stepfun',
+  '01ai_yi',
+  'baichuan',
+  'sensetime',
+  'huawei_pangu',
+  'iflytek_spark',
+]
 
 function loadJson(file, fallback) {
   if (!existsSync(file)) return fallback
@@ -43,6 +64,84 @@ function loadJson(file, fallback) {
 function saveJson(file, value) {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+}
+
+function isParserImplemented(parserStrategy) {
+  return Boolean(parserStrategy) && !/manual|todo|unimplemented/i.test(parserStrategy)
+}
+
+function sourceIsStale(checkedAtIso, nowIso, staleAfterDays = 8) {
+  if (!checkedAtIso) return true
+  const checkedAt = new Date(checkedAtIso).getTime()
+  const now = new Date(nowIso).getTime()
+  if (!Number.isFinite(checkedAt) || !Number.isFinite(now)) return true
+  return now - checkedAt > staleAfterDays * 24 * 60 * 60 * 1000
+}
+
+function officialSourceCoverageAuditFromRegistry(registry, checkedAtBySourceId, nowIso) {
+  const sourcesByOwner = new Map()
+  for (const source of registry.filter(item => item.active !== false)) {
+    if (!source.modelOwner) continue
+    const ownerSources = sourcesByOwner.get(source.modelOwner) ?? []
+    ownerSources.push(source)
+    sourcesByOwner.set(source.modelOwner, ownerSources)
+  }
+  const missing = []
+  const stale = []
+  const parser_unimplemented = []
+  const region_review_needed = []
+
+  for (const providerOwner of REQUIRED_OFFICIAL_SOURCE_PROVIDER_OWNERS) {
+    const ownerSources = sourcesByOwner.get(providerOwner) ?? []
+    if (ownerSources.length === 0) {
+      missing.push({
+        providerOwner,
+        sourceId: null,
+        reason: 'required_provider_owner_missing',
+      })
+      continue
+    }
+    for (const source of ownerSources) {
+      const sourceId = source.id ?? `${providerOwner}:unknown_source`
+      if (sourceIsStale(checkedAtBySourceId[sourceId], nowIso)) {
+        stale.push({
+          providerOwner,
+          sourceId,
+          reason: 'source_not_checked_recently',
+        })
+      }
+      if (!isParserImplemented(source.parserStrategy)) {
+        parser_unimplemented.push({
+          providerOwner,
+          sourceId,
+          reason: 'parser_strategy_unimplemented',
+        })
+      }
+      if (source.pricingRegion === 'unknown') {
+        region_review_needed.push({
+          providerOwner,
+          sourceId,
+          reason: 'pricing_region_unknown',
+        })
+      }
+    }
+  }
+
+  const warnings = [
+    ...missing.map(issue => `official_source_missing:${issue.providerOwner}`),
+    ...stale.map(issue => `official_source_stale:${issue.sourceId}`),
+    ...parser_unimplemented.map(issue => `official_source_parser_unimplemented:${issue.sourceId}`),
+    ...region_review_needed.map(issue => `official_source_region_review_needed:${issue.sourceId}`),
+  ]
+  return {
+    blocking: false,
+    requiredProviderOwners: REQUIRED_OFFICIAL_SOURCE_PROVIDER_OWNERS,
+    missing,
+    stale,
+    parser_unimplemented,
+    region_review_needed,
+    warnings,
+  }
 }
 
 async function fetchText(url, signal) {
@@ -82,6 +181,7 @@ async function main() {
   const changedSources = []
   const errors = []
   const capturedAt = new Date().toISOString()
+  const checkedAtBySourceId = {}
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 45_000)
 
@@ -105,6 +205,7 @@ async function main() {
         officialDocChunks.push(...buildOfficialApiDocChunks({ source, text, capturedAt }))
       }
       nextBaseline[source.id] = hash
+      checkedAtBySourceId[source.id] = capturedAt
     } catch (error) {
       errors.push({
         id: source.id,
@@ -115,6 +216,7 @@ async function main() {
   }))
 
   clearTimeout(timeout)
+  const coverageAudit = officialSourceCoverageAuditFromRegistry(registry, checkedAtBySourceId, capturedAt)
   const inbox = partitionCandidateInbox(allCandidates)
   const officialDocsRagRecords = officialSourceSnippetsToRagRecords(snippets)
   const officialDocsVectorIndex = await buildOfficialDocsVectorIndex({
@@ -142,6 +244,7 @@ async function main() {
     officialDocChunkCount: officialDocChunks.length,
     officialDocsVectorIndexItemCount: officialDocsVectorIndex.items.length,
     officialDocsVectorDimensions: officialDocsVectorIndex.dimensions,
+    coverageAudit,
     errors,
   }
   saveJson(resolve(ARTIFACT_DIR, 'latest-report.json'), report)
@@ -181,10 +284,12 @@ async function main() {
       `- Official docs RAG records: ${report.officialDocsRagRecordCount}`,
       `- Official docs chunks: ${report.officialDocChunkCount}`,
       `- Official docs vector index items: ${report.officialDocsVectorIndexItemCount}`,
+      `- Coverage warnings: ${report.coverageAudit.warnings.length}`,
       `- Errors: ${errors.length}`,
       '',
       ...changedSources.map(source => `- changed: ${source.id} (${source.url})`),
       ...inbox.warnings.map(warning => `- warning: ${warning}`),
+      ...coverageAudit.warnings.map(warning => `- coverage: ${warning}`),
       ...errors.map(error => `- error: ${error.id} (${error.error})`),
       '',
     ].join('\n'),
@@ -203,14 +308,17 @@ async function main() {
     officialDocsRagRecords: officialDocsRagRecords.length,
     officialDocChunks: officialDocChunks.length,
     officialDocsVectorIndexItems: officialDocsVectorIndex.items.length,
+    coverageWarnings: coverageAudit.warnings.length,
     errors: errors.length,
     artifact: 'artifacts/research/official-watch/latest-report.json',
   }, null, 2))
   const exitCode = officialWatchExitCode({
     errorCount: errors.length,
     changedSourceCount: changedSources.length,
+    coverageWarningCount: coverageAudit.warnings.length,
     dryRun: DRY_RUN,
     failOnChange: FAIL_ON_CHANGE,
+    failOnCoverage: FAIL_ON_COVERAGE,
   })
   if (exitCode !== 0) process.exit(exitCode)
 }

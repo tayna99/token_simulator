@@ -100,4 +100,28 @@ describe('official-watch-core', () => {
       failOnChange: false,
     })).toBe(2)
   })
+
+  it('can fail dry-run CI on coverage warnings without affecting normal reports', () => {
+    expect(officialWatchExitCode({
+      errorCount: 0,
+      changedSourceCount: 0,
+      coverageWarningCount: 2,
+      dryRun: true,
+      failOnCoverage: false,
+    })).toBe(0)
+    expect(officialWatchExitCode({
+      errorCount: 0,
+      changedSourceCount: 0,
+      coverageWarningCount: 2,
+      dryRun: true,
+      failOnCoverage: true,
+    })).toBe(1)
+    expect(officialWatchExitCode({
+      errorCount: 0,
+      changedSourceCount: 0,
+      coverageWarningCount: 2,
+      dryRun: false,
+      failOnCoverage: true,
+    })).toBe(0)
+  })
 })
