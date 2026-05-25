@@ -4,7 +4,7 @@ const dryRun = process.argv.includes('--dry-run')
 const env = process.env
 const demoFixtureVersion = env.DEMO_FIXTURE_VERSION || 'production-demo-v1'
 const workspaceId = env.DEMO_WORKSPACE_ID || 'demo'
-const demoEmail = env.DEMO_USER_EMAIL || 'demo@agentcost.local'
+const demoEmail = env.DEMO_USER_EMAIL || 'demo@agentpayroll.local'
 const demoPassword = env.DEMO_USER_PASSWORD
 
 const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
@@ -69,7 +69,7 @@ async function main() {
 
   await upsert('workspaces', [{
     id: workspaceId,
-    name: 'AgentCost production demo',
+    name: 'AgentPayroll production demo',
     provenance,
     demo_fixture_version: demoFixtureVersion,
     updated_at: now,
@@ -155,17 +155,98 @@ async function main() {
     captured_at: now,
     provenance,
     demo_fixture_version: demoFixtureVersion,
+  }, {
+    workspace_id: workspaceId,
+    chunk_id: `rag:${workspaceId}:benchmark:lmarena`,
+    collection: 'benchmark_evidence',
+    source_id: 'lmarena-leaderboard',
+    source_url: 'https://lmarena.ai/leaderboard',
+    text: 'LMArena is third-party benchmark evidence for model routing quality. It requires human review and cannot override accepted facts.',
+    refs: ['evidence:lmarena-leaderboard'],
+    metadata: {
+      sourceId: 'lmarena-leaderboard',
+      contentHash: `demo-${demoFixtureVersion}-benchmark`,
+      capturedAt: now,
+      corpusTrust: 'third_party_benchmark',
+      reviewStatus: 'needs_review',
+      tags: ['benchmark', 'demo'],
+    },
+    embedding: vector1536(),
+    content_hash: `demo-${demoFixtureVersion}-benchmark`,
+    captured_at: now,
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }, {
+    workspace_id: workspaceId,
+    chunk_id: `rag:${workspaceId}:serving-economics:vllm`,
+    collection: 'serving_economics',
+    source_id: 'vllm-benchmark-docs',
+    source_url: 'https://docs.vllm.ai/en/stable/api/vllm/benchmarks/',
+    text: 'vLLM benchmark docs provide serving economics evidence for TTFT, TPOT, throughput, GPU utilization, KV cache, prefix cache, and batching.',
+    refs: ['serving:vllm-benchmark-docs'],
+    metadata: {
+      sourceId: 'vllm-benchmark-docs',
+      contentHash: `demo-${demoFixtureVersion}-serving`,
+      capturedAt: now,
+      corpusTrust: 'standard_reference',
+      tags: ['serving-economics', 'demo'],
+    },
+    embedding: vector1536(),
+    content_hash: `demo-${demoFixtureVersion}-serving`,
+    captured_at: now,
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }, {
+    workspace_id: workspaceId,
+    chunk_id: `rag:${workspaceId}:usage-schema:openai`,
+    collection: 'usage_schema',
+    source_id: 'usage-schema-openai',
+    source_url: 'https://platform.openai.com/docs/api-reference/usage',
+    text: 'Usage schema evidence maps required dimensions: customer, feature, model, plan, session, agent run, input tokens, and output tokens.',
+    refs: ['evidence:usage-schema-openai'],
+    metadata: {
+      sourceId: 'usage-schema-openai',
+      contentHash: `demo-${demoFixtureVersion}-usage-schema`,
+      capturedAt: now,
+      corpusTrust: 'official_docs',
+      tags: ['usage-schema', 'demo'],
+    },
+    embedding: vector1536(),
+    content_hash: `demo-${demoFixtureVersion}-usage-schema`,
+    captured_at: now,
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
+  }, {
+    workspace_id: workspaceId,
+    chunk_id: `rag:${workspaceId}:decision-history:routing`,
+    collection: 'decision_history',
+    source_id: `decision:${workspaceId}:model-routing`,
+    source_url: `decision:${workspaceId}:model-routing`,
+    text: 'Decision history records the approved production demo routing baseline and links reporting to tenant-scoped evidence.',
+    refs: [`decision:${workspaceId}:model-routing`],
+    metadata: {
+      sourceId: `decision:${workspaceId}:model-routing`,
+      contentHash: `demo-${demoFixtureVersion}-decision-history`,
+      capturedAt: now,
+      corpusTrust: 'internal_authoritative',
+      tags: ['decision-history', 'demo'],
+    },
+    embedding: vector1536(),
+    content_hash: `demo-${demoFixtureVersion}-decision-history`,
+    captured_at: now,
+    provenance,
+    demo_fixture_version: demoFixtureVersion,
   }], 'workspace_id,chunk_id')
 
   await upsert('report_artifacts', [{
     id: 'demo-report',
     workspace_id: workspaceId,
     report_run_id: `report:${workspaceId}:latest`,
-    format: 'markdown',
-    content_type: 'text/markdown',
-    body: '# AgentCost Production Demo\n\nThis report was loaded from Supabase report_artifacts.',
+    format: 'pdf',
+    content_type: 'application/pdf',
+    body: `%PDF-1.4\n% AgentPayroll Production Demo\nThis report was loaded from Supabase report_artifacts.\n%%EOF`,
     download_path: `/api/reports/demo-report/download?workspaceId=${workspaceId}`,
-    size_bytes: 76,
+    size_bytes: 99,
     provenance,
     demo_fixture_version: demoFixtureVersion,
   }])

@@ -119,11 +119,14 @@ export function createSupabaseProductionDemoStatusStore(client: SupabaseClient):
     hasWatchtowerRun(input) {
       return hasRows('watchtower_runs', { workspace_id: `eq.${input.workspaceId}` })
     },
-    hasRagChunks(input) {
-      return hasRows('rag_chunks', {
+    async hasRagChunks(input) {
+      const rows = await client.select<{ collection?: string }>('rag_chunks', {
         workspace_id: `eq.${input.workspaceId}`,
-        collection: 'eq.official_docs',
+        select: 'collection',
       })
+      const collections = new Set(rows.map(row => row.collection))
+      return ['official_docs', 'benchmark_evidence', 'serving_economics', 'usage_schema', 'decision_history']
+        .every(collection => collections.has(collection))
     },
     hasReportArtifact(input) {
       return hasRows('report_artifacts', { workspace_id: `eq.${input.workspaceId}` })

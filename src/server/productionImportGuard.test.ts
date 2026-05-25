@@ -59,4 +59,11 @@ describe('Next production import guard', () => {
     expect(packageJson.scripts['legacy:vite:dev']).toBe('vite')
     expect(packageJson.scripts['legacy:vite:build']).toBe('tsc -p tsconfig.app.json && tsc -p tsconfig.node.json && vite build')
   })
+
+  it('uses the shared role projection layout policy in the Next workspace route', () => {
+    const source = readFileSync(join(repoRoot, 'app', '(app)', 'w', '[workspaceId]', 'page.tsx'), 'utf8')
+
+    expect(source).toContain('buildRoleWorkspaceLayout')
+    expect(source).toContain('COST_STAGE_CARDS')
+  })
 })

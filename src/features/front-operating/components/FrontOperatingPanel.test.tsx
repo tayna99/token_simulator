@@ -6,7 +6,7 @@ import type { FrontOperatingSystemContext } from '../lib/frontOperatingContext'
 import { FrontOperatingPanel } from './FrontOperatingPanel'
 
 describe('FrontOperatingPanel', () => {
-  it('renders the front operating assets required by the AgentCost workflow', () => {
+  it('renders the front operating assets required by the AgentPayroll workflow', () => {
     render(
       <FrontOperatingPanel
         context={AGENTCOST_FRONT_OPERATING_SYSTEM}
@@ -18,7 +18,7 @@ describe('FrontOperatingPanel', () => {
 
     const panel = screen.getByTestId('front-operating-panel')
     expect(panel).toHaveAttribute('lang', 'en')
-    expect(panel).toHaveTextContent(/AgentCost front operating system/i)
+    expect(panel).toHaveTextContent(/AgentPayroll front operating system/i)
     expect(panel).toHaveTextContent(/ICP Scorecard/i)
     expect(panel).toHaveTextContent(/asset:icp_scorecard/i)
     expect(panel).toHaveTextContent(/Data Readiness Checklist/i)

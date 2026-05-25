@@ -1,10 +1,11 @@
 import Link from 'next/link'
+import { PRODUCT_NAME } from '../../src/lib/productBrand'
 
 export default function MarketingPage() {
   return (
     <main className="min-h-screen bg-surface-normal text-label-normal">
       <section className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-6 py-16">
-        <p className="text-sm font-semibold uppercase text-primary-normal">AgentCost Production Demo</p>
+        <p className="text-sm font-semibold uppercase text-primary-normal">{PRODUCT_NAME} Production Demo</p>
         <h1 className="mt-4 max-w-4xl text-5xl font-semibold leading-tight">
           AI SaaS cost, evidence, and agent operations on a production path.
         </h1>

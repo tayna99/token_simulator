@@ -1,5 +1,6 @@
 import { Badge, Button } from '../../../shared/ui/primitives'
 import { fmtNumber } from '../../../lib/format'
+import { PRODUCT_NAME } from '../../../lib/productBrand'
 import type { FrontOperatingSystemContext } from '../lib/frontOperatingContext'
 
 function assetById(context: FrontOperatingSystemContext, id: string) {
@@ -63,7 +64,7 @@ export function FrontOperatingPanel({
   return (
     <div data-testid="front-operating-panel" lang="en" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase text-primary-normal">AgentCost front operating system</p>
+        <p className="text-xs font-semibold uppercase text-primary-normal">{PRODUCT_NAME} front operating system</p>
         <Badge tone="primary">read-only</Badge>
       </div>
 

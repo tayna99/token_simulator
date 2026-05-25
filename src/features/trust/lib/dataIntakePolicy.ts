@@ -7,6 +7,8 @@ export type TrustWarning =
   | 'customer_id_missing'
   | 'revenue_missing'
   | 'retention_policy_unconfirmed'
+  | 'file_type_not_allowed'
+  | 'file_size_exceeded'
 
 export interface DataIntakePolicy {
   allowRawPrompt: false

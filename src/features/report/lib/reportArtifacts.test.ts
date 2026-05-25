@@ -71,7 +71,7 @@ describe('buildReportArtifact', () => {
     expect(report.markdown).toContain('tool:monthlyAiCogs')
   })
 
-  it('includes decision choice, draft-only rate card, and pricing freshness in the one-page report', () => {
+  it('includes decision choice, rate-card readiness, and pricing freshness in the one-page report', () => {
     const report = buildOnePageReportArtifact({
       title: 'SparkClaw AI Cost Snapshot',
       executiveSummary: 'The operating team reviewed the recommendation.',

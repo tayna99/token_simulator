@@ -32,4 +32,20 @@ describe('UsageImportPanel', () => {
     expect((screen.getByLabelText(/LLM usage CSV/i) as HTMLTextAreaElement).value).toContain('rag_chat')
     expect(screen.getByText(/Token fields are read from logs/i)).toBeInTheDocument()
   })
+
+  it('shows Trust blocking and does not import raw prompt CSVs', () => {
+    const onImport = vi.fn()
+    render(<UsageImportPanel onImport={onImport} />)
+
+    fireEvent.change(screen.getByLabelText(/LLM usage CSV/i), {
+      target: {
+        value: 'feature,model,input_tokens,output_tokens,prompt\nrag_chat,claude-sonnet-4.6,1000,500,"hello"',
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /apply csv usage/i }))
+
+    expect(onImport).not.toHaveBeenCalled()
+    expect(screen.getByText(/trust pipeline blocked/i)).toBeInTheDocument()
+    expect(screen.getByText(/raw_prompt_detected/i)).toBeInTheDocument()
+  })
 })

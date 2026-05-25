@@ -155,6 +155,81 @@ describe('P1 API handlers', () => {
     })
   })
 
+  it('rejects server-supplied usage summaries that did not pass the Trust gate', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleUsageImportApi('POST', {
+      workspaceId: 'workspace-demo',
+      summary: {
+        rows: [],
+        featureSummaries: [],
+        errors: [],
+        requestCount: 1,
+        totalInputTokens: 10,
+        totalOutputTokens: 5,
+        totalCostUsd: 0.01,
+        avgInputTokensPerRequest: 10,
+        avgOutputTokensPerRequest: 5,
+        p95OutputTokens: 5,
+        topFeatureByCost: null,
+      },
+    }, { store, models: MODELS })
+
+    expect(response.status).toBe(422)
+    expect(response.body.error).toBe('trust_pipeline_blocked')
+    expect(response.body.snapshotAllowed).toBe(false)
+    expect(response.body.blockedReason).toBe('missing_trust_inspection')
+    await expect(store.getJson('workspace:workspace-demo:usage-current')).resolves.toBeNull()
+  })
+
+  it('rejects server-supplied usage summaries with a blocking Trust inspection', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleUsageImportApi('POST', {
+      workspaceId: 'workspace-demo',
+      summary: {
+        rows: [],
+        featureSummaries: [],
+        errors: [],
+        requestCount: 1,
+        totalInputTokens: 10,
+        totalOutputTokens: 5,
+        totalCostUsd: 0.01,
+        avgInputTokensPerRequest: 10,
+        avgOutputTokensPerRequest: 5,
+        p95OutputTokens: 5,
+        topFeatureByCost: null,
+        trustInspection: {
+          status: 'blocked',
+          warnings: ['raw_prompt_detected'],
+          allowedForSnapshot: false,
+          anonymizationStatus: 'blocked',
+          retentionNote: 'blocked',
+          analysisScope: { available: [], blocked: ['all_analysis'] },
+        },
+      },
+    }, { store, models: MODELS })
+
+    expect(response.status).toBe(422)
+    expect(response.body.error).toBe('trust_pipeline_blocked')
+    expect(response.body.snapshotAllowed).toBe(false)
+    expect(response.body.blockedReason).toBe('trust_inspection_blocked')
+    await expect(store.getJson('workspace:workspace-demo:usage-current')).resolves.toBeNull()
+  })
+
+  it('rejects blocked CSV usage imports before snapshot or retention rows are written', async () => {
+    const store = createMemoryKvStore()
+    const response = await handleUsageImportApi('POST', {
+      workspaceId: 'workspace-demo',
+      csv: 'timestamp,prompt,api_key,input_tokens\n2026-05-01,"hello","sk-test",100',
+      fileName: 'usage.csv',
+      fileSizeBytes: 128,
+    }, { store, models: MODELS })
+
+    expect(response.status).toBe(422)
+    expect(response.body.error).toBe('trust_pipeline_blocked')
+    await expect(store.getJson('workspace:workspace-demo:usage-current')).resolves.toBeNull()
+    await expect(store.getJson('workspace:workspace-demo:retention-jobs')).resolves.toBeNull()
+  })
+
   it('ingests SDK-lite events only after Trust pipeline approval', async () => {
     const store = createMemoryKvStore()
     const accepted = await handleSdkLiteUsageApi('POST', {
@@ -236,7 +311,7 @@ describe('P1 API handlers', () => {
       configSnapshotRef: 'config:p1:workspace-demo',
       usageSnapshotRef: 'usage:p1:workspace-demo:2026-05',
     })
-    expect(response.body.reportRun.artifacts.map(artifact => artifact.format)).toEqual(['markdown', 'json', 'pdf'])
+    expect(response.body.reportRun.artifacts.map(artifact => artifact.format)).toEqual(['pdf', 'markdown', 'json'])
     expect(loaded.body.reportRuns).toHaveLength(1)
   })
 
@@ -375,8 +450,11 @@ describe('P1 API handlers', () => {
 
     expect(missing.body.agentRuntime.status).toBe('unavailable')
     expect(missing.body.persistence.status).toBe('unavailable')
+    expect(missing.body.productName).toBe('AgentPayroll')
+    expect(missing.body.corpusReadiness.status).toBe('unavailable')
     expect(connected.body.agentRuntime.status).toBe('provider_llm')
     expect(connected.body.persistence.status).toBe('provider_llm')
+    expect(connected.body.corpusReadiness.items.model_benchmark.status).toBe('needs_review')
     expect(connected.body.connectors.resend_email.status).toBe('provider_llm')
     expect(connected.body.connectors.stripe_billing.status).toBe('connector_not_configured')
   })
@@ -671,6 +749,53 @@ describe('P1 API handlers', () => {
     expect(calls.some(call => call.url === 'https://api.openai.com/v1/embeddings')).toBe(true)
     expect(calls.some(call => call.url.includes('/rest/v1/rag_chunks'))).toBe(true)
     expect(calls.some(call => call.url.includes('/rest/v1/rpc/match_rag_chunks'))).toBe(true)
+  })
+
+  it('accepts production RAG index collections beyond official docs', async () => {
+    const officialDocChunks = chunkApiDoc(normalizeApiDoc({
+      source: {
+        id: 'usage-schema-openai',
+        modelOwner: 'openai',
+        servingProvider: 'first_party',
+        modelFamilies: ['gpt'],
+        sourceKind: 'schema',
+        url: 'https://platform.openai.com/docs/api-reference/usage',
+        pricingRegion: 'global',
+        sourceLanguage: 'en',
+        officialSourceTrust: 'official_docs',
+      },
+      capturedAt: '2026-05-25T00:00:00.000Z',
+      rawText: '# Usage schema\n\nUsage rows include tokens, model, customer, plan, and feature dimensions.',
+    })).map(chunk => ({ ...chunk, collection: 'usage_schema' as const }))
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({ url, init: init ?? {} })
+      if (url === 'https://api.openai.com/v1/embeddings') {
+        return new Response(JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }), { status: 200 })
+      }
+      if (url.includes('/rest/v1/rag_chunks?') && init?.method === 'GET') {
+        return new Response(JSON.stringify([{ chunk_id: officialDocChunks[0].id }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+
+    const indexed = await handleRagIndexApi('POST', {
+      workspaceId: 'workspace-demo',
+      collection: 'usage_schema',
+      chunks: officialDocChunks,
+    }, {
+      env: {
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+        OPENAI_API_KEY: 'sk-test',
+      },
+      fetcher,
+    })
+
+    expect(indexed.status).toBe(202)
+    expect(indexed.body.stats.collection).toBe('usage_schema')
+    expect(JSON.parse(String(calls.find(call => call.url.includes('/rest/v1/rag_chunks'))?.init.body))[0].collection).toBe('usage_schema')
   })
 
   it('keeps P1 RAG API benchmark gaps explicit instead of inventing peer averages', async () => {

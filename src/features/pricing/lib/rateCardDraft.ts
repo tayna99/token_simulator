@@ -26,6 +26,17 @@ export interface RateCardDraft extends RateCardDraftInput {
   requiresHumanApproval: true
 }
 
+export type RateCardExecutionReadinessStatus = 'draft' | 'ready' | 'connector_not_configured' | 'blocked' | 'pushed_to_billing' | 'failed'
+
+export interface RateCardExecutionReadiness {
+  status: RateCardExecutionReadinessStatus
+  billingExecutable: boolean
+  billingConnectorId?: BillingConnectorId
+  billingExternalRef?: string
+  billingError?: string
+  missing: string[]
+}
+
 function nonNegative(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
@@ -99,5 +110,61 @@ export function markRateCardBillingFailed(input: RateCardDraft, result: {
     billingConnectorId: result.connectorId,
     billingError: result.error,
     failedAt: result.failedAt ?? new Date().toISOString(),
+  }
+}
+
+export function buildRateCardExecutionReadiness(input: {
+  draft: RateCardDraft
+  hasApproval?: boolean
+  hasIdempotencyKey?: boolean
+  hasRollbackMetadata?: boolean
+  hasLedgerRow?: boolean
+}): RateCardExecutionReadiness {
+  const draft = input.draft
+  if (draft.status === 'pushed_to_billing') {
+    return {
+      status: 'pushed_to_billing',
+      billingExecutable: false,
+      billingConnectorId: draft.billingConnectorId,
+      billingExternalRef: draft.billingExternalRef,
+      missing: [],
+    }
+  }
+  if (draft.status === 'failed') {
+    return {
+      status: 'failed',
+      billingExecutable: false,
+      billingConnectorId: draft.billingConnectorId,
+      billingError: draft.billingError,
+      missing: [],
+    }
+  }
+  if (draft.status === 'draft') {
+    return {
+      status: 'draft',
+      billingExecutable: false,
+      missing: ['approval'],
+    }
+  }
+  if (!draft.billingExecutable || !draft.billingConnectorId) {
+    return {
+      status: 'connector_not_configured',
+      billingExecutable: false,
+      missing: ['billing_connector'],
+    }
+  }
+
+  const missing = [
+    input.hasApproval ? '' : 'approval',
+    input.hasIdempotencyKey ? '' : 'idempotency_key',
+    input.hasRollbackMetadata ? '' : 'rollback_metadata',
+    input.hasLedgerRow ? '' : 'ledger_row',
+  ].filter(Boolean)
+
+  return {
+    status: missing.length > 0 ? 'blocked' : 'ready',
+    billingExecutable: missing.length === 0,
+    billingConnectorId: draft.billingConnectorId,
+    missing,
   }
 }

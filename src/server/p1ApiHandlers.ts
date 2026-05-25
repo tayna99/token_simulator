@@ -7,7 +7,9 @@ import type { RiskCard } from '../features/agent/lib/riskCards'
 import type { TeamCostGraphEvent } from '../features/team-cost/lib/teamCostState'
 import type { CheckpointPersistence, TeamCostCheckpoint } from '../features/agent/lib/checkpointStore'
 import { MODELS, type Model } from '../features/alternatives/data/models'
+import { PRODUCT_NAME } from '../lib/productBrand'
 import { parseUsageCsv, type UsageImportSummary } from '../features/usage/lib/usageImport'
+import { validateUsageIngress, type TrustGateDecision } from '../features/trust/lib/securityMiddleware'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { estimateAgentWorkload } from '../features/team-cost/lib/estimateAgentWorkload'
 import { normalizeDecisionRecord, type Decision } from '../features/decision-log/lib/decisionLog'
@@ -57,6 +59,7 @@ import {
   createHashEmbeddingProvider,
   searchVectorIndex,
   type ApiDocChunk,
+  type RagCollection,
   type RagContextBlock,
   type VectorSearchResult,
   type VectorStore,
@@ -76,6 +79,7 @@ import {
   type CorpusEvidenceResult,
 } from '../features/rag/lib/corpusRag'
 import { CORPUS_IDS, type CorpusId } from '../features/rag/lib/corpusTypes'
+import { buildCorpusReadinessReport, type CorpusReadinessReport } from '../features/rag/lib/corpusReadiness'
 import { EXTERNAL_CONNECTORS } from './externalConnectors'
 
 export interface ApiResult<T> {
@@ -102,6 +106,7 @@ type PersistenceState = 'kv' | 'not_configured' | 'supabase'
 type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
 
 export interface RuntimeStatusApiResponse {
+  productName: typeof PRODUCT_NAME
   agentRuntime: {
     status: RuntimeCapabilityStatus
     requiredEnv: string[]
@@ -117,6 +122,7 @@ export interface RuntimeStatusApiResponse {
     requiredEnv: string[]
     missingEnv: string[]
   }>
+  corpusReadiness: CorpusReadinessReport
   error?: string
 }
 
@@ -191,6 +197,9 @@ export interface UsageImportApiResponse {
   persistence: PersistenceState
   summary: UsageImportSummary
   snapshotRef: string | null
+  snapshotAllowed: boolean
+  trustGate: TrustGateDecision
+  blockedReason?: string
   history: Array<{ snapshotRef: string; requestCount: number; importedAt: string }>
   error?: string
 }
@@ -206,6 +215,7 @@ export interface SdkLiteUsageApiResponse {
 
 export interface P1RagEvidenceApiResponse {
   persistence: PersistenceState
+  runtimeStatus: RuntimeCapabilityStatus
   evidence: P1VectorRagEvidenceResult
   corpusEvidence?: CorpusEvidenceResult
   contextBlocks?: RagContextBlock[]
@@ -360,6 +370,18 @@ function workspaceKey(workspaceId: string, name: string): string {
 
 function ragIndexKey(workspaceId: string): string {
   return workspaceKey(workspaceId, 'p1-rag-official-doc-chunks')
+}
+
+const RAG_COLLECTIONS: RagCollection[] = [
+  'official_docs',
+  'benchmark_evidence',
+  'serving_economics',
+  'usage_schema',
+  'decision_history',
+]
+
+function isRagCollection(value: unknown): value is RagCollection {
+  return typeof value === 'string' && (RAG_COLLECTIONS as string[]).includes(value)
 }
 
 function emptyUsageSummary(errors: string[] = []): UsageImportSummary {
@@ -523,12 +545,12 @@ function buildReportArtifacts(input: {
     snapshotRefs: input.snapshotRefs,
     createdAt: input.createdAt,
   }, null, 2)
-  const pdf = ['%PDF-1.4', `% AgentCost report artifact ${input.reportRunId}`, markdown, '%%EOF'].join('\n')
+  const pdf = ['%PDF-1.4', `% ${PRODUCT_NAME} report artifact ${input.reportRunId}`, markdown, '%%EOF'].join('\n')
   const basePath = `/api/reports/${input.reportRunId}/download`
   const rows = [
+    { format: 'pdf' as const, contentType: 'application/pdf' as const, body: pdf },
     { format: 'markdown' as const, contentType: 'text/markdown' as const, body: markdown },
     { format: 'json' as const, contentType: 'application/json' as const, body: json },
-    { format: 'pdf' as const, contentType: 'application/pdf' as const, body: pdf },
   ]
 
   return rows.map(row => ({
@@ -764,15 +786,21 @@ export async function handleRuntimeStatusApi(
 ): Promise<ApiResult<RuntimeStatusApiResponse>> {
   const env = contextEnv(context)
   const connector = (requiredEnv: string[]) => capabilityFromEnv(env, requiredEnv, 'connector_not_configured')
+  const persistenceCapability = capabilityFromEnv(env, ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY'])
   const body: RuntimeStatusApiResponse = {
+    productName: PRODUCT_NAME,
     agentRuntime: capabilityFromEnv(env, ['OPENAI_API_KEY', 'AGENT_SERVICE_URL']),
-    persistence: capabilityFromEnv(env, ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY']),
+    persistence: persistenceCapability,
     connectors: {
       slack_webhook: connector(['SLACK_WEBHOOK_URL']),
       resend_email: connector(['RESEND_API_KEY']),
       stripe_billing: connector(['STRIPE_SECRET_KEY']),
       metronome: connector(['METRONOME_API_KEY']),
     },
+    corpusReadiness: buildCorpusReadinessReport({
+      productionStoreConfigured: persistenceCapability.status === 'provider_llm',
+      nowIso: (context.now?.() ?? new Date()).toISOString(),
+    }),
   }
   if (method !== 'GET') return { status: 405, body: { ...body, error: 'Method not allowed' } }
   return { status: 200, body }
@@ -788,6 +816,8 @@ export async function handleUsageImportApi(
     persistence: 'not_configured',
     summary: emptyUsageSummary(),
     snapshotRef: null,
+    snapshotAllowed: false,
+    trustGate: 'blocked',
     history: [],
   }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
@@ -795,11 +825,38 @@ export async function handleUsageImportApi(
 
   const store = contextStore(context)
   const models = context.models ?? MODELS
-  const summary = isObject(body) && typeof body.csv === 'string'
-    ? parseUsageCsv(body.csv, models)
+  const rawCsv = isObject(body) && typeof body.csv === 'string' ? body.csv : null
+  const summary = rawCsv
+    ? parseUsageCsv(rawCsv, models)
     : isObject(body) && isObject(body.summary)
       ? body.summary as unknown as UsageImportSummary
       : emptyUsageSummary(['Missing usage CSV or summary'])
+  const trustGate = validateUsageIngress(rawCsv ? {
+    ingressKind: 'csv',
+    source: isObject(body) && typeof body.source === 'string' ? body.source : 'usage_import_api',
+    rawCsv,
+    fileName: isObject(body) && typeof body.fileName === 'string' ? body.fileName : undefined,
+    fileSizeBytes: isObject(body) && typeof body.fileSizeBytes === 'number' ? body.fileSizeBytes : undefined,
+    workspaceId,
+  } : {
+    ingressKind: 'summary',
+    source: isObject(body) && typeof body.source === 'string' ? body.source : 'usage_import_api',
+    summary,
+  })
+  if (!trustGate.allowedForSnapshot) {
+    return {
+      status: 422,
+      body: {
+        ...base,
+        persistence: store.persistence,
+        summary,
+        snapshotAllowed: false,
+        trustGate: trustGate.decision,
+        blockedReason: trustGate.blockedReason,
+        error: 'trust_pipeline_blocked',
+      },
+    }
+  }
   const importedAt = (context.now?.() ?? new Date()).toISOString()
   const period = importedAt.slice(0, 7)
   const snapshotRef = `usage:p1:${workspaceId}:${period}`
@@ -811,7 +868,28 @@ export async function handleUsageImportApi(
     const history = [usageEntry, ...existingHistory]
     await store.setJson(workspaceKey(workspaceId, 'usage-current'), summary)
     await store.setJson(historyKey, history)
-    return { status: 202, body: { persistence: store.persistence, summary, snapshotRef, history } }
+    if (trustGate.retentionJobRequired && trustGate.inspection) {
+      const warnings = trustGate.inspection.warnings
+      const plan = buildRetentionAutomationPlan({
+        workspaceId,
+        hasRawUpload: rawCsv !== null,
+        hasRawPrompt: warnings.includes('raw_prompt_detected'),
+        hasApiKey: warnings.includes('api_key_candidate_detected'),
+        hasPii: warnings.includes('pii_candidate_detected'),
+      })
+      await store.setJson(workspaceKey(workspaceId, 'retention-jobs'), plan.jobs)
+    }
+    return {
+      status: 202,
+      body: {
+        persistence: store.persistence,
+        summary,
+        snapshotRef,
+        snapshotAllowed: true,
+        trustGate: trustGate.decision,
+        history,
+      },
+    }
   } catch (error) {
     if (isStorageNotConfigured(error)) return storageErrorBody({ ...base, summary })
     return { status: 500, body: { ...base, summary, error: 'usage_import_failed' } }
@@ -903,7 +981,7 @@ function ragCollections(value: unknown) {
 
 function isApiDocChunk(value: unknown): value is ApiDocChunk {
   return isObject(value)
-    && value.collection === 'official_docs'
+    && isRagCollection(value.collection)
     && typeof value.id === 'string'
     && typeof value.text === 'string'
     && typeof value.sourceUrl === 'string'
@@ -924,7 +1002,7 @@ function uniqueApiDocChunks(chunks: ApiDocChunk[]): ApiDocChunk[] {
   return Array.from(byId.values()).sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function officialDocsProductionVectorStore(context: P1ApiContext, workspaceId: string): VectorStore | null {
+function createProductionVectorStore(context: P1ApiContext, workspaceId: string, collection: RagCollection): VectorStore | null {
   const env = contextEnv(context)
   const client = contextSupabaseClient(context)
   const embeddingProvider = createOpenAiEmbeddingProviderFromEnv(env, context.fetcher)
@@ -932,9 +1010,13 @@ function officialDocsProductionVectorStore(context: P1ApiContext, workspaceId: s
   return new SupabasePersistentVectorStore({
     client,
     workspaceId,
-    collection: 'official_docs',
+    collection,
     embeddingProvider,
   })
+}
+
+function officialDocsProductionVectorStore(context: P1ApiContext, workspaceId: string): VectorStore | null {
+  return createProductionVectorStore(context, workspaceId, 'official_docs')
 }
 
 async function officialDocsVectorStats(chunks: ApiDocChunk[]): Promise<VectorStoreStats> {
@@ -1116,6 +1198,7 @@ export async function handleP1RagEvidenceApi(
   const workspaceId = normalizedWorkspaceId(body, context.query)
   const base: P1RagEvidenceApiResponse = {
     persistence: 'not_configured',
+    runtimeStatus: 'unavailable',
     evidence: emptyRagEvidence(),
   }
   if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
@@ -1128,6 +1211,9 @@ export async function handleP1RagEvidenceApi(
   const store = contextStore(context)
   const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
   const previewRagFallback = isObject(body) && body.runtimeMode === 'preview'
+  if (!productionVectorStore && store.persistence !== 'kv' && !previewRagFallback) {
+    return { status: 503, body: { ...base, error: 'storage_not_configured' } }
+  }
   const evidence = retrieveP1VectorRagEvidence({
     query: body.query,
     collections: ragCollections(body.collections),
@@ -1196,6 +1282,7 @@ export async function handleP1RagEvidenceApi(
     status: 200,
     body: {
       persistence: productionVectorStore ? 'supabase' : store.persistence,
+      runtimeStatus: productionVectorStore ? 'provider_llm' : 'deterministic_preview',
       evidence,
       corpusEvidence,
       contextBlocks,
@@ -1210,7 +1297,12 @@ export async function handleRagIndexApi(
   context: P1ApiContext = {},
 ): Promise<ApiResult<RagIndexApiResponse>> {
   const workspaceId = normalizedWorkspaceId(body, context.query)
-  const emptyStats: VectorStoreStats = { collection: 'official_docs', dimensions: 64, itemCount: 0 }
+  const collection = isObject(body) && isRagCollection(body.collection)
+    ? body.collection
+    : isRagCollection(queryValue(context.query ?? {}, 'collection'))
+      ? queryValue(context.query ?? {}, 'collection') as RagCollection
+      : 'official_docs'
+  const emptyStats: VectorStoreStats = { collection, dimensions: 64, itemCount: 0 }
   const base: RagIndexApiResponse = {
     persistence: 'not_configured',
     indexedCount: 0,
@@ -1222,7 +1314,7 @@ export async function handleRagIndexApi(
   }
 
   const store = contextStore(context)
-  const productionVectorStore = officialDocsProductionVectorStore(context, workspaceId)
+  const productionVectorStore = createProductionVectorStore(context, workspaceId, collection)
   if (productionVectorStore) {
     try {
       if (method === 'GET') {
@@ -1238,7 +1330,7 @@ export async function handleRagIndexApi(
       }
 
       if (!isObject(body)) return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_rag_index_request' } }
-      const chunks = apiDocChunks(body.chunks)
+      const chunks = apiDocChunks(body.chunks).map(chunk => ({ ...chunk, collection }))
       if (chunks.length === 0) {
         return { status: 400, body: { ...base, persistence: 'supabase', error: 'invalid_rag_chunks' } }
       }
@@ -1276,7 +1368,7 @@ export async function handleRagIndexApi(
     }
 
     if (!isObject(body)) return { status: 400, body: { ...base, persistence: store.persistence, error: 'invalid_rag_index_request' } }
-    const chunks = apiDocChunks(body.chunks)
+    const chunks = apiDocChunks(body.chunks).map(chunk => ({ ...chunk, collection }))
     if (chunks.length === 0) {
       return { status: 400, body: { ...base, persistence: store.persistence, error: 'invalid_rag_chunks' } }
     }

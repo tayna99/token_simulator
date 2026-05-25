@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { approveRateCardDraft, buildRateCardDraft, markRateCardBillingFailed, markRateCardPushedToBilling } from './rateCardDraft'
+import {
+  approveRateCardDraft,
+  buildRateCardDraft,
+  buildRateCardExecutionReadiness,
+  markRateCardBillingFailed,
+  markRateCardPushedToBilling,
+} from './rateCardDraft'
 
 describe('buildRateCardDraft', () => {
   it('builds a non-executable draft rate card grounded in deterministic margin refs', () => {
@@ -73,5 +79,42 @@ describe('buildRateCardDraft', () => {
       billingConnectorId: 'stripe_billing',
       billingError: 'connector_timeout',
     })
+  })
+
+  it('reports execution readiness gates for billing connector pushes', () => {
+    const draft = buildRateCardDraft({
+      policyType: 'usage_cap',
+      includedCredits: 2500,
+      overagePricePerRequest: 0.08,
+      capUsdPerCustomer: 149,
+      affectedCustomerCount: 7,
+      marginBasisRefs: ['tool:margin.plan.pro'],
+    })
+    const approvedWithoutConnector = approveRateCardDraft(draft, {
+      approvedBy: 'owner@example.com',
+      billingConnectorConfigured: false,
+    })
+    const approvedWithConnector = approveRateCardDraft(draft, {
+      approvedBy: 'owner@example.com',
+      billingConnectorConfigured: true,
+      billingConnectorId: 'metronome',
+    })
+
+    expect(buildRateCardExecutionReadiness({ draft }).status).toBe('draft')
+    expect(buildRateCardExecutionReadiness({ draft: approvedWithoutConnector }).status).toBe('connector_not_configured')
+    expect(buildRateCardExecutionReadiness({
+      draft: approvedWithConnector,
+      hasApproval: true,
+      hasIdempotencyKey: false,
+      hasRollbackMetadata: true,
+      hasLedgerRow: true,
+    })).toMatchObject({ status: 'blocked', missing: ['idempotency_key'] })
+    expect(buildRateCardExecutionReadiness({
+      draft: approvedWithConnector,
+      hasApproval: true,
+      hasIdempotencyKey: true,
+      hasRollbackMetadata: true,
+      hasLedgerRow: true,
+    })).toMatchObject({ status: 'ready', billingExecutable: true, billingConnectorId: 'metronome' })
   })
 })

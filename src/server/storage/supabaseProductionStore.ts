@@ -182,7 +182,7 @@ export class SupabasePersistentVectorStore implements VectorStore {
         score: row.similarity,
         chunk: {
           id: row.chunk_id,
-          collection: row.collection === 'official_docs' ? 'official_docs' : 'official_docs',
+          collection: row.collection,
           text: row.text,
           sourceUrl: row.source_url,
           refs: row.refs,

@@ -1,4 +1,9 @@
-export type RagCollection = 'official_docs' | 'benchmark_evidence' | 'decision_history'
+export type RagCollection =
+  | 'official_docs'
+  | 'benchmark_evidence'
+  | 'serving_economics'
+  | 'usage_schema'
+  | 'decision_history'
 
 export type ApiDocSectionType =
   | 'overview'
@@ -54,7 +59,7 @@ export interface ApiDocChunkMetadata {
 
 export interface ApiDocChunk {
   id: string
-  collection: 'official_docs'
+  collection: RagCollection
   text: string
   sourceUrl: string
   refs: string[]

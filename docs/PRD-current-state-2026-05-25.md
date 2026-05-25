@@ -83,7 +83,8 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 - decision-flow 5단계: Design → Cost → Bottleneck → Optimize+Risk → Decision Log (`App.tsx` `DECISION_STAGES`) ✅
 - 역할 projection: dev/pm/ceo, `projectSnapshotForRole(snapshot, role, audience)` → KPI/panelOrder/assistant ✅
 - audience: internal/customer (`showInternal`, `?mode=admin`/`?debug=1`) ✅
-- **역할 projection이 stage 내부 카드 순서까지 강하게 재배치하지는 않음** — `RoleProjectionPanel`은 panelOrder를 Badge로만 노출, stageWorkspace는 고정 순서. 🟡 (개선안: `docs/architecture/2026-05-24-role-projection-plan.md`)
+- 역할 projection layout policy: Design/Cost/Bottleneck/Optimize+Risk/Decision Log의 중앙 workspace 카드가 role affinity에 따라 primary/auxiliary로 재배치되고, customer audience에서는 internal-only 패널이 숨겨진다. ✅ (`stageCards.ts`, `App.test.tsx`)
+- 남은 갭: Next workspace는 shared policy를 읽기 시작했지만 아직 Vite legacy 수준의 full dashboard parity는 아니다. 🟡
 
 ### 4.4 운영 조직(에이전트/자산) ✅
 - 11개 운영 에이전트, 10개 운영 자산, 11개 P1 자동화 모듈: `src/features/operating-assets/lib/operatingAssets.ts`
@@ -91,22 +92,22 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 - 에이전트 런타임(Python): `agent_service/agentic_runtime.py`(+ `main.py`, `rag/chroma_store.py`, tests)
 
 ### 4.5 RAG 코퍼스 ✅ / 🟡 / ⚠️
-- C1 공식 소스: `officialSourceRegistry.json`(중국계 13종 + Cursor). 서구권 빅3는 **누락 → audit warning만**(`corpusRegistry.ts`, non-blocking) 🟡
-- C2 벤치마크: `modelBenchmarkRegistry.json` + `modelBenchmarkCorpus.ts` + `scripts/research/benchmark-corpus.mjs`(parseArtificialAnalysis, JSONL 산출). baseline 없으면 `baseline_unavailable`. ✅(지원 parser 범위는 테스트 그린, manual-review 소스는 warning으로 남김)
-- C3 서빙 경제성: `rag/data/servingEconomicsRegistry.ts` 🟡
-- C4 usage 스키마: `rag/data/usageSchemaRegistry.ts` 🟡
-- C9 decision-history: `rag/lib/decisionHistoryCorpus.ts` 🟡
+- C1 공식 소스: `officialSourceRegistry.json`에 OpenAI/Anthropic/Google Big3 공식 가격 source가 등록되어 있다. coverage audit은 non-blocking warning과 freshness/parser review를 노출한다. ✅
+- C2 벤치마크: `modelBenchmarkRegistry.json` + `modelBenchmarkCorpus.ts` + `scripts/research/benchmark-corpus.mjs`(parseArtificialAnalysis, JSONL 산출). baseline 없으면 `baseline_unavailable`; manual-review 소스는 `needs_review` readiness로 노출한다. ✅ / 🟡
+- C3 서빙 경제성: `rag/data/servingEconomicsRegistry.ts` + Supabase `serving_economics` collection path. manual-review 상태로 운영자 확인 필요. 🟡
+- C4 usage 스키마: `rag/data/usageSchemaRegistry.ts` + Supabase `usage_schema` collection path. 🟡
+- C9 decision-history: `rag/lib/decisionHistoryCorpus.ts` + Supabase `decision_history` collection path. 🟡
 - 공통 계약: `rag/lib/corpusTypes.ts`, `research/lib/corpusRegistry.ts` (`corpusId`/`corpusTrust`/`consumerAgentIds`/`evidenceRefPrefix`)
 - 설계 정본: `docs/architecture/2026-05-25-agent-rag-corpus-design.md`
 - 참고: C2-only로 계획됐으나 실제로는 C3/C4/C9까지 함께 들어와 **계획보다 범위가 넓다.**
 
-### 4.6 신뢰·보안 intake 🟡
-- `src/features/trust/`(dataIntakePolicy, securityMiddleware, ImportTrustCheckPanel) — raw prompt/PII 차단, retention note
+### 4.6 신뢰·보안 intake ✅ / 🟡
+- `src/features/trust/`(dataIntakePolicy, securityMiddleware, ImportTrustCheckPanel) — raw prompt/API key/file type/file size 차단, PII needs_mapping, retention job intent 연결.
 
 ### 4.7 산출물 ✅ / 🟡
 - 의사결정 원장: `src/features/decision-log/`(decisionLog, decisionStore) ✅
 - one-page report + export gate(adopt/reject/hold 기록 필요) + decision header: `decision-loop/lib/`(exportGate, decisionHeader) ✅
-- rate card draft(draft-only, billing 미실행): `pricing/lib/rateCardDraft.ts` ✅ (UX 시각 강조는 개선 여지 🟡)
+- rate card state machine + billing readiness: `pricing/lib/rateCardDraft.ts` (`draft → approved → pushed_to_billing | failed`, connector_not_configured/blocked/ready 표시) ✅
 - evidence drawer(benchmark_evidence 섹션, baseline unavailable 표시): `App.tsx` ✅
 
 ---
@@ -129,9 +130,9 @@ audience: internal | customer                                        (얼마나 
 
 - LLM이 비용/마진 숫자를 계산하거나 덮어쓰지 않는다.
 - 벤치마크가 부족할 때 가짜 peer 평균을 만들지 않는다(`baseline_unavailable`).
-- billing(Stripe/Metronome 등)을 자동 실행하지 않는다(draft only).
+- billing(Stripe/Metronome 등)은 자동 실행하지 않는다. Rate card는 `draft → approved → pushed_to_billing | failed` 상태 머신과 connector readiness gate를 통과해야 한다.
 - raw prompt/API key/PII를 기본 수집하지 않는다.
-- Vector DB/저장소는 단계적으로 둔다. 현재 런타임에는 Python `agent_service`의 Chroma official-docs store와 TS workspace KV 기반 RAG index가 있으며, Supabase pgvector 마이그레이션은 production store 준비물이다. 단 RAG는 여전히 스니펫/근거만 제공하고 숫자 권위는 Fact Ledger/결정론 레지스트리에 둔다.
+- Vector DB/저장소는 Supabase pgvector production path를 기준으로 둔다. KV/memory/request-body chunk는 preview/test adapter이며 production demo 성공으로 렌더하지 않는다. RAG는 여전히 스니펫/근거만 제공하고 숫자 권위는 Fact Ledger/결정론 레지스트리에 둔다.
 - 개인용 ChatGPT 구독 비교 도구가 아니다 — API 기반 AI 기능 운영 팀 대상.
 
 ---
@@ -152,9 +153,9 @@ audience: internal | customer                                        (얼마나 
 
 1. **검증 그린 확인됨.** `npm run test:run -- --testTimeout 60000` → 98 files / 445 tests passed, `uv run pytest agent_service/tests` → 42 passed, `npm run build` → 성공. 단 Vitest 전체 실행은 약 7분 20초로 느리며 `maxWorkers: 4` 상한이 필요하다.
 2. **브랜치 divergence 존재.** 로컬 브랜치가 원격과 ahead/behind 상태라 push 전 rebase/merge 정책 결정이 필요하다.
-3. **역할 projection이 "표시 레이어"에 머문다(🟡).** stage 카드 실제 재배치 미적용 — 사용자가 role을 바꿔도 중앙 콘텐츠 차이가 약함.
-4. **C1 공식 가격 커버리지는 빅3까지 확장됐지만 운영 감시는 계속 필요.** OpenAI/Anthropic/Google 가격 source는 등록됐고, 지역/모델 family drift는 watchtower review 대상으로 남는다.
-5. **Trust intake 부분 구현(🟡).** Prompt-free/PII 차단이 모든 import 경로에서 강제되는지 일관성 점검 필요.
+3. **역할 projection은 workspace layout policy로 승격됨.** Design/Cost/Bottleneck/Optimize/Decision Log stage 카드가 role affinity에 따라 primary/auxiliary/hidden으로 재배치되고, Next workspace도 같은 shared policy를 읽는다. ✅
+4. **C1 공식 가격 커버리지는 빅3까지 확장됐고 readiness로 노출됨.** OpenAI/Anthropic/Google 가격 source는 등록됐으며, coverage audit과 `CorpusReadinessReport`가 운영 UI/API에서 연결 상태·manual review·stale 여부를 드러낸다.
+5. **Trust intake 강제 경로 보강됨.** CSV import, SDK-lite, 서버 summary passthrough가 단일 Trust Gate를 통과해야 하며, file type/size, raw prompt, API key, PII, mapping gap을 검사한다. blocked import는 snapshot/report/decision-history로 넘어가지 않는다. ✅
 6. **2-런타임(TS/Python) 동기화 리스크.** 같은 개념(benchmark evidence, baseline_unavailable, RAG context block)이 양쪽에 구현됨 — 계약 드리프트 방지 테스트가 지속적으로 필요.
 7. **Production persistence는 schema 준비 단계.** Supabase pgvector migration은 존재하지만 앱 런타임은 아직 Supabase DB adapter로 완전히 배선되지 않았다.
 
@@ -168,13 +169,14 @@ audience: internal | customer                                        (얼마나 
 2. **Next.js UI/UX 상세 기획 (§11 참조)** — Production Demo First를 전제로 IA, 화면 상태, 컴포넌트, 사용자 흐름을 확정한다.
 3. Production demo tenant 완성 — Supabase Auth, workspace membership, pgvector RAG, accepted fact ledger, report artifact, sandbox connector path가 모두 연결되어야 데모 성공으로 본다.
 4. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
-5. RAG 코퍼스 운영화 — C4 usage-schema → C9 decision-history → C2 manual-review benchmark queue
-6. Rate card draft UX — "왜/언제 export/billing 아님" 시각 강조
+5. RAG 코퍼스 운영화 — C1/C2/C3/C4/C9 readiness와 Supabase pgvector collection path를 production UI/API에 연결
+6. Rate card readiness UX — connector_not_configured/blocked/ready/pushed/failed 상태를 billing 실행 조건과 함께 표시
 
 미결정:
 - v3.2 방향 문서와 이 사실 문서의 정본 관계를 어디까지 합칠 것인가
 - decision-flow 5단계 vs v3.2가 그리는 더 넓은 stage 집합의 통합 시점
 - Supabase 실제 project ref/token 적용 시점과 production demo smoke 일정
+- Watchtower accepted fact review workflow와 실제 Supabase project 적용 시점
 
 ---
 
@@ -194,7 +196,7 @@ audience: internal | customer                                        (얼마나 
 
 - demo 데이터는 Supabase provisioning seed가 넣은 production-shaped row에서만 나온다.
 - Next production route/page에서 `DEMO_*`, `VITE_AGENTCOST_DEMO_SEED`, memory fallback, request body fixture를 production-connected data처럼 렌더하지 않는다.
-- `/w/demo`은 demo user session + workspace membership + usage snapshot + accepted facts + watchtower run + pgvector RAG chunk + report artifact + `agent_service` reachability를 확인한다.
+- `/w/demo`은 demo user session + workspace membership + usage snapshot + accepted facts + watchtower run + C1/C2/C3/C4/C9 pgvector RAG chunks + report artifact + `agent_service` reachability를 확인한다.
 - 하나라도 없으면 fake success가 아니라 `production_demo_unavailable`로 실패한다.
 
 ### 10.3 단계 시퀀스
@@ -288,7 +290,7 @@ audience: internal | customer                                        (얼마나 
 | Workspace unavailable | missing env/table/service checklist, admin link, retry | Fix setup / retry | fake KPI, fake chart, fake agent success 금지 |
 | Workspace connected | KPI strip, stage nav, attribution/margin/pricing/decision data | Review next decision | 숫자 inline 계산 금지 |
 | Admin | membership role, connector config status, seed/watchtower/RAG/report/retention readiness | Run checks / review queue | owner/admin 아닌 사용자의 connector 실행 UI 노출 금지 |
-| Report | artifact metadata, source decision, content type, download choices | Download Markdown/JSON/PDF | 저장되지 않은 markdown 문자열 즉석 report처럼 렌더 금지 |
+| Report | artifact metadata, source decision, content type, download choices | Download PDF first, then Markdown/JSON | 저장되지 않은 markdown 문자열 즉석 report처럼 렌더 금지 |
 
 ### 11.6 상태 모델
 
@@ -337,13 +339,13 @@ audience: internal | customer                                        (얼마나 
 - 모바일 375px 폭에서 버튼/카드 텍스트가 부모 영역을 넘지 않는다.
 - 자동번역 보호가 layout, report, provider/model/source id에 유지된다.
 
-### 11.10 아직 정해야 할 UX 결정
+### 11.10 UX 결정 완료
 
-- 제품명 표기: 문서에는 `AgentPayroll`, 구현/랜딩에는 `AgentCost`가 함께 남아 있다. Next UI에서 하나의 primary name을 정해야 한다.
-- 역할별 기본 홈: demo workspace의 기본 persona를 CEO, PM, Developer 중 무엇으로 둘지 정해야 한다.
-- demo login 정책: 사용자가 직접 credential을 입력할지, 초대/매직링크/seeded account 안내만 둘지 정해야 한다.
-- report download 우선순위: Markdown, JSON, PDF 중 첫 CTA를 무엇으로 둘지 정해야 한다.
-- admin 노출 범위: demo 환경에서 connector/retention 실행 UI를 얼마나 실제로 열어둘지 정해야 한다.
+- 제품명 표기: primary product name은 `AgentPayroll`이다. Production Next UI/API/report/email sender는 이 이름을 사용한다.
+- 역할별 기본 홈: demo workspace 기본 persona는 `developer`다. CEO/PM은 role query/control로 전환한다.
+- demo login 정책: Supabase seeded demo account를 사용자가 직접 입력한다. 이메일은 env로 안내/프리필할 수 있지만 password는 UI/코드에 노출하지 않는다.
+- report download 우선순위: PDF가 첫 CTA이며 Markdown/JSON은 보조 artifact다.
+- admin 노출 범위: demo admin은 readiness/review-first다. connector/retention/billing mutation은 owner/admin + sandbox env + approval/idempotency/rollback/ledger 조건을 만족하기 전까지 blocked로 보인다.
 
 ---
 

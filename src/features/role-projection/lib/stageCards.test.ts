@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BOTTLENECK_STAGE_CARDS,
   COST_STAGE_CARDS,
   DECISION_LOG_STAGE_CARDS,
+  DESIGN_STAGE_CARDS,
   OPTIMIZE_STAGE_CARDS,
+  buildRoleWorkspaceLayout,
   orderCardsForRole,
   splitCardsByRoleAffinity,
 } from './stageCards'
@@ -74,5 +77,54 @@ describe('stage card role affinity', () => {
       primary: [{ key: 'one_page_report' }, { key: 'decision_log' }],
       auxiliary: [{ key: 'operating_ledger' }],
     })
+  })
+
+  it('builds role-aware workspace layouts for every decision stage', () => {
+    expect(buildRoleWorkspaceLayout({
+      stage: 'design',
+      role: 'developer',
+      audience: 'internal',
+      cards: DESIGN_STAGE_CARDS,
+    }).primary.map(card => card.key)).toEqual(['import_workflow', 'team_cost_simulator'])
+
+    expect(buildRoleWorkspaceLayout({
+      stage: 'design',
+      role: 'ceo',
+      audience: 'internal',
+      cards: DESIGN_STAGE_CARDS,
+    }).primary.map(card => card.key)).toEqual(['team_cost_simulator'])
+
+    expect(buildRoleWorkspaceLayout({
+      stage: 'bottleneck',
+      role: 'developer',
+      audience: 'internal',
+      cards: BOTTLENECK_STAGE_CARDS,
+    }).primary.map(card => card.key)).toEqual(['team_forecast', 'operational_signals'])
+
+    expect(buildRoleWorkspaceLayout({
+      stage: 'bottleneck',
+      role: 'ceo',
+      audience: 'internal',
+      cards: BOTTLENECK_STAGE_CARDS,
+    }).primary.map(card => card.key)).toEqual(['margin_risk', 'team_forecast'])
+  })
+
+  it('hides internal-only cards for customer audience without changing role ordering', () => {
+    const internal = buildRoleWorkspaceLayout({
+      stage: 'decision-log',
+      role: 'developer',
+      audience: 'internal',
+      cards: DECISION_LOG_STAGE_CARDS,
+    })
+    const customer = buildRoleWorkspaceLayout({
+      stage: 'decision-log',
+      role: 'developer',
+      audience: 'customer',
+      cards: DECISION_LOG_STAGE_CARDS,
+    })
+
+    expect(internal.primary.map(card => card.key)).toEqual(['operating_ledger', 'decision_log'])
+    expect(customer.primary.map(card => card.key)).toEqual(['decision_log'])
+    expect(customer.hiddenForAudience.map(card => card.key)).toEqual(['operating_ledger'])
   })
 })

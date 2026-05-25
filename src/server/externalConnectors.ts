@@ -3,6 +3,7 @@ import type {
   P1ExternalConnectorId,
   P1ExternalConnectorMode,
 } from '../features/p1/lib/p1OperatingSystem'
+import { PRODUCT_NAME } from '../lib/productBrand'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -102,7 +103,7 @@ const resendEmailConnector: ExternalConnector = {
       action,
       url: 'https://api.resend.com/emails',
       body: {
-        from: text(action.payload.from, 'AgentCost <agentcost@example.com>'),
+        from: text(action.payload.from, `${PRODUCT_NAME} <agentpayroll@example.com>`),
         to: [text(action.payload.recipient, 'founder@example.com')],
         subject: text(action.payload.subject, action.title),
         text: messagePayload(action),

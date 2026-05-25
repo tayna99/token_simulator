@@ -122,6 +122,50 @@ describe('Supabase production store', () => {
     })
   })
 
+  it('preserves non-official RAG collections returned by pgvector search', async () => {
+    const servingChunk = {
+      ...chunk,
+      id: 'serving:vllm-benchmark-docs',
+      collection: 'serving_economics' as const,
+      refs: ['serving:vllm-benchmark-docs'],
+      metadata: {
+        ...chunk.metadata,
+        sourceId: 'vllm-benchmark-docs',
+        officialSourceTrust: 'standard_reference',
+        contentHash: 'hash-vllm',
+      },
+    }
+    const fetcher = async (input: RequestInfo | URL) => {
+      if (String(input).includes('/rpc/match_rag_chunks')) {
+        return new Response(JSON.stringify([{
+          chunk_id: servingChunk.id,
+          collection: 'serving_economics',
+          source_url: servingChunk.sourceUrl,
+          text: servingChunk.text,
+          refs: servingChunk.refs,
+          metadata: servingChunk.metadata,
+          similarity: 0.82,
+        }]), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ok: true }]), { status: 201 })
+    }
+    const client = createSupabaseClientFromEnv({
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+    }, fetcher)
+    const store = new SupabasePersistentVectorStore({
+      client: client!,
+      workspaceId: 'workspace-demo',
+      collection: 'serving_economics',
+      embeddingProvider,
+    })
+
+    await store.upsertChunks([servingChunk])
+    const results = await store.search({ query: 'vllm serving economics' })
+
+    expect(results[0].chunk.collection).toBe('serving_economics')
+  })
+
   it('persists and restores checkpoint graph state', async () => {
     const calls: Array<{ url: string; init: RequestInit }> = []
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {

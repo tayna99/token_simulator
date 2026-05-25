@@ -429,7 +429,7 @@ describe('App AI team operations workspace', () => {
     window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
-    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/AgentCost front operating system/i)
+    expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/AgentPayroll front operating system/i)
     expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/ICP Scorecard/i)
     expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Data Readiness Checklist/i)
     expect(screen.getByTestId('front-operating-panel')).toHaveTextContent(/Offer Ladder/i)
@@ -657,7 +657,7 @@ describe('App AI team operations workspace', () => {
 
     const rateCard = screen.getByRole('region', { name: /Rate card draft/i })
     expect(within(rateCard).getByRole('heading', { name: /Rate card draft/i })).toBeInTheDocument()
-    expect(screen.getByText(/Draft only/i)).toBeInTheDocument()
+    expect(screen.getByText(/Billing readiness/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/검토용 가격표 초안/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/실제 청구 실행 아님/i)).toBeInTheDocument()
     expect(within(rateCard).getByText(/고객에게 자동 적용 아님/i)).toBeInTheDocument()
@@ -701,13 +701,13 @@ describe('App AI team operations workspace', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/PM projection/i)
-    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Feature, customer, and plan/i)
-
-    await user.click(screen.getByRole('tab', { name: /Developer view/i }))
-
     expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/Developer projection/i)
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Model, token, retry, and cache/i)
+
+    await user.click(screen.getByRole('tab', { name: /PM view/i }))
+
+    expect(screen.getByTestId('role-projection-panel')).toHaveTextContent(/PM projection/i)
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Feature, customer, and plan/i)
 
     await user.click(screen.getByRole('tab', { name: /CEO view/i }))
 
@@ -731,10 +731,13 @@ describe('App AI team operations workspace', () => {
       left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
     )
 
-    expect(appearsBefore(costPanel(), marginPanel())).toBe(true)
+    expect(appearsBefore(signalPanel(), costPanel())).toBe(true)
     expect(auxiliaryCards()).not.toHaveAttribute('open')
     expect(auxiliaryCards()).toHaveTextContent(/Additional review details/i)
-    expect(auxiliaryCards()).not.toHaveTextContent(/Technical detail \(developer\)/i)
+    expect(within(auxiliaryCards()).getByTestId('workspace-panel-margin_risk')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /PM view/i }))
+    expect(appearsBefore(costPanel(), marginPanel())).toBe(true)
     expect(within(auxiliaryCards()).getByTestId('workspace-panel-operational_signals')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /CEO view/i }))
@@ -747,6 +750,42 @@ describe('App AI team operations workspace', () => {
     await user.click(screen.getByRole('tab', { name: /Developer view/i }))
     expect(appearsBefore(signalPanel(), costPanel())).toBe(true)
     expect(within(auxiliaryCards()).getByTestId('workspace-panel-margin_risk')).toBeInTheDocument()
+  })
+
+  it('applies role layout to design and bottleneck stages', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const workspace = screen.getByTestId('decision-workspace-panel')
+    const primaryCards = () => within(workspace).getByTestId('stage-primary-cards')
+    const auxiliaryCards = () => within(workspace).getByTestId('stage-auxiliary-cards')
+    const appearsBefore = (left: HTMLElement, right: HTMLElement) => Boolean(
+      left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /CEO view/i }))
+    expect(appearsBefore(
+      within(primaryCards()).getByTestId('workspace-panel-team_cost_simulator'),
+      within(auxiliaryCards()).getByTestId('workspace-panel-import_workflow'),
+    )).toBe(true)
+
+    await user.click(screen.getByRole('tab', { name: /Developer view/i }))
+    expect(appearsBefore(
+      within(primaryCards()).getByTestId('workspace-panel-import_workflow'),
+      within(primaryCards()).getByTestId('workspace-panel-team_cost_simulator'),
+    )).toBe(true)
+
+    await user.click(lifecycleButton(/Bottleneck/i))
+    expect(appearsBefore(
+      within(primaryCards()).getByTestId('workspace-panel-team_forecast'),
+      within(primaryCards()).getByTestId('workspace-panel-operational_signals'),
+    )).toBe(true)
+
+    await user.click(screen.getByRole('tab', { name: /CEO view/i }))
+    expect(appearsBefore(
+      within(primaryCards()).getByTestId('workspace-panel-margin_risk'),
+      within(primaryCards()).getByTestId('workspace-panel-team_forecast'),
+    )).toBe(true)
   })
 
   it('does not render unsupported or duplicate dashboard panels in the default app shell', () => {

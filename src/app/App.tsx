@@ -15,7 +15,7 @@ import { rollupUsageByAxis, type AttributionAxis, type AttributionResult } from 
 import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../features/usage/data/sparkClawSample'
 import { customerProfitability, heavyUserDetection, marginByPlan, type CustomerMarginRow, type MarginRow } from '../features/unit-economics/lib/margin'
 import { calculatePricingScenario, type ScenarioResult } from '../features/pricing/lib/pricingScenario'
-import { buildRateCardDraft, type RateCardDraft } from '../features/pricing/lib/rateCardDraft'
+import { buildRateCardDraft, buildRateCardExecutionReadiness, type RateCardDraft } from '../features/pricing/lib/rateCardDraft'
 import { buildPricingFreshnessBadge, type PricingFreshnessBadge } from '../features/facts/lib/pricingFreshness'
 import { buildDecisionHeader, type DecisionHeader } from '../features/decision-loop/lib/decisionHeader'
 import { canExportOnePageReport } from '../features/decision-loop/lib/exportGate'
@@ -26,12 +26,15 @@ import {
   type RoleViewModel,
 } from '../features/role-projection/lib/projectSnapshotForRole'
 import {
+  BOTTLENECK_STAGE_CARDS,
   COST_STAGE_CARDS,
   OPTIMIZE_STAGE_CARDS,
   DECISION_LOG_STAGE_CARDS,
+  DESIGN_STAGE_CARDS,
+  buildRoleWorkspaceLayout,
   orderCardsForRole,
-  splitCardsByRoleAffinity,
   type StageCard,
+  type RoleWorkspaceStage,
 } from '../features/role-projection/lib/stageCards'
 import { retrieveRiskCards, type RiskCard } from '../features/agent/lib/riskCards'
 import { runAgent, type AgentEvent } from '../features/agent/lib/agentRuntime'
@@ -158,7 +161,7 @@ type TeamCostCompanyProfile = {
   locale: 'en' | 'ko'
 }
 
-type RemoteBackendStatus = 'checking' | 'connected' | 'fallback'
+type RemoteBackendStatus = 'checking' | 'connected' | 'fallback' | 'blocked'
 
 interface RemoteUsageHistoryEntry {
   snapshotRef: string
@@ -853,6 +856,13 @@ function RateCardDraftPanel({
   decisionHeader: DecisionHeader
   showInternal: boolean
 }) {
+  const billingReadiness = buildRateCardExecutionReadiness({
+    draft: rateCardDraft,
+    hasApproval: rateCardDraft.status !== 'draft',
+    hasIdempotencyKey: Boolean(rateCardDraft.billingExternalRef),
+    hasRollbackMetadata: Boolean(rateCardDraft.billingExternalRef),
+    hasLedgerRow: rateCardDraft.status === 'pushed_to_billing',
+  })
   const readinessSteps = [
     { label: '초안 생성됨', ready: true },
     { label: exportGate.allowed ? '결정 기록됨' : '결정 기록 필요', ready: exportGate.allowed },
@@ -863,11 +873,29 @@ function RateCardDraftPanel({
     <section aria-label="Rate card draft" className="mb-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-label-normal">Rate card draft</h3>
-        <Badge tone="caution">Draft only</Badge>
+        <Badge tone={billingReadiness.billingExecutable ? 'positive' : 'caution'}>
+          {billingReadiness.status}
+        </Badge>
       </div>
       <p className="mt-1 text-xs text-label-alternative">
         Stripe/Metronome 같은 billing 시스템은 실행하지 않고, 사람이 검토할 가격표 초안만 만듭니다.
       </p>
+      <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <p className="text-xs font-semibold uppercase text-primary-normal">Billing readiness</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge tone={rateCardDraft.billingExecutable ? 'positive' : 'caution'}>
+            executable: {String(rateCardDraft.billingExecutable)}
+          </Badge>
+          <Badge tone={rateCardDraft.billingConnectorId ? 'positive' : 'caution'}>
+            connector: {rateCardDraft.billingConnectorId ?? 'connector_not_configured'}
+          </Badge>
+          {rateCardDraft.billingExternalRef && <Badge tone="positive">externalRef: {rateCardDraft.billingExternalRef}</Badge>}
+          {rateCardDraft.billingError && <Badge tone="caution">error: {rateCardDraft.billingError}</Badge>}
+          {billingReadiness.missing.map(item => (
+            <Badge key={item} tone="caution">missing: {item}</Badge>
+          ))}
+        </div>
+      </div>
       <div className="mt-3 grid gap-2 md:grid-cols-2">
         <div className="rounded-wds border border-status-positive/30 bg-status-positive/10 p-3">
           <p className="text-xs font-semibold uppercase text-status-positive">무엇인가</p>
@@ -1415,7 +1443,7 @@ function DecisionWorkspaceIntro({
         <div className="grid gap-2 text-sm lg:min-w-64">
           {showInternal && (
             <>
-              <Badge tone={remoteBackendStatus === 'connected' ? 'positive' : remoteBackendStatus === 'fallback' ? 'caution' : 'neutral'}>
+              <Badge tone={remoteBackendStatus === 'connected' ? 'positive' : remoteBackendStatus === 'fallback' || remoteBackendStatus === 'blocked' ? 'caution' : 'neutral'}>
                 {remoteBackendStatus}
               </Badge>
               <p className="text-label-neutral">{remoteBackendMessage}</p>
@@ -2494,7 +2522,7 @@ function App() {
     }
 
     return {
-      role: 'pm',
+      role: 'developer',
       currentModel: getModelById('claude-sonnet-4.6') ?? MODELS[4],
       candidateModel: getModelById('gemini-3.1-flash') ?? MODELS[7],
       period: 'month',
@@ -3253,7 +3281,15 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ workspaceId, summary }),
         })
-        if (!response.ok) throw new Error(`Usage import failed with ${response.status}`)
+        if (!response.ok) {
+          const failure = await response.json().catch(() => ({})) as { error?: string; blockedReason?: string }
+          if (response.status === 422 && failure.error === 'trust_pipeline_blocked') {
+            setRemoteBackendStatus('blocked')
+            setRemoteBackendMessage(`Trust pipeline blocked: ${failure.blockedReason ?? 'review usage import'}`)
+            return
+          }
+          throw new Error(`Usage import failed with ${response.status}`)
+        }
         const body = await response.json() as {
           summary?: UsageImportSummary
           snapshotRef?: string | null
@@ -3882,12 +3918,18 @@ function App() {
 
   const renderWorkspacePanels = (
     panels: WorkspacePanelDefinition[],
+    stage: RoleWorkspaceStage,
     cards?: readonly StageCard<RoleProjectionPanelKey>[],
   ) => {
     const panelsByKey = new Map(panels.map(panel => [panel.key, panel]))
-    const { primary, auxiliary } = cards
-      ? splitCardsByRoleAffinity(cards, roleProjection.role)
-      : { primary: panels, auxiliary: [] }
+    const layout = cards
+      ? buildRoleWorkspaceLayout({
+          stage,
+          cards,
+          role: roleProjection.role,
+          audience: roleProjection.audience,
+        })
+      : null
     const renderCards = (items: readonly (StageCard<RoleProjectionPanelKey> | WorkspacePanelDefinition)[]) => items
       .map(item => panelsByKey.get(item.key))
       .filter((panel): panel is WorkspacePanelDefinition => Boolean(panel))
@@ -3896,9 +3938,9 @@ function App() {
     return (
       <>
         <div data-testid="stage-primary-cards" className="grid gap-4">
-          {cards ? renderCards(primary) : panels.map(renderWorkspacePanel)}
+          {layout ? renderCards(layout.primary) : panels.map(renderWorkspacePanel)}
         </div>
-        {auxiliary.length > 0 && (
+        {layout && layout.auxiliary.length > 0 && (
           <details
             data-testid="stage-auxiliary-cards"
             className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4"
@@ -3907,7 +3949,7 @@ function App() {
               {auxiliarySummary}
             </summary>
             <div className="mt-4 grid gap-4">
-              {renderCards(auxiliary)}
+              {renderCards(layout.auxiliary)}
             </div>
           </details>
         )}
@@ -3943,7 +3985,7 @@ function App() {
             key: 'team_cost_simulator',
             node: teamCostSimulatorStack,
           },
-        ])
+        ], 'design', DESIGN_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'cost' && (
@@ -3966,7 +4008,7 @@ function App() {
               />
             ),
           },
-        ], COST_STAGE_CARDS)
+        ], 'cost', COST_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'bottleneck' && (
@@ -3989,7 +4031,21 @@ function App() {
               </Surface>
             ),
           },
-        ])
+          {
+            key: 'operational_signals',
+            node: <OperationalSignalSummary summary={operationalSignals} />,
+          },
+          {
+            key: 'margin_risk',
+            node: (
+              <MarginRiskWorkspace
+                planMargins={planMargins}
+                customerMargins={customerMargins}
+                topDecileShare={heavyUsers.topDecileShare}
+              />
+            ),
+          },
+        ], 'bottleneck', BOTTLENECK_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'optimize' && (
@@ -4039,7 +4095,7 @@ function App() {
               </Surface>
             ),
           },
-        ], OPTIMIZE_STAGE_CARDS)
+        ], 'optimize', OPTIMIZE_STAGE_CARDS)
       )}
 
       {activeDecisionStage === 'decision-log' && (
@@ -4081,7 +4137,7 @@ function App() {
               />
             ),
           },
-        ], DECISION_LOG_STAGE_CARDS)
+        ], 'decision-log', DECISION_LOG_STAGE_CARDS)
       )}
     </div>
   )

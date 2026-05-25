@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { PRODUCT_NAME } from '../../../../../src/lib/productBrand'
 
 import {
   createSupabaseWorkspaceMembershipStore,
@@ -28,10 +29,10 @@ export default async function WorkspaceAdminPage({
         <Link className="text-sm font-semibold text-primary-normal" href={`/w/${workspaceId}`}>
           Back to workspace
         </Link>
-        <h1 className="mt-4 text-3xl font-semibold">Production admin surface</h1>
+        <h1 className="mt-4 text-3xl font-semibold">{PRODUCT_NAME} production admin</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-label-neutral">
-          Admin surfaces require a real Supabase session and workspace membership. Connector execution remains
-          blocked unless approval, idempotency, rollback metadata, and ledger writes are present.
+          Demo admin is readiness and review first. Mutating sandbox execution stays blocked unless owner/admin access,
+          sandbox connector config, approval, idempotency, rollback metadata, and ledger writes are all present.
         </p>
         <div className="mt-6 rounded-wds border border-line-neutral bg-fill-alternative p-4">
           <p className="text-sm font-semibold">Access check</p>
@@ -43,6 +44,18 @@ export default async function WorkspaceAdminPage({
               role: {access.membership.role}
             </p>
           )}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[
+            ['Connector execution', 'review_only_until_sandbox_ready'],
+            ['Retention runner', 'review_only_until_job_rows_exist'],
+            ['Billing push', 'blocked_without_approval_and_ledger'],
+          ].map(([label, status]) => (
+            <div key={label} className="rounded-wds border border-line-neutral bg-fill-alternative p-4">
+              <p className="text-sm font-semibold">{label}</p>
+              <p className="mt-1 text-xs text-label-alternative" translate="no">{status}</p>
+            </div>
+          ))}
         </div>
       </section>
     </main>

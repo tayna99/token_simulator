@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 
 import '../src/index.css'
+import { PRODUCT_NAME } from '../src/lib/productBrand'
 
 export const metadata: Metadata = {
-  title: 'AgentCost',
+  title: PRODUCT_NAME,
   description: 'Production demo workspace for AI SaaS cost and agent operations.',
   other: {
     google: 'notranslate',

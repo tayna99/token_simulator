@@ -87,6 +87,7 @@ describe('P1 Vercel API routes', () => {
       body: {
         workspaceId: 'workspace-demo',
         query: 'cache margin',
+        runtimeMode: 'preview',
         structuredFactRefs: ['fact:gemini-3-5-flash'],
         collections: {
           official_docs: [{ id: 'google-pricing', text: 'Cache pricing source.' }],
