@@ -1,20 +1,20 @@
-# PRD v0.2: AI SaaS Cost & Margin Workspace
+# PRD(제품 요구사항 문서) v0.2: AI SaaS 비용·마진 워크스페이스
 
 ## 1. 제품 정의
 
-이 제품은 **LLM 운영 로그를 고객·기능·모델·플랜·세션 단위 원가로 재분류하고, AI SaaS의 마진과 가격정책 판단으로 연결하는 워크스페이스**다.
+이 제품은 **LLM(대규모 언어 모델) 운영 로그를 고객·기능·모델·플랜·세션 단위 원가로 재분류하고, AI SaaS(AI 기능을 제공하는 구독형 소프트웨어)의 마진과 가격정책 판단으로 연결하는 워크스페이스**다.
 
 단순히 "이번 달 LLM 비용이 얼마인가?"를 보여주는 도구가 아니다. 이 제품의 핵심 질문은 다음이다.
 
 > 우리 AI 기능은 고객별·기능별로 얼마의 원가를 만들고, 어떤 고객이나 기능이 마진을 깨고 있는가?
 
-약한 포지션은 "LLM 비용 계산기"다. 강한 포지션은 **개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace**다.
+약한 포지션은 "LLM 비용 계산기"다. 강한 포지션은 **개발자의 LLM 운영 로그를 비즈니스 원가와 가격정책 판단으로 번역하는 AI SaaS unit economics workspace(단위 경제성 워크스페이스)**다.
 
 ## 2. 리서치 근거
 
-공식 원본은 [evidence_board.csv](evidence_board.csv)다. 2026-05-07 기준 공식 evidence는 38개이고, [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv)에 후보/검증 이력 44개를 별도로 보관한다.
+공식 원본은 [evidence_board.csv](evidence_board.csv)다. 2026-05-07 기준 공식 evidence(검증 근거 사례)는 38개이고, [evidence_candidates_unverified.csv](evidence_candidates_unverified.csv)에 후보/검증 이력 44개를 별도로 보관한다.
 
-현재 Top Pain은 validator로 계산한다.
+현재 Top Pain(가장 중요한 문제)은 validator(검증 스크립트)로 계산한다.
 
 ```bash
 npm run research:validate
@@ -24,15 +24,15 @@ npm run research:validate
 
 | 순위 | pain | 점수 | 의미 |
 | --- | --- | ---: | --- |
-| 1 | `pain_margin_unknown` | 259 | AI 기능이 gross margin을 얼마나 깎는지 모른다. |
+| 1 | `pain_margin_unknown` | 259 | AI 기능이 gross margin(매출총이익률)을 얼마나 깎는지 모른다. |
 | 2 | `pain_heavy_user_loss` | 201 | 많이 쓰는 고객이 오히려 마진을 깨는 고객이 된다. |
 | 3 | `pain_usage_pricing_mismatch` | 193 | 비용은 usage 기반인데 가격은 seat/flat이라 마진이 깨진다. |
 
-이 결과는 MVP를 비용 절감 도구가 아니라 **unit economics와 pricing decision 도구**로 잡아야 한다는 신호다. 특히 대부분의 high-WTP pain은 "지금 구조로 계속 팔면 마진이 어떻게 될까?", "heavy user가 늘면 손해가 날까?", "usage-based pricing이나 credit pricing으로 바꾸면 나아질까?" 같은 **what-if 질문**으로 이어진다.
+이 결과는 MVP(최소 기능 제품)를 비용 절감 도구가 아니라 **unit economics와 pricing decision(가격정책 결정) 도구**로 잡아야 한다는 신호다. 특히 대부분의 high-WTP(지불 의향이 높은) pain은 "지금 구조로 계속 팔면 마진이 어떻게 될까?", "heavy user(많이 쓰는 고객)가 늘면 손해가 날까?", "usage-based pricing(사용량 기준 가격정책)이나 credit pricing(크레딧 기준 가격정책)으로 바꾸면 나아질까?" 같은 **what-if 질문(가정 실험 질문)**으로 이어진다.
 
 ## 2.1 경쟁 제품과 차별점
 
-Helicone, LangSmith, Phoenix, Langfuse, Portkey 같은 도구는 LLM observability, tracing, prompt debugging, gateway, usage tracking에 강하다. 이 제품의 차별점은 dev observability가 아니라 **Finance/CEO decision layer**에 있다.
+Helicone, LangSmith, Phoenix, Langfuse, Portkey 같은 도구는 LLM observability(LLM 요청에서 무슨 일이 일어났는지 추적하는 관측 기능), tracing(요청 흐름 추적), prompt debugging(LLM 입력 지시문 디버깅), gateway(LLM 호출을 한곳에서 받아 라우팅·제어하는 중간 관문), usage tracking(사용량 추적)에 강하다. 이 제품의 차별점은 dev observability가 아니라 **Finance/CEO decision layer(재무·CEO 의사결정 계층)**에 있다.
 
 경쟁 제품 비교 원장은 [ai-saas-llm-cost-products-comparison-2026.md](ai-saas-llm-cost-products-comparison-2026.md)에 둔다. 핵심 결론은 관측 도구와 billing 도구 사이에 빈 공간이 있다는 것이다.
 
@@ -42,11 +42,11 @@ Helicone, LangSmith, Phoenix, Langfuse, Portkey 같은 도구는 LLM observabili
 
 조금 더 구체적으로 말하면:
 
-> Observability는 개발자에게 무슨 일이 있었는지 보여주고, billing은 고객에게 사용량을 청구한다. 이 제품은 그 사이에서 그 사용량이 이익인지 손실인지, 가격정책을 어떻게 바꿔야 하는지 설명한다.
+> Observability는 개발자에게 무슨 일이 있었는지 보여주고, billing(청구)은 고객에게 사용량을 청구한다. 이 제품은 그 사이에서 그 사용량이 이익인지 손실인지, 가격정책을 어떻게 바꿔야 하는지 설명한다.
 
-## 2.2 3-Layer Product Model
+## 2.2 3-Layer Product Model(3층 제품 모델)
 
-제품은 Group A와 Group B를 따로 보지 않는다. Group A는 entry point, Core Engine은 비용 귀속 레이어, Group B는 paid value다.
+제품은 Group A와 Group B를 따로 보지 않는다. Group A는 entry point(제품을 처음 쓰게 만드는 진입점), Core Engine(비용 귀속과 의사결정 계산을 맡는 핵심 엔진)은 비용 귀속 레이어, Group B는 paid value(돈을 내고 살 만한 의사결정 가치)다.
 
 ```txt
 Group A: Entry Point
@@ -62,7 +62,7 @@ Group B: Paid Value
 고객별 수익성, 플랜별 gross margin, heavy user 손실, pricing simulation, CEO/CFO report
 ```
 
-핵심은 "비용이 튀었다"에서 멈추지 않는 것이다. 운영 로그를 attribution dimension으로 재분류해야 "어떤 고객, 기능, 플랜, 세션이 마진을 깨는가?"라는 유료 의사결정 질문에 답할 수 있다.
+핵심은 "비용이 튀었다"에서 멈추지 않는 것이다. 운영 로그를 attribution dimension(비용 귀속 기준)으로 재분류해야 "어떤 고객, 기능, 플랜, 세션이 마진을 깨는가?"라는 유료 의사결정 질문에 답할 수 있다.
 
 ## 3. Evidence 운영 원칙
 

@@ -1,7 +1,7 @@
 # TERMINOLOGY: 용어 친화화 가이드 (AgentPayroll)
 
 작성일: 2026-05-23  
-목적: 사용자(특히 1인 창업자)가 겁먹지 않는 **쉬운 말**로 통일한다. finance·엔지니어링 전문용어는 기본 노출에서 빼고, 필요할 때만 보조로 보여준다.
+목적: 사용자(특히 1인 창업자)가 겁먹지 않는 **쉬운 말**로 통일한다. finance(재무)·엔지니어링 전문용어는 기본 노출에서 빼고, 필요할 때만 보조로 보여준다.
 
 ---
 
@@ -19,22 +19,22 @@
 
 | 어려운 말 | 쉬운 말 (기본) | 보조(선택) |
 | --- | --- | --- |
-| Agent | **AI 팀원** | Agent |
+| Agent | **AI 팀원** | Agent(일을 맡아 실행하는 AI 역할) |
 | Research/PM/Engineering Agent | 리서치 AI · 기획 AI · 개발 AI · 고객응대 AI | — |
-| agent-run / session | **작업 1회** | — |
-| deliverable | **한 일 / 결과물** | — |
-| review gate / approval gate | **사람 확인** | — |
+| agent-run / session | **작업 1회** | agent-run(에이전트 실행), session(작업 묶음) |
+| deliverable | **한 일 / 결과물** | deliverable(고객에게 보여줄 수 있는 산출물) |
+| review gate / approval gate | **사람 확인** | gate(넘어가기 전 확인문) |
 | monthly cost | **이번 달 비용** ("AI 팀 급여") | — |
 
 ## 2. 비용 · 돈
 
 | 어려운 말 | 쉬운 말 | 보조 |
 | --- | --- | --- |
-| AI COGS / LLM cost | **AI 비용** | — |
+| AI COGS / LLM cost | **AI 비용** | COGS(매출원가) |
 | token / input·output tokens | **사용량** | 토큰 |
 | cost attribution | **비용이 어디서 나오는지** | — |
 | cost per request/report | **1건당 비용** | — |
-| gross margin | **남는 돈 / 남는 비율** | 이익률, gross margin |
+| gross margin | **남는 돈 / 남는 비율** | 이익률, gross margin(매출총이익률) |
 | customer profitability | **이 고객은 남는가 (고객별 손익)** | — |
 | heavy user / heavy-user loss | **많이 쓰는 고객 / 많이 쓸수록 손해 나는 고객** | — |
 | margin compression / erosion | **이익이 줄어듦** | — |
@@ -57,14 +57,14 @@
 
 | 어려운 말 | 쉬운 말 | 보조 |
 | --- | --- | --- |
-| deterministic engine | (화면 비노출) **정확히 계산** | — |
+| deterministic engine | (화면 비노출) **정확히 계산** | deterministic(같은 입력이면 같은 결과가 나오는 방식) |
 | "숫자는 deterministic, 해석은 AI" | **숫자는 정확히 계산하고, 설명은 AI가 도와줘요** | — |
 | tool ref / tool ref chip | **근거** | — |
 | risk card | **주의할 점** | — |
 | bottleneck | **돈이 가장 많이 새는 곳** | — |
 | optimization | **비용 줄이기** | — |
-| benchmark | **비슷한 팀 평균과 비교** | — |
-| Plan vs Actual | **예상 vs 실제** | — |
+| benchmark | **비슷한 팀 평균과 비교** | benchmark(비교 기준) |
+| Plan vs Actual | **예상 vs 실제** | Plan vs Actual(계획 대비 실제) |
 | Decision & Approval Log | **운영 일지 (내가 정한 것들)** | — |
 | Human Operating Decision | **사람이 정하기** | — |
 | attribution 축(customer/feature/model/plan/session/agent-run) | 고객별 · 기능별 · 모델별 · **요금제별** · 작업별 | — |
