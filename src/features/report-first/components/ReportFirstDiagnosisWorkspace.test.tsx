@@ -14,15 +14,16 @@ describe('ReportFirstDiagnosisWorkspace', () => {
   it('starts with the Korean margin diagnosis flow and hides internal machinery', () => {
     render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="production_demo_unavailable" />)
 
-    expect(screen.getByRole('heading', { name: /AI 기능 때문에 손해 보는 고객을 찾으세요/ })).toBeInTheDocument()
-    expect(screen.getByText(/어떤 고객과 기능이 마진을 깨는지 찾아드립니다/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /AI 비용 리포트 만들기/ })).toBeInTheDocument()
+    expect(screen.getByText(/CSV\/summary -> Trust Gate -> Money Leak -> Decision Candidate -> Adopt\/Reject\/Hold -> PDF Report/)).toBeInTheDocument()
+    expect(screen.getByTestId('trust-assurance-panel')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /사용량 CSV 업로드/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /Stripe\/매출 CSV 업로드/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /샘플로 보기/ }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Summary JSON/ })).toBeInTheDocument()
     expect(screen.queryByText(/RAG|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /PDF 만들기/ })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /PDF 만들기/ })[0]).toBeDisabled()
+    expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ })[0]).toBeDisabled()
   })
 
   it('updates the diagnosis preview when CSV state changes', () => {
@@ -91,16 +92,61 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     )
 
     fireEvent.click(screen.getAllByRole('button', { name: /샘플로 보기/ })[0])
-    expect(screen.queryByRole('link', { name: /PDF 만들기/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByRole('button', { name: /PDF 만들기/ }).find(button => !button.hasAttribute('disabled'))!)
+    fireEvent.click(screen.getByLabelText(/요금제\/credit 정책 변경 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))!)
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: /PDF 만들기/ })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: /PDF 리포트 다운로드/ })).toHaveAttribute(
         'href',
         '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:pdf',
       )
     })
     expect(fetcher).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('requires explicit Adopt Reject or Hold before creating a PDF report', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/api/usage/import')) {
+        return new Response(JSON.stringify({ snapshotRef: 'usage:p1:workspace-demo:2026-05' }), { status: 202 })
+      }
+      if (url.includes('/api/reports')) {
+        return new Response(JSON.stringify({
+          reportRun: {
+            id: 'report-run-2026-05',
+            artifacts: [{
+              id: 'report-artifact:report-run-2026-05:pdf',
+              format: 'pdf',
+              downloadPath: '/api/reports/report-run-2026-05/download?artifactId=report-artifact:report-run-2026-05:pdf',
+            }],
+          },
+        }), { status: 202 })
+      }
+      return new Response('{}', { status: 404 })
+    })
+
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" fetcher={fetcher} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+
+    expect(screen.getByText(/Adopt\/Reject\/Hold 선택이 필요합니다/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))).toBeUndefined()
+
+    fireEvent.click(screen.getByLabelText(/요금제\/credit 정책 변경 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Adopt/ }))
+
+    const enabledPdfButton = screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))
+    expect(enabledPdfButton).toBeDefined()
+    fireEvent.click(enabledPdfButton!)
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /PDF 리포트 다운로드/ })).toBeInTheDocument())
+    const reportCall = fetcher.mock.calls.find(([input]) => String(input).includes('/api/reports'))
+    expect(JSON.parse(String(reportCall?.[1]?.body)).reportFirst).toMatchObject({
+      decisionRefs: ['decision:diagnosis:pricing-policy'],
+      decisionChoice: 'adopt',
+    })
   })
 })
