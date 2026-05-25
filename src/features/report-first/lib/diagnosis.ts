@@ -191,7 +191,7 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
     'tool:diagnosis.loss_customers',
     'tool:diagnosis.feature_margin',
     'tool:diagnosis.policy_candidate',
-    input.snapshotRef ?? '',
+    input.snapshotRef ?? 'diagnosis_preview',
   ])
 
   if (!gate.canPreview) {
