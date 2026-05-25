@@ -440,7 +440,7 @@ Decision {
 18. SDK/Gateway 자동 수집, Helicone/Langfuse export import
 19. Stripe/Metronome billing 연동
 20. Re-org 추천 알고리즘 (6주 누적)
-21. Multi-tenant
+21. Multi-tenant(여러 고객/조직을 분리해 운영하는 구조)
 
 ---
 

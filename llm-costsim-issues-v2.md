@@ -1,22 +1,22 @@
-# LLM Cost Simulator — Improvement Tickets (v2)
+# LLM Cost Simulator — 개선 티켓(v2)
 
-_Based on live investigation of `https://llm-costsim-aulvsefh.manus.space/` on 2026-04-22._
-_**Target personas: (1) Developer, (2) PM/CEO.** Enterprise-procurement persona is explicitly out of scope for this pass._
-
----
-
-## Why this rewrite
-
-The first pass of this document focused on developer-facing correctness. That's necessary but not sufficient. Once we anchor the product to **two** personas — developer and PM/CEO — a second class of gaps becomes visible, centered almost entirely on the **Monthly Simulator**:
-
-- Developers want: _"paste my prompt, see the real $/call with caching"_ (Quick Calc-centric).
-- PM/CEOs want: _"compare scenarios, show me the migration savings, let me export a slide"_ (Monthly-centric, currently underbuilt).
-
-Monthly Simulator today is effectively "Quick Calc × 30 days" with a broken time-series chart. It does not answer any of the three PM questions that matter: **What-if**, **Migration ROI**, and **Exportable summary**.
+_2026-04-22에 `https://llm-costsim-aulvsefh.manus.space/`를 live investigation(실제 배포 화면 조사)한 결과를 바탕으로 작성._
+_**Target personas(대상 사용자): (1) Developer, (2) PM/CEO.** Enterprise-procurement persona(기업 구매/조달 담당자)는 이번 범위에서 명시적으로 제외한다._
 
 ---
 
-## Persona map of every ticket
+## 왜 다시 썼는가
+
+첫 번째 문서는 developer-facing correctness(개발자 관점의 정확성)에 집중했다. 그것은 필요하지만 충분하지 않다. 제품을 **두 persona(사용자 유형)**, 즉 developer와 PM/CEO에 맞춰 고정하면 두 번째 종류의 빈틈이 보인다. 그 빈틈은 거의 전부 **Monthly Simulator**에 모여 있다.
+
+- Developers want: _"paste my prompt, see the real $/call with caching"_ (Quick Calc 중심).
+- PM/CEOs want: _"compare scenarios, show me the migration savings, let me export a slide"_ (Monthly 중심이지만 현재는 약함).
+
+현재 Monthly Simulator는 사실상 "Quick Calc × 30 days"에 broken time-series chart(깨진 시계열 차트)를 붙인 상태다. PM에게 중요한 세 질문인 **What-if(가정 변경), Migration ROI(모델 교체 투자 대비 효과), Exportable summary(공유 가능한 요약)** 중 어느 것도 충분히 답하지 못한다.
+
+---
+
+## 모든 티켓의 persona map(사용자별 영향)
 
 | # | Ticket | Dev | PM/CEO |
 |---|---|:---:|:---:|
@@ -37,142 +37,142 @@ Monthly Simulator today is effectively "Quick Calc × 30 days" with a broken tim
 | **15** | **Dual Hero entry points (dev vs PM)** | ● | **●●** |
 | **16** | **"Board-ready" summary card at top of Monthly** | — | **●●●** |
 
-`●●●` = primary beneficiary; `●●` = strong secondary; `●` = benefits; `—` = not applicable.
+`●●●` = primary beneficiary(가장 큰 수혜자); `●●` = strong secondary(강한 보조 수혜); `●` = benefits(도움 됨); `—` = not applicable(해당 없음).
 
 ---
 
-## Revised priority list
+## 수정된 우선순위 목록
 
 | # | Severity | Ticket | Est. effort |
 |---|---|---|---|
-| 1 | **P0** | Cost Breakdown draws lines before each model's `releaseDate` | S |
-| 3 | **P0** | "Cheapest option" badge misframes the entire product | S |
-| 15 | **P0** | Dual Hero entry points (Dev vs PM) | XS |
-| 12 | **P1** | Migration comparison panel (A → B delta) | M |
-| 13 | **P1** | Scenario planner (best / base / worst) | M |
+| 1 | **P0** | Cost Breakdown이 각 모델의 `releaseDate` 이전에도 선을 그림 | S |
+| 3 | **P0** | "Cheapest option" badge가 전체 제품을 잘못 프레이밍 | S |
+| 15 | **P0** | Dual Hero entry points(Dev vs PM) | XS |
+| 12 | **P1** | Migration comparison panel(A → B delta) | M |
+| 13 | **P1** | Scenario planner(best / base / worst) | M |
 | 4 | **P1** | Prompt-to-token estimator | M |
 | 5 | **P1** | Caching + batch discount toggles | M |
-| 16 | **P1** | "Board-ready" summary card at top of Monthly | S |
+| 16 | **P1** | Monthly 상단 "Board-ready" summary card | S |
 | 14 | **P2** | Export to PNG/PDF | S |
-| 6 | **P2** | Exclude brand names from translation | XS |
+| 6 | **P2** | Brand names를 번역에서 제외 | XS |
 | 7 | **P2** | Context window + rate limit + benchmark links | S |
 | 8 | **P2** | Recommendations rationale | S |
-| 9 | **P2** | Restore 4-tab header on all routes | XS |
+| 9 | **P2** | 모든 route에 4-tab header 복구 | XS |
 | 2 | **P2** | Orphan `priceHistory` key cleanup | XS |
 | 10 | **P3** | Custom Models JSON export/import | S |
 | 11 | **P3** | Share-URL visibility | XS |
 
-Note the reshuffle vs v1: **#15 (dual Hero) jumps to P0** because if the first screen speaks only to developers, PM/CEO visitors don't even reach the Monthly Simulator. And **#12 and #13 are now P1** ahead of the token estimator, because Monthly Simulator without migration/scenario features is half-built for its intended audience.
+v1 대비 재정렬: **#15(dual Hero)가 P0로 올라간다.** 첫 화면이 개발자에게만 말하면 PM/CEO 방문자는 Monthly Simulator에 도달하기 전에 이탈한다. 그리고 **#12와 #13이 token estimator보다 앞선 P1**이다. Monthly Simulator에 migration/scenario 기능이 없으면 의도한 audience에게 반쪽짜리 제품이기 때문이다.
 
 ---
 
-## Evidence log (from live investigation)
+## Evidence log(live investigation 기반 근거)
 
 | Check | Finding |
 |---|---|
-| Network requests for pricing | **Zero.** All prices hardcoded in `index-Dunnx39z.js` (~900KB bundle). |
+| pricing network requests | **0개.** 모든 가격은 `index-Dunnx39z.js` 약 900KB bundle 안에 hardcoded. |
 | Footer disclaimer | "Prices based on official API docs (as of April 2026)." |
 | Model data shape | `{ id, provider, inputPrice, outputPrice, contextWindow, releaseDate }` |
 | `releaseDate` values | GPT-5.4: `2026-04`; Claude Opus 4.7: `2026-03`; Sonnet 4.6: `2026-02` |
-| Cost Breakdown chart X-axis | `2026-01 → 2026-04` regardless of each model's release date |
+| Cost Breakdown chart X-axis | 각 모델 release date와 무관하게 `2026-01 → 2026-04` |
 | Workload presets (already exist) | Basic Chat, Document Analysis, Code Generation, Batch Processing, Data Extraction, Summarization |
 | Navigation tabs on `/` | 4 tabs |
-| Navigation tabs on `/monthly` | **2 tabs** (Recommendations and Custom Models missing) |
+| Navigation tabs on `/monthly` | **2 tabs**(Recommendations와 Custom Models 누락) |
 | Korean translation bugs | `Anthropic → 인류`, `OpenAI → 오픈아이`, `Copilot Standard → 부조종사 표준` |
-| `priceHistory` i18n key | Present in bundle, not rendered on any visible UI element |
+| `priceHistory` i18n key | bundle에는 있지만 어떤 visible UI element에도 렌더되지 않음 |
 
 ---
 
-## Tickets (full detail)
+## Tickets(상세)
 
-### #1 [P0] Cost Breakdown draws lines before model `releaseDate` — primary PM/CEO
+### #1 [P0] Cost Breakdown이 모델 `releaseDate` 이전에도 선을 그림 — PM/CEO 우선
 
-**Why primary for PM/CEO:** The single most likely use case for this chart is a PM asking "what would Q1 have looked like if we'd used Claude Opus 4.7?" The chart answers that question with a confident line **even though Opus 4.7 didn't exist until 2026-03**. That's not a rounding issue — it's the chart telling the user something factually false and then letting them take it to a budget meeting.
+**PM/CEO에게 중요한 이유:** 이 chart의 가장 가능성 높은 use case는 PM이 "Claude Opus 4.7을 썼다면 Q1이 어떻게 보였을까?"라고 묻는 것이다. 하지만 chart는 **Opus 4.7이 2026-03 이전에는 존재하지 않았는데도** 자신 있게 선을 그려 답한다. 반올림 문제가 아니라, 사용자에게 사실과 다른 정보를 말하고 예산 회의에 가져가게 만드는 문제다.
 
 **Repro**
-1. Open `/monthly`.
-2. Select GPT-5.4 (`releaseDate: 2026-04`) and Claude Sonnet 4.6 (`releaseDate: 2026-02`).
-3. Chart shows a continuous line from 2026-01 for both.
+1. `/monthly`를 연다.
+2. GPT-5.4(`releaseDate: 2026-04`)와 Claude Sonnet 4.6(`releaseDate: 2026-02`)을 선택한다.
+3. 차트가 두 모델 모두 2026-01부터 연속 선을 보여준다.
 
 **Fix**
-- Don't plot points where `month < model.releaseDate`.
-- Render pre-release segment as greyed or dashed, with tooltip "Not yet released."
-- Add info icon near the time-range picker: "Chart only shows months in which each model was available."
+- `month < model.releaseDate`인 point는 그리지 않는다.
+- 출시 전 segment(구간)는 greyed 또는 dashed로 표시하고 tooltip에 "Not yet released."를 넣는다.
+- time-range picker 근처에 info icon을 붙인다. "Chart only shows months in which each model was available."
 
 **Acceptance**
-- [ ] No line drawn for any (model, month) pair where `month < model.releaseDate`.
-- [ ] Legend shows release date next to each model name.
+- [ ] `(model, month)` 쌍에 대해 `month < model.releaseDate`이면 선이 그려지지 않는다.
+- [ ] Legend가 각 모델명 옆에 release date를 보여준다.
 
 ---
 
-### #3 [P0] "Cheapest option $X" badge misframes the product — affects both personas
+### #3 [P0] "Cheapest option $X" badge가 제품을 잘못 프레이밍 — 두 persona 모두 영향
 
 **Problem**
-The top-right badge commits the UX to a "find the cheapest" job. Developers need workload-aware pricing; PMs need total-cost-of-ownership thinking. Neither maps to "cheapest sticker price."
+우상단 badge는 UX를 "가장 싼 것 찾기" 작업으로 확정해 버린다. 개발자는 workload-aware pricing(작업량을 반영한 가격)이 필요하고, PM은 total-cost-of-ownership(전체 소유/운영 비용) 관점이 필요하다. 둘 다 "cheapest sticker price(표면상 최저 가격)"와 맞지 않는다.
 
 **Fix (minimal)**
-- Relabel to **"Lowest base price"** with tooltip: "Does not include prompt caching, batch discounts, or quality differences."
+- label을 **"Lowest base price"**로 바꾸고 tooltip을 붙인다. "Does not include prompt caching, batch discounts, or quality differences."
 
 **Fix (better)**
-- Replace badge with contextual summary: `"Your config: {input} in / {output} out → lowest: {model} at ${price}"`. On hover, top 3 with deltas.
+- badge를 contextual summary(맥락 요약)로 교체한다. `"Your config: {input} in / {output} out → lowest: {model} at ${price}"`. hover 시 top 3와 delta 표시.
 
 **Acceptance**
-- [ ] No UI element uses the word "cheapest" without a scope qualifier (workload, caching state, etc.).
+- [ ] 어떤 UI element도 scope qualifier(workload, caching state 등) 없이 "cheapest"라는 단어를 쓰지 않는다.
 
 ---
 
-### #15 [P0] Dual Hero entry points (Dev vs PM) — primary PM/CEO
+### #15 [P0] Dual Hero entry points(Dev vs PM) — PM/CEO 우선
 
 **Why**
-Current Hero: _"Compare LLM API pricing across OpenAI, Claude, Gemini, Grok, and Copilot."_ This is a feature description. A PM visiting the tool for the first time doesn't see their question reflected anywhere on the first screen, so they either bounce or fall into Quick Calc, which is the wrong tool for them.
+현재 Hero: _"Compare LLM API pricing across OpenAI, Claude, Gemini, Grok, and Copilot."_ 이는 기능 설명이다. 도구를 처음 방문한 PM은 첫 화면 어디에서도 자신의 질문을 보지 못한다. 그래서 이탈하거나 Quick Calc로 들어가는데, Quick Calc는 그들에게 맞는 도구가 아니다.
 
-**Fix — two primary CTAs on the Hero**
+**Fix — Hero에 두 개의 primary CTA**
 
-Rewrite Hero as:
+Hero를 다음처럼 다시 쓴다.
 
 > **LLM pricing, decoded.**
 > _Real costs — not just sticker prices — with caching, batching, and your actual traffic._
 >
 > `[ I'm a developer — Quick Calc → ]`  `[ I'm planning a budget — Monthly Simulator → ]`
 
-The two buttons are the entry points. Quick Calc flow remains as-is; the Monthly button lands on `/monthly` which — per tickets #12, #13, #16 — is redesigned to answer PM questions.
+두 버튼이 entry point다. Quick Calc flow는 유지하고, Monthly 버튼은 `/monthly`로 이동한다. `/monthly`는 #12, #13, #16에 따라 PM 질문에 답하도록 재설계된다.
 
 **Acceptance**
-- [ ] First-screen A/B test: bounce rate on `/` from PM visitors (proxy: sessions that go to `/monthly` within 30s) increases vs control.
-- [ ] Dev-Quick-Calc path length (clicks to first cost number) does not regress.
+- [ ] First-screen A/B test에서 PM visitor proxy(`/monthly`로 30초 안에 이동한 session)의 bounce rate가 control 대비 개선된다.
+- [ ] Dev-Quick-Calc path length(첫 비용 숫자까지의 click 수)는 나빠지지 않는다.
 
 ---
 
-### #12 [P1] Migration comparison panel — primary PM/CEO
+### #12 [P1] Migration comparison panel — PM/CEO 우선
 
 **Problem**
-The #1 question a PM asks a cost tool is: _"we're on Model A today, what does Model B cost us if we switch?"_ Currently the tool can only show absolute costs side by side, with no delta, no break-even, no payback-period view.
+PM이 비용 도구에 묻는 1번 질문은 "지금 Model A를 쓰는데 Model B로 바꾸면 비용이 어떻게 되나?"다. 현재 도구는 absolute costs(절대 비용)를 나란히 보여줄 수는 있지만, delta(차이), break-even(손익분기), payback-period(회수 기간)를 한 번에 보여주지 못한다.
 
-**Fix — add a "Compare migration" mode inside Monthly Simulator**
+**Fix — Monthly Simulator 안에 "Compare migration" mode 추가**
 
 UI:
-- Two slots: **Current model** and **Candidate model**.
+- 두 slot: **Current model**과 **Candidate model**.
 - Output panel:
   - Monthly cost today: $X
   - Monthly cost after switch: $Y
-  - Monthly delta: **$(X − Y)** (green if saving, red if not)
+  - Monthly delta: **$(X − Y)**(절감이면 green, 아니면 red)
   - Annualized delta: **$(X − Y) × 12**
   - "Break-even on migration effort: {estimated engineering hours at $150/hr} = {months}"
-- Below: "What changes if…" with sliders for (a) traffic multiplier, (b) cache hit rate, (c) batch adoption. All three sliders move both numbers live.
+- 아래에는 "What changes if..." slider 3개: (a) traffic multiplier, (b) cache hit rate, (c) batch adoption. 세 slider 모두 두 숫자를 live로 움직인다.
 
 **Acceptance**
-- [ ] User can pick any two models and see annualized delta in one view.
-- [ ] Shareable URL preserves the comparison.
-- [ ] Migration panel respects workload preset and caching toggles from tickets #4, #5.
+- [ ] 사용자는 어떤 두 모델이든 골라 한 view에서 annualized delta를 볼 수 있다.
+- [ ] shareable URL이 comparison을 보존한다.
+- [ ] Migration panel은 tickets #4, #5의 workload preset과 caching toggle을 반영한다.
 
 ---
 
-### #13 [P1] Scenario planner (best / base / worst) — primary PM/CEO
+### #13 [P1] Scenario planner(best / base / worst) — PM/CEO 우선
 
 **Problem**
-Finance people think in ranges, not point estimates. "Monthly cost: $4,200" is useless for budget planning; "Monthly cost: $2,800 (best) / $4,200 (base) / $7,500 (worst, if traffic doubles)" is the format they actually need.
+Finance people(재무 담당자)은 point estimate(단일 추정값)가 아니라 range(범위)로 생각한다. "Monthly cost: $4,200"은 예산 계획에 별로 유용하지 않다. "Monthly cost: $2,800(best) / $4,200(base) / $7,500(worst, traffic doubles)"가 실제로 필요한 형식이다.
 
-**Fix — three-column scenario table in Monthly Simulator**
+**Fix — Monthly Simulator에 3열 scenario table 추가**
 
 ```
                   Best case        Base case       Worst case
@@ -184,105 +184,105 @@ Monthly cost      $1,800           $4,200          $12,600
 Annualized        $21,600          $50,400         $151,200
 ```
 
-User can edit any cell; columns recompute independently. Defaults for best/worst come from sensible preset multipliers per workload preset.
+사용자는 어떤 cell이든 편집할 수 있고, 각 column은 독립적으로 재계산된다. best/worst 기본값은 workload preset별 합리적 multiplier에서 나온다.
 
 **Acceptance**
-- [ ] Three columns visible by default when user lands on Monthly Simulator.
-- [ ] Any cell edit updates only its column.
-- [ ] The whole table is a single share URL.
+- [ ] 사용자가 Monthly Simulator에 들어오면 세 열이 기본으로 보인다.
+- [ ] 어떤 cell edit도 해당 column만 갱신한다.
+- [ ] 전체 table이 하나의 share URL로 보존된다.
 
 ---
 
-### #16 [P1] "Board-ready" summary card at top of Monthly — primary PM/CEO
+### #16 [P1] Monthly 상단 "Board-ready" summary card — PM/CEO 우선
 
 **Problem**
-A PM who just ran a scenario on Monthly Simulator has to manually translate "$0.01 per call × 150k calls" into a sentence for a slide. That work is done by every user, every time, poorly.
+Monthly Simulator에서 scenario를 돌린 PM은 "$0.01 per call × 150k calls"를 slide용 문장으로 직접 바꿔야 한다. 모든 사용자가 매번 이 일을 반복하고, 품질도 들쭉날쭉하다.
 
-**Fix — pinned summary card above all charts**
+**Fix — 모든 chart 위에 pinned summary card 배치**
 
-Template (auto-generated from current inputs):
+현재 입력에서 자동 생성하는 template:
 
 > On **Claude Sonnet 4.6** with **150,000 calls/month** (Document Analysis workload, 80% cache hit, batch enabled), estimated monthly cost is **$4,200**. Switching to **Gemini 3.1 Flash** would reduce this to **$680/month** (−84%), but context window drops from 200K → 1M and LMArena score differs by {X} points.
 
-Rendered as a card with a "Copy to clipboard" button and an "Export as PNG" button (ties into #14).
+card에는 "Copy to clipboard" button과 "Export as PNG" button을 둔다(#14와 연결).
 
 **Acceptance**
-- [ ] Card text updates within 200ms of any input change.
-- [ ] All figures in the card are present in the share URL.
-- [ ] Text is coherent English/Korean, no placeholder artifacts.
+- [ ] 어떤 input change에도 card text가 200ms 안에 갱신된다.
+- [ ] card 안의 모든 figure(수치)가 share URL에 들어있다.
+- [ ] text는 영어/한국어 모두 자연스럽고 placeholder artifact(자리표시자 찌꺼기)가 없다.
 
 ---
 
-### #14 [P2] Export to PNG/PDF — primary PM/CEO
+### #14 [P2] Export to PNG/PDF — PM/CEO 우선
 
 **Fix**
-- Export button on Monthly Simulator produces a 16:9 PNG of the summary card + chart + scenario table, suitable for pasting into a deck.
-- Optional PDF with the same content plus the full disclaimer ("Based on API docs as of {date}. Not a quote.").
-- Client-side only — no server, no data sent anywhere.
+- Monthly Simulator의 export button은 summary card + chart + scenario table을 담은 16:9 PNG를 만든다. deck(슬라이드 자료)에 붙여 넣기 적합해야 한다.
+- 선택적으로 같은 내용과 full disclaimer("Based on API docs as of {date}. Not a quote.")를 포함한 PDF를 제공한다.
+- Client-side only(브라우저 안에서만 처리). 서버 없음, 데이터 전송 없음.
 
 **Acceptance**
-- [ ] One-click export works in Chrome/Safari/Firefox.
-- [ ] Output includes a visible timestamp and the source URL.
+- [ ] Chrome/Safari/Firefox에서 one-click export가 작동한다.
+- [ ] 출력물에는 visible timestamp(보이는 생성 시각)와 source URL이 포함된다.
 
 ---
 
-### #4 [P1] Prompt-to-token estimator — primary Dev
+### #4 [P1] Prompt-to-token estimator — Dev 우선
 
-(Unchanged from v1. See v1 for full body. Placed here to preserve ticket numbering.)
+(v1과 동일. 번호 보존을 위해 여기에 둔다. 자세한 본문은 v1 문서를 참고.)
 
 ---
 
-### #5 [P1] Caching + batch discount toggles, wired to existing presets — primary Dev
+### #5 [P1] Caching + batch discount toggle을 기존 preset에 연결 — Dev 우선
 
 **Existing state**
-6 workload presets already exist (Basic Chat, Document Analysis, Code Generation, Batch Processing, Data Extraction, Summarization). None apply provider-specific discounts.
+6개 workload preset이 이미 있다. Basic Chat, Document Analysis, Code Generation, Batch Processing, Data Extraction, Summarization이다. provider-specific discount(제공사별 할인)는 적용되지 않는다.
 
 | Provider | Caching discount | Batch discount |
 |---|---|---|
-| Anthropic | up to 90% on cached tokens | 50% via Message Batches API |
-| OpenAI | 50% on cached input | 50% via Batch API |
-| Google | caching available; rate varies | batch available |
-| xAI | caching on Grok models | N/A |
+| Anthropic | cached tokens에 최대 90% | Message Batches API로 50% |
+| OpenAI | cached input에 50% | Batch API로 50% |
+| Google | caching 가능, rate는 다양 | batch 가능 |
+| xAI | Grok 모델에서 caching | N/A |
 
 **Fix**
-- Toggles: **Prompt caching** (slider, 0–100% cached), **Batch mode** (on/off).
-- Per-preset defaults (Document Analysis = 80% cache, Batch Processing = batch on, etc.).
-- Effective formula on hover: `input × (1 − cache_ratio × cache_discount) × (batch ? 0.5 : 1) + output × (batch ? 0.5 : 1)`.
-- **PM-critical:** when caching/batch is on, the top badge (#3) and scenario planner (#13) must both reflect it. Otherwise the PM gets a number that looks good in Monthly but doesn't match what the developer reports.
+- Toggle: **Prompt caching**(cached 0-100% slider), **Batch mode**(on/off).
+- preset별 default(Document Analysis = 80% cache, Batch Processing = batch on 등).
+- hover에 effective formula: `input × (1 − cache_ratio × cache_discount) × (batch ? 0.5 : 1) + output × (batch ? 0.5 : 1)`.
+- **PM-critical:** caching/batch가 켜지면 top badge(#3)와 scenario planner(#13)가 모두 이를 반영해야 한다. 그렇지 않으면 PM이 Monthly에서 본 숫자와 개발자가 보고한 숫자가 맞지 않는다.
 
 **Acceptance**
-- [ ] Each preset pre-fills realistic toggle values.
-- [ ] Models that don't support a given discount are greyed with a tooltip.
-- [ ] All downstream numbers (badge, scenario, summary card) respect the toggle state.
+- [ ] 각 preset이 현실적인 toggle 값을 미리 채운다.
+- [ ] 지원하지 않는 discount는 tooltip과 함께 회색 처리된다.
+- [ ] downstream numbers(badge, scenario, summary card)가 toggle state를 모두 반영한다.
 
 ---
 
-### #6–#11 — unchanged from v1
+### #6-#11 — v1과 동일
 
-(See v1 document for full detail on these tickets — translation, context window display, recommendations rationale, navigation consistency, custom-model export, share-URL visibility.)
-
----
-
-## Suggested 2-week plan
-
-**Week 1 — stop misleading anyone**
-- Day 1–2: #1, #3, #15, #9. All small. Ship as "Data accuracy & persona framing" release. This alone changes how both developer and PM visitors perceive the tool.
-- Day 3–5: #4 (token estimator) and #5 (caching/batch toggles). Developer-path complete.
-
-**Week 2 — Monthly Simulator becomes a decision tool**
-- Day 6–8: #12 (migration comparison).
-- Day 9–10: #13 (scenario planner).
-- Day 11: #16 (summary card) — small because it's a synthesis of #12 and #13.
-- Day 12: #14 (export).
-- Day 13–14: polish — #6, #7, #8, #2.
-
-After two weeks, #10 and #11 are the remaining P3 items that can go into a "team features" release informed by real usage data.
+(translation, context window display, recommendations rationale, navigation consistency, custom-model export, share-URL visibility에 대한 상세 내용은 v1 문서를 참고.)
 
 ---
 
-## Open questions for the product owner
+## 제안 2주 계획
 
-1. Is there analytics data on the Quick Calc vs Monthly Simulator split? If Monthly is under-used, tickets #12/#13/#16 are the highest-leverage investment.
-2. What's the actual data source for the rising Cost Breakdown slope? Bundle has no `growthRate` variable. Could be a monthly usage-growth assumption baked into the chart renderer.
-3. Is `priceHistory` an abandoned feature or staged?
-4. For #14 (export), any existing brand/style guide to match?
+**Week 1 — 누구도 오해하지 않게 만들기**
+- Day 1-2: #1, #3, #15, #9. 모두 작다. "Data accuracy & persona framing" release로 배포한다. 이것만으로도 developer와 PM visitor가 도구를 인식하는 방식이 바뀐다.
+- Day 3-5: #4(token estimator)와 #5(caching/batch toggles). developer path 완성.
+
+**Week 2 — Monthly Simulator를 decision tool로 만들기**
+- Day 6-8: #12(migration comparison).
+- Day 9-10: #13(scenario planner).
+- Day 11: #16(summary card). #12와 #13의 synthesis(종합)이므로 작다.
+- Day 12: #14(export).
+- Day 13-14: polish(마감 다듬기) — #6, #7, #8, #2.
+
+2주 뒤에는 #10과 #11만 P3로 남으며, 실제 사용 데이터를 보고 "team features" release에 넣을 수 있다.
+
+---
+
+## Product owner에게 남은 질문
+
+1. Quick Calc와 Monthly Simulator 사용 비중에 대한 analytics data가 있는가? Monthly가 덜 쓰인다면 #12/#13/#16이 가장 leverage(효과 대비 가치)가 큰 투자다.
+2. 상승하는 Cost Breakdown slope의 실제 data source는 무엇인가? bundle에는 `growthRate` 변수가 없다. chart renderer에 monthly usage-growth assumption(월별 사용량 증가 가정)이 박혀 있을 수 있다.
+3. `priceHistory`는 abandoned feature(버려진 기능)인가, staged feature(준비 중인 기능)인가?
+4. #14(export)는 맞춰야 할 기존 brand/style guide가 있는가?
