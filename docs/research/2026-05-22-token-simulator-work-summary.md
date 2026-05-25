@@ -83,7 +83,7 @@ pain_usage_pricing_mismatch:193
 
 `docs/research/pain_taxonomy.md`를 3층 구조로 재분류했다.
 
-Entry Point pain:
+Entry Point pain(처음 들어오는 운영 불편):
 
 - `pain_cost_unpredictable`
 - `pain_token_waste`
@@ -98,7 +98,7 @@ Core Engine pain(핵심 엔진이 해결할 고통):
 - `pain_provider_compare`
 - `pain_quality_tradeoff`
 
-Paid Value pain:
+Paid Value pain(돈을 낼 만한 의사결정 문제):
 
 - `pain_margin_unknown`
 - `pain_heavy_user_loss`
@@ -141,15 +141,15 @@ LLM Usage Event
 
 PRD 핵심:
 
-- Primary buyer: Founder, CEO, CFO, Finance
-- Primary user: AI SaaS developer, backend, ML, infra
+- Primary buyer(핵심 구매자): Founder, CEO, CFO, Finance
+- Primary user(핵심 사용자): AI SaaS developer, backend, ML, infra
 - MVP 입력: CSV usage import
 - MVP 출력: feature/customer/model/plan/session별 cost attribution
 - 유료 가치: gross margin, customer profitability, pricing simulation, CEO/CFO report
 
 MVP P0:
 
-- CSV usage import
+- CSV usage import(CSV 사용량 가져오기)
 - usage/spike 요약
 - 고객별 비용
 - 기능별 비용
@@ -159,19 +159,19 @@ MVP P0:
 - 고객별 수익성
 - 플랜별 gross margin
 - heavy-user 손실 탐지
-- pricing / credit / overage simulation
-- CEO/CFO/PM/Developer report
+- pricing / credit / overage simulation(가격정책/크레딧/초과 사용료 시뮬레이션)
+- CEO/CFO/PM/Developer report(대표/재무/제품/개발자용 리포트)
 
 MVP P1:
 
-- raw cost vs effective cost
-- invoice vs internal usage reconciliation
+- raw cost vs effective cost(표면 비용과 실제 비용 비교)
+- invoice vs internal usage reconciliation(청구서와 내부 사용량 대조)
 - quality/risk 반영
 
 MVP P2:
 
-- SDK / Middleware
-- Gateway / Proxy
+- SDK / Middleware(개발자가 붙이는 자동 수집 도구/중간 계층)
+- Gateway / Proxy(요청을 거쳐 보내는 관문/대리 서버)
 - Slack/Email 알림
 
 ### 6. Grok 리서치 반영
@@ -246,20 +246,20 @@ customer_id + plan_id + feature + model
 
 보고서에서 다뤄야 할 언어:
 
-- AI COGS
-- gross margin compression
-- cost per customer
-- customer profitability
-- margin erosion
-- pricing alignment
-- Board reporting
+- AI COGS(AI 매출원가)
+- gross margin compression(매출총이익률 압박)
+- cost per customer(고객당 원가)
+- customer profitability(고객별 수익성)
+- margin erosion(마진 침식)
+- pricing alignment(가격정책 정렬)
+- Board reporting(이사회/투자자 보고)
 
 리포트 방향:
 
-- Developer report: token, model, feature, session, agent-run breakdown
-- PM report: feature cost, rollout, pricing impact
-- CEO/CFO report: AI COGS, gross margin, customer profitability, pricing risk
-- Board-ready summary: AI unit economics, margin trend, customer concentration, plan risk
+- Developer report(개발자 리포트): token, model, feature, session, agent-run breakdown(토큰/모델/기능/세션/에이전트 실행별 분해)
+- PM report(제품 리포트): feature cost, rollout, pricing impact(기능 원가, 출시 영향, 가격 영향)
+- CEO/CFO report(대표/재무 리포트): AI COGS, gross margin, customer profitability, pricing risk(AI 매출원가, 매출총이익률, 고객별 수익성, 가격 위험)
+- Board-ready summary(이사회/투자자 공유용 요약): AI unit economics, margin trend, customer concentration, plan risk(AI 단위 수익성, 마진 추세, 고객 집중도, 요금제 위험)
 
 ### 10. 경쟁 제품 비교
 
@@ -416,25 +416,25 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 우선 더 모을 키워드:
 
-- cost per customer
-- gross margin
-- AI COGS
-- customer profitability
-- heavy users unprofitable
-- usage-based pricing
-- AI credits
-- hybrid pricing
-- board reporting
-- CFO dashboard
-- AI SaaS unit economics
+- cost per customer(고객당 원가)
+- gross margin(매출총이익률)
+- AI COGS(AI 매출원가)
+- customer profitability(고객별 수익성)
+- heavy users unprofitable(많이 쓰는 고객이 손해가 되는 상황)
+- usage-based pricing(사용량 기반 과금)
+- AI credits(AI 사용 크레딧)
+- hybrid pricing(기본료+사용량 혼합 과금)
+- board reporting(이사회/투자자 보고)
+- CFO dashboard(재무 책임자용 대시보드)
+- AI SaaS unit economics(AI SaaS 단위 수익성)
 
 ### 2. MVP UI에 3층 구조 반영
 
 문서 구조는 정리됐다. 다음은 실제 UI 흐름을 이 구조로 맞추는 것이다.
 
-- Entry Point: usage/spike summary
-- Core Engine: attribution tables
-- Paid Value: margin/pricing/report
+- Entry Point(진입점): usage/spike summary(사용량/급증 요약)
+- Core Engine(핵심 엔진): attribution tables(비용 귀속 표)
+- Paid Value(유료 가치): margin/pricing/report(마진/가격정책/리포트)
 
 ### 3. Report Output 강화
 
@@ -442,10 +442,10 @@ timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,i
 
 우선순위:
 
-- CEO/CFO 1-pager
-- PM feature cost report
-- Developer breakdown
-- Board-ready summary
+- CEO/CFO 1-pager(대표/재무 1페이지 요약)
+- PM feature cost report(제품 담당자용 기능 원가 리포트)
+- Developer breakdown(개발자용 상세 분해)
+- Board-ready summary(이사회/투자자 공유용 요약)
 
 ### 4. Pricing Simulator 강화
 
@@ -455,11 +455,11 @@ high-WTP pain 대부분은 what-if 질문으로 이어진다.
 
 - flat pricing 유지
 - usage-based pricing 전환
-- credit bundle
-- overage pricing
-- usage cap
+- credit bundle(크레딧 묶음)
+- overage pricing(기본 제공량 초과 과금)
+- usage cap(사용량 상한)
 - AI add-on
-- tier upgrade
+- tier upgrade(상위 요금제로 이동)
 
 ### 5. 인터뷰에서 확인할 질문
 

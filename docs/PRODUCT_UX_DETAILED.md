@@ -1,8 +1,8 @@
-# PRODUCT_UX_DETAILED: AI Team Cost Simulator — 상세 UI/UX 기획
+# PRODUCT_UX_DETAILED: AI Team Cost Simulator(AI 팀 비용 시뮬레이터) — 상세 UI/UX 기획
 
 작성일: 2026-05-23  
 상위 문서: `docs/PRODUCT_UX.md` (원칙) · `DESIGN.md` (Wanted Montage/WDS 디자인 시스템 — 랜딩·앱 공통 토큰/컴포넌트 권위)  
-성격: **빌드 가능한 상세 스펙.** PRODUCT_UX.md의 원칙을 단계별 contract / 컴포넌트 anatomy / 상태 매트릭스 / App.tsx 분리 설계로 구체화한다.
+성격: **빌드 가능한 상세 스펙.** PRODUCT_UX.md의 원칙을 단계별 contract(계약), component anatomy(컴포넌트 구성), 상태 매트릭스, App.tsx 분리 설계로 구체화한다.
 
 ## 0.1 Google I/O 2026 반영 상세 스펙 (2026-05-24)
 
@@ -10,23 +10,23 @@
 
 | 상태 | 의미 | 고객 화면 | Admin/debug 화면 |
 | --- | --- | --- | --- |
-| `verified` | 공식 API 단가로 계산 가능 | 모델 선택 가능, 단가 반영 badge | source URL, lastVerifiedAt, priceSourceUrl |
+| `verified` | 공식 API 단가로 계산 가능 | 모델 선택 가능, 단가 반영 badge(배지) | source URL, lastVerifiedAt, priceSourceUrl |
 | `estimated` / `tbd` | 후속 확인 필요 | 계산 전 경고 | 추정/미정 사유, 검증 작업 링크 |
 | `unavailable` | 공식 발표 모델이지만 API 가격 미공개 | 모델 레이더에는 표시, 계산 선택은 비활성화 | announcement URL, pricing unavailable reason |
 
 ### Google I/O 2026 모델별 처리
 
-- Gemini 3.5 Flash: 계산 가능 모델. text input/output, context caching, batch 할인 단가를 Fact Ledger에 저장한다.
+- Gemini 3.5 Flash: 계산 가능 모델. text input/output, context caching(반복 입력 캐싱), batch(일괄 처리) 할인 단가를 Fact Ledger(사실 장부)에 저장한다.
 - Gemini 3.5 Pro: 발표 모델. API 가격 미공개이므로 계산 비활성, 사용자 단가 입력이 있어야 시나리오 계산 가능.
 - Gemini Omni / Gemini Omni Flash: 발표 모델. 비디오/멀티모달 capability로 표시하되 공식 API 단가가 나오기 전까지 비용/절감액 계산 금지.
 
 ### 고객/admin 노출 분리
 
 - 고객 화면: “최신 단가 반영”, “가격 출처 확인일”, “공식 API 단가 확인 필요”, “사용자 단가 입력 시 계산 가능”만 노출한다.
-- Admin/debug 화면: `tool:*`, `asset:*`, `snapshot:*`, source URL, agent route, stale warning, pricing unavailable reason을 표시한다.
+- Admin/debug 화면: `tool:*`, `asset:*`, `snapshot:*`(그 시점의 분석 데이터 묶음), source URL, agent route(에이전트 실행 경로), stale warning(오래된 정보 경고), pricing unavailable reason(가격 미공개 사유)을 표시한다.
 - Decision Log와 Report는 고객 화면에서 요약 중심으로 렌더하고, 내부 ref는 admin/debug 모드에서만 펼친다.
 
-### 멀티모달 비용 skeleton
+### 멀티모달 비용 skeleton(골격)
 
 - `calculateCost`의 text-token 경로는 유지한다.
 - `calculateModalityCost`와 `calculateMultimodalScenario`는 image/audio/video/search/cache storage 차원을 받되, 공식 단가가 없으면 숫자 0이 아니라 `unsupported_pricing`을 반환한다.
@@ -38,7 +38,7 @@
 
 ## 0. 설계 불변식 (모든 화면에 적용)
 
-1. **숫자는 deterministic, 해석은 AI.** 표시 숫자는 전부 `src/lib/format.ts`(`fmtCurrency`/`fmtPercent`/`fmtTokens`)만 통과. AI 문장은 숫자를 만들지 않고 `tool:*` chip으로 인용.
+1. **숫자는 deterministic(결정론 계산), 해석은 AI.** 표시 숫자는 전부 `src/lib/format.ts`(`fmtCurrency`/`fmtPercent`/`fmtTokens`)만 통과. AI 문장은 숫자를 만들지 않고 `tool:*` chip(작은 근거 배지)으로 인용.
 2. **모든 AI 문장 옆에 chip.** `tool:*`(숫자 출처) 또는 `risk:*`(리스크 근거). chip 없는 AI 문장은 렌더 금지 — 컴포넌트 레벨에서 강제(§4.1).
 3. **결정은 사람.** AI는 Adopt/Reject하지 않는다. optimization 채택 버튼은 risk card가 붙어야만 활성.
 4. **단계 이동이 곧 진행.** 좌측 nav는 라벨만 바꾸지 않고 중앙 작업대를 교체한다(현재 끊김의 핵심 수정).
@@ -48,7 +48,7 @@
 
 ## 1. 결정 흐름 spine — 단계별 UX Contract
 
-각 단계를 "진입 조건 → 중앙 작업대 → 우측 패널 → 완료(다음 이동) 기준 → 상태"로 못박는다.
+각 단계를 "진입 조건 → 중앙 작업대 → 우측 패널 → 완료(다음 이동) 기준 → 상태"로 못박는다. 여기서 spine은 제품의 판단 흐름을 지탱하는 중심축이라는 뜻이다.
 
 ### 1.1 Design
 
@@ -89,7 +89,7 @@
 | --- | --- |
 | 진입 조건 | 병목 1개 이상 선택 |
 | 중앙 작업대 | 절감안 카드(before/after 비용, 검토시간, 고위험 자동실행 수) · 차트(before/after) |
-| 우측 패널 | Optimization 해석 + **Risk Auditor 카드**(영향/조건/안전망, 근거 ID) + Operating Decision 컨트롤(Approve/Automate/Authority/Policy/Attribution) |
+| 우측 패널 | Optimization 해석 + **Risk Auditor 카드**(영향/조건/안전망, 근거 ID) + Operating Decision(운영 결정) 컨트롤(Approve/Automate/Authority/Policy/Attribution) |
 | 완료 기준 | 각 절감안에 채택/거부 결정 → 결정 시 Decision Log로 흐름 |
 | 상태 | Post-decision(결정 후) · Failure(LLM/remote 미가용 → deterministic fallback) |
 | 컴포넌트 매핑 | `optimizationPolicies`, `pricingScenario`, `RiskCard`, `OperationDecisionControls` |
@@ -164,10 +164,10 @@ WDS 토큰 사용. 모든 신규 컴포넌트는 `*.test.tsx` 동반(헌법: sta
 ```tsx
 interface ToolRefChipProps { kind: 'tool' | 'risk'; id: string }  // id: 'tool:monthlyCost' | 'risk:credit-confusion'
 ```
-- tool: 중립 톤(`fill-alternative`), risk: cautionary 톤.
+- tool: 중립 톤(`fill-alternative`), risk: cautionary(주의) 톤.
 - **강제 규칙**: AI 문장 컴포넌트(`AIAnnotation`)는 `refs: string[]`가 비면 렌더 자체를 막거나 "근거 없음" 경고 표시. → 진단의 "chip 일관성" 해결.
 
-### 4.2 AIAnnotation — 해석 callout
+### 4.2 AIAnnotation — 해석 callout(짧은 주석 박스)
 
 ```tsx
 interface AIAnnotationProps { text: string; refs: string[]; tone?: 'analysis' | 'pricing' | 'report' }
@@ -211,7 +211,7 @@ interface OperationDecisionControlsProps { kinds: DecisionKind[]; onDecide: (kin
 ```
 - OK/Reject만이 아니라 6종 운영 결정(고도화 문서 축2). `adoptionEnabled`는 risk card 유무로 결정.
 
-### 4.8 DecisionLogRow — ledger (JSON pre 탈피)
+### 4.8 DecisionLogRow — ledger(장부) (JSON pre 탈피)
 
 ```tsx
 interface DecisionLogRowProps {
@@ -365,7 +365,7 @@ OperatingDecision {
 
 ### 목적
 
-공식 가격/모델 조건은 제품의 Fact Ledger다. 새 모델 발표나 가격 변경을 사람이 매번 수동으로 찾으면 I/O 같은 발표를 놓친다. Watchtower는 공식 source를 감시하고, 모델/가격 후보를 inbox에 넣고, 사람이 검토한 뒤 Fact Ledger로 승격시키는 내부 운영 표면이다.
+공식 가격/모델 조건은 제품의 Fact Ledger(사실 장부)다. 새 모델 발표나 가격 변경을 사람이 매번 수동으로 찾으면 I/O 같은 발표를 놓친다. Watchtower(공식 source를 감시하는 내부 검토함)는 공식 source를 감시하고, 모델/가격 후보를 inbox(검토함)에 넣고, 사람이 검토한 뒤 Fact Ledger로 승격시키는 내부 운영 표면이다.
 
 ### 데이터 구분
 
