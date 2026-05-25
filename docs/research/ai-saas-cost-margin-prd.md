@@ -487,13 +487,13 @@ Board-ready summary(이사회에 바로 공유할 수 있는 요약)에는 최�
 - 실시간 예산/쿼터 가드레일
 - 개발자 진단 전용 화면
 - Slack/Email 알림
-- SDK 자동 수집
-- Gateway / Proxy
-- 실시간 provider price sync
+- SDK(개발자가 기능을 붙이는 코드 패키지) 자동 수집
+- Gateway / Proxy(대리 호출 계층)
+- 실시간 provider price sync(공급자 가격 동기화)
 - 실제 eval harness 연동
-- ontology 화면
-- Jarvis형 assistant
-- 실시간 anomaly detection
+- ontology(개념 관계 지도) 화면
+- Jarvis형 assistant(도우미)
+- 실시간 anomaly detection(이상 징후 탐지)
 
 이유:
 
@@ -507,7 +507,7 @@ Board-ready summary(이사회에 바로 공유할 수 있는 요약)에는 최�
 | Developer diagnostics | `pain_tracking_wrong` 또는 `pain_token_waste`가 Top 3 |
 | Internal Mode | Group C 후보가 검증 evidence 15개 이상이고, 팀 예산/내부 RAG 비용 WTP가 4 이상 |
 | SDK / Middleware | CSV로 실제 로그 분석 요청이 반복되고, 자동 수집 니즈가 인터뷰에서 확인됨 |
-| Gateway / Proxy | routing, fallback, budget cap이 유료 action과 직접 연결됨 |
+| Gateway / Proxy | routing(요청 경로 선택), fallback(대체 경로), budget cap(예산 상한)이 유료 action(실행할 조치)과 직접 연결됨 |
 
 ## 12. 성공 기준
 
