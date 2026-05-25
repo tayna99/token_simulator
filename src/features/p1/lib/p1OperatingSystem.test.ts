@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeVllmServingEconomics,
+  approveExternalAction,
+  buildBenchmarkMarketplace,
+  buildDataRoomWorkspace,
+  buildExternalActionDraft,
   buildP1ActionApprovalGate,
   buildP1OperatingContract,
   buildCustomerWorkspaceDashboard,
   buildRetentionAutomationPlan,
+  buildVllmServingReview,
   draftBillingChange,
   draftP1Alert,
+  executeExternalAction,
   normalizeSdkLiteUsageEvent,
   retrieveP1VectorRagEvidence,
   normalizeP1UsageAdapterExport,
@@ -85,6 +91,7 @@ describe('p1OperatingSystem', () => {
   it('keeps full vector RAG split by official docs, benchmarks, and decision history with typed refs', () => {
     const result = retrieveP1VectorRagEvidence({
       query: 'cache margin',
+      topK: 3,
       collections: {
         official_docs: [
           { id: 'google-pricing', text: 'Cache pricing is a fact table source.', sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing' },
@@ -103,7 +110,34 @@ describe('p1OperatingSystem', () => {
     expect(result.results.official_docs.refs).toEqual(['source:google-pricing', 'fact:gemini-3-5-flash'])
     expect(result.results.benchmark_evidence.refs).toEqual(['evidence:peer-cache'])
     expect(result.results.decision_history.refs).toEqual(['decision:decision-cache-policy'])
+    expect(result.results.official_docs.scores[0]).toBeGreaterThan(0)
     expect(result.warnings).toEqual([])
+  })
+
+  it('ranks split RAG collections deterministically and never fabricates sparse benchmark averages', () => {
+    const result = retrieveP1VectorRagEvidence({
+      query: 'cache margin',
+      topK: 1,
+      collections: {
+        official_docs: [
+          { id: 'unrelated-doc', text: 'Model release announcement.' },
+          { id: 'cache-doc', text: 'Cache margin and pricing documentation.' },
+        ],
+        benchmark_evidence: [],
+        decision_history: [
+          { id: 'cache-decision', text: 'Decision history for cache margin review.' },
+          { id: 'routing-decision', text: 'Routing only.' },
+        ],
+      },
+      structuredFactRefs: [],
+    })
+
+    expect(result.results.official_docs.records.map(record => record.id)).toEqual(['cache-doc'])
+    expect(result.results.decision_history.records.map(record => record.id)).toEqual(['cache-decision'])
+    expect(result.results.benchmark_evidence.records).toEqual([])
+    expect(result.results.benchmark_evidence.refs).toEqual([])
+    expect(result.results.benchmark_evidence.warnings).toContain('baseline_unavailable')
+    expect(JSON.stringify(result)).not.toMatch(/average|peerAverage|mean/i)
   })
 
   it('normalizes SDK and gateway exports through Trust inspection before snapshot use', () => {
@@ -260,6 +294,138 @@ describe('p1OperatingSystem', () => {
       nextRequiredStep: 'execute',
       ledgerRequired: true,
     })
+  })
+
+  it('blocks every external action execution until approval is recorded', () => {
+    const draft = buildExternalActionDraft({
+      workspaceId: 'workspace-demo',
+      kind: 'slack_alert',
+      title: 'Margin breach alert',
+      payload: { channel: '#ops', message: 'Margin breach needs review.' },
+      sourceRefs: ['basis:rule:gross_margin_thin_pct'],
+    })
+
+    const result = executeExternalAction({
+      action: draft,
+      connectorMode: 'dry_run',
+      executedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    expect(draft.status).toBe('draft')
+    expect(draft.requiresHumanApproval).toBe(true)
+    expect(result.status).toBe('blocked')
+    expect(result.error).toBe('approval_required')
+    expect(result.ledgerEntry).toBeNull()
+  })
+
+  it('executes approved external actions as dry-runs and creates a ledger entry', () => {
+    const draft = buildExternalActionDraft({
+      workspaceId: 'workspace-demo',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    })
+    const approved = approveExternalAction({
+      action: draft,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+      decidedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    const result = executeExternalAction({
+      action: approved,
+      connectorMode: 'dry_run',
+      executedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(approved.status).toBe('approved')
+    expect(result.status).toBe('executed')
+    expect(result.connectorMode).toBe('dry_run')
+    expect(result.ledgerEntry).toMatchObject({
+      workspaceId: 'workspace-demo',
+      actionId: draft.id,
+      kind: 'email_alert',
+      connectorMode: 'dry_run',
+      status: 'ledgered',
+    })
+  })
+
+  it('requires rollback metadata before approved billing actions can execute', () => {
+    const billing = buildExternalActionDraft({
+      workspaceId: 'workspace-demo',
+      kind: 'billing_change',
+      title: 'Usage cap draft',
+      payload: { policy: 'usage_cap', includedCredits: 1000 },
+      sourceRefs: ['decision:pricing'],
+    })
+    const approved = approveExternalAction({
+      action: billing,
+      approver: 'owner@example.com',
+      reason: 'Pricing decision approved.',
+      decidedAt: '2026-05-25T00:00:00.000Z',
+    })
+
+    const result = executeExternalAction({
+      action: approved,
+      connectorMode: 'dry_run',
+      executedAt: '2026-05-25T00:01:00.000Z',
+    })
+
+    expect(result.status).toBe('blocked')
+    expect(result.error).toBe('rollback_metadata_required')
+  })
+
+  it('builds a data room workspace with an audit export draft and excludes sensitive raw artifacts', () => {
+    const dataRoom = buildDataRoomWorkspace({
+      workspaceId: 'workspace-demo',
+      hasRawUpload: true,
+      hasRawPrompt: true,
+      hasApiKey: true,
+      hasPii: true,
+    })
+
+    expect(dataRoom.artifactInventory.map(item => item.id)).toContain('normalized_usage_snapshot')
+    expect(dataRoom.artifactInventory.find(item => item.id === 'raw_prompt')?.stored).toBe(false)
+    expect(dataRoom.artifactInventory.find(item => item.id === 'api_key')?.stored).toBe(false)
+    expect(dataRoom.auditExportDraft.kind).toBe('audit_export')
+    expect(dataRoom.auditExportDraft.status).toBe('draft')
+  })
+
+  it('builds a self-hosted vLLM review without adding provider API cost and keeps savings as what-if only', () => {
+    const review = buildVllmServingReview({
+      ttftMs: 2600,
+      itlMs: 130,
+      throughputTokensPerSecond: 180,
+      gpuUtilizationPct: 0.4,
+      kvCacheUsagePct: 0.9,
+      p95LatencyMs: 9000,
+      p99LatencyMs: 13000,
+      prefixCacheHitRate: 0.2,
+      batchingEfficiency: 0.35,
+      p95ContextTokens: 48000,
+    })
+
+    expect(review.providerApiCostExcluded).toBe(true)
+    expect(review.costAuthority).toBe('self_hosted_serving_economics_only')
+    expect(review.whatIfComparisons.map(item => item.status)).toEqual(expect.arrayContaining(['validation_required']))
+    expect(JSON.stringify(review)).not.toMatch(/confirmed_savings|providerApiCostUsd/i)
+  })
+
+  it('keeps benchmark marketplace evidence separated by review status and returns baseline unavailable when sparse', () => {
+    const empty = buildBenchmarkMarketplace({ selfBaselineCount: 0, verifiedPublicRecords: [], customerPeerRows: [] })
+    const populated = buildBenchmarkMarketplace({
+      selfBaselineCount: 2,
+      verifiedPublicRecords: [{ id: 'evidence-cache', label: 'Verified cache evidence' }],
+      customerPeerRows: [{ id: 'peer-1', label: 'Customer peer import', verified: false }],
+    })
+
+    expect(empty.basis.status).toBe('baseline_unavailable')
+    expect(empty.records).toEqual([])
+    expect(populated.records).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'evidence-cache', sourceType: 'verified_public_evidence', status: 'verified' }),
+      expect.objectContaining({ id: 'peer-1', sourceType: 'customer_peer_cohort', status: 'needs_review' }),
+    ]))
   })
 
   it('selects benchmark basis honestly and automates retention without storing sensitive raw data', () => {

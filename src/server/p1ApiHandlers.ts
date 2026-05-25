@@ -19,6 +19,14 @@ import {
 } from './storage/kvStore'
 import {
   normalizeSdkLiteUsageEvent,
+  approveExternalAction,
+  buildExternalActionDraft,
+  executeExternalAction,
+  type P1ExternalAction,
+  type P1ExternalConnectorMode,
+  type P1ExternalActionExecutionResult,
+  type P1ExternalActionKind,
+  type P1ExternalActionLedgerEntry,
   retrieveP1VectorRagEvidence,
   type NormalizedP1SdkLiteUsageEvent,
   type P1RagEvidenceResult,
@@ -131,6 +139,15 @@ export interface P1RagEvidenceApiResponse {
   error?: string
 }
 
+export interface P1ExternalActionsApiResponse {
+  persistence: PersistenceState
+  actions: P1ExternalAction[]
+  ledger: P1ExternalActionLedgerEntry[]
+  action: P1ExternalAction | null
+  execution: P1ExternalActionExecutionResult | null
+  error?: string
+}
+
 export interface TeamCostCalibrationResult {
   plannedCallsPerDay: number
   actualCallsPerDay: number
@@ -167,6 +184,17 @@ function isP1UsageAdapterSource(value: unknown): value is P1UsageAdapterSource {
     || value === 'helicone'
     || value === 'langfuse'
     || value === 'application_gateway'
+}
+
+function isP1ExternalActionKind(value: unknown): value is P1ExternalActionKind {
+  return value === 'slack_alert'
+    || value === 'email_alert'
+    || value === 'billing_change'
+    || value === 'audit_export'
+}
+
+function externalConnectorMode(value: unknown): P1ExternalConnectorMode {
+  return value === 'live' ? 'live' : 'dry_run'
 }
 
 function queryValue(query: Record<string, string | string[] | undefined>, key: string): string | undefined {
@@ -219,6 +247,7 @@ function emptyRagEvidence(): P1VectorRagEvidenceResult {
     refs: [],
     mayOverrideFacts: false,
     records: [],
+    scores: [],
     warnings: [],
   })
   return {
@@ -592,6 +621,40 @@ function ragCollections(value: unknown) {
   return collections
 }
 
+function coerceExternalActions(value: unknown): P1ExternalAction[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is P1ExternalAction => (
+      isObject(item)
+      && typeof item.id === 'string'
+      && typeof item.workspaceId === 'string'
+      && isP1ExternalActionKind(item.kind)
+      && typeof item.title === 'string'
+    ))
+    : []
+}
+
+function coerceExternalActionLedger(value: unknown): P1ExternalActionLedgerEntry[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is P1ExternalActionLedgerEntry => (
+      isObject(item)
+      && typeof item.id === 'string'
+      && typeof item.actionId === 'string'
+      && isP1ExternalActionKind(item.kind)
+    ))
+    : []
+}
+
+function externalActionResponse(input: Partial<P1ExternalActionsApiResponse> = {}): P1ExternalActionsApiResponse {
+  return {
+    persistence: input.persistence ?? 'not_configured',
+    actions: input.actions ?? [],
+    ledger: input.ledger ?? [],
+    action: input.action ?? null,
+    execution: input.execution ?? null,
+    error: input.error,
+  }
+}
+
 export async function handleP1RagEvidenceApi(
   method: string,
   body: unknown,
@@ -612,6 +675,7 @@ export async function handleP1RagEvidenceApi(
     query: body.query,
     collections: ragCollections(body.collections),
     structuredFactRefs: stringArray(body.structuredFactRefs),
+    topK: typeof body.topK === 'number' ? body.topK : undefined,
   })
   const store = contextStore(context)
 
@@ -630,6 +694,101 @@ export async function handleP1RagEvidenceApi(
       evidence,
       metadata: { workspaceId, query: body.query },
     },
+  }
+}
+
+export async function handleP1ExternalActionsApi(
+  method: string,
+  body: unknown,
+  context: P1ApiContext = {},
+): Promise<ApiResult<P1ExternalActionsApiResponse>> {
+  const workspaceId = normalizedWorkspaceId(body, context.query)
+  const base = externalActionResponse()
+  if (!workspaceId) return { status: 400, body: { ...base, error: 'workspaceId_required' } }
+
+  const store = contextStore(context)
+  const actionsKey = workspaceKey(workspaceId, 'p1-external-actions')
+  const ledgerKey = workspaceKey(workspaceId, 'p1-external-action-ledger')
+
+  try {
+    const actions = coerceExternalActions(await store.getJson<unknown[]>(actionsKey))
+    const ledger = coerceExternalActionLedger(await store.getJson<unknown[]>(ledgerKey))
+
+    if (method === 'GET') {
+      return { status: 200, body: externalActionResponse({ persistence: store.persistence, actions, ledger }) }
+    }
+
+    if (method !== 'POST') {
+      return { status: 405, body: externalActionResponse({ persistence: store.persistence, actions, ledger, error: 'Method not allowed' }) }
+    }
+    if (!isObject(body) || typeof body.action !== 'string') {
+      return { status: 400, body: externalActionResponse({ persistence: store.persistence, actions, ledger, error: 'invalid_external_action_request' }) }
+    }
+
+    if (body.action === 'draft') {
+      if (!isP1ExternalActionKind(body.kind) || typeof body.title !== 'string' || !isObject(body.payload)) {
+        return { status: 400, body: externalActionResponse({ persistence: store.persistence, actions, ledger, error: 'invalid_external_action_draft' }) }
+      }
+      const draft = buildExternalActionDraft({
+        workspaceId,
+        kind: body.kind,
+        title: body.title,
+        payload: body.payload,
+        sourceRefs: stringArray(body.sourceRefs),
+        rollbackRef: typeof body.rollbackRef === 'string' ? body.rollbackRef : undefined,
+        createdAt: (context.now?.() ?? new Date()).toISOString(),
+      })
+      const nextActions = [draft, ...actions.filter(action => action.id !== draft.id)]
+      await store.setJson(actionsKey, nextActions)
+      return { status: 202, body: externalActionResponse({ persistence: store.persistence, actions: nextActions, ledger, action: draft }) }
+    }
+
+    const actionId = typeof body.actionId === 'string' ? body.actionId : ''
+    const existing = actions.find(action => action.id === actionId)
+    if (!existing) {
+      return { status: 404, body: externalActionResponse({ persistence: store.persistence, actions, ledger, error: 'external_action_not_found' }) }
+    }
+
+    if (body.action === 'approve') {
+      const approved = approveExternalAction({
+        action: existing,
+        approver: typeof body.approver === 'string' ? body.approver : 'workspace_admin',
+        reason: typeof body.reason === 'string' ? body.reason : 'Approved in workspace admin.',
+        decidedAt: (context.now?.() ?? new Date()).toISOString(),
+      })
+      const nextActions = actions.map(action => action.id === approved.id ? approved : action)
+      await store.setJson(actionsKey, nextActions)
+      return { status: 202, body: externalActionResponse({ persistence: store.persistence, actions: nextActions, ledger, action: approved }) }
+    }
+
+    if (body.action === 'reject') {
+      const rejected: P1ExternalAction = { ...existing, status: 'rejected' }
+      const nextActions = actions.map(action => action.id === rejected.id ? rejected : action)
+      await store.setJson(actionsKey, nextActions)
+      return { status: 202, body: externalActionResponse({ persistence: store.persistence, actions: nextActions, ledger, action: rejected }) }
+    }
+
+    if (body.action === 'execute') {
+      const execution = executeExternalAction({
+        action: existing,
+        connectorMode: externalConnectorMode(body.connectorMode),
+        executedAt: (context.now?.() ?? new Date()).toISOString(),
+      })
+      if (execution.status === 'blocked') {
+        return { status: 409, body: externalActionResponse({ persistence: store.persistence, actions, ledger, action: existing, execution }) }
+      }
+      const executed: P1ExternalAction = { ...existing, status: 'executed' }
+      const nextActions = actions.map(action => action.id === executed.id ? executed : action)
+      const nextLedger = execution.ledgerEntry ? [execution.ledgerEntry, ...ledger] : ledger
+      await store.setJson(actionsKey, nextActions)
+      await store.setJson(ledgerKey, nextLedger)
+      return { status: 202, body: externalActionResponse({ persistence: store.persistence, actions: nextActions, ledger: nextLedger, action: executed, execution }) }
+    }
+
+    return { status: 400, body: externalActionResponse({ persistence: store.persistence, actions, ledger, error: 'unsupported_external_action_operation' }) }
+  } catch (error) {
+    if (isStorageNotConfigured(error)) return storageErrorBody(base)
+    return { status: 500, body: { ...base, error: 'external_action_failed' } }
   }
 }
 

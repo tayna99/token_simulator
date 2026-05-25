@@ -7,6 +7,7 @@ import {
   handleReportsApi,
   handleRiskCardsApi,
   handleP1RagEvidenceApi,
+  handleP1ExternalActionsApi,
   handleSdkLiteUsageApi,
   handleUsageImportApi,
 } from './p1ApiHandlers'
@@ -259,5 +260,111 @@ describe('P1 API handlers', () => {
     expect(response.body.evidence.results.official_docs.refs).toEqual(['source:google-pricing', 'fact:gemini-3-5-flash'])
     expect(response.body.evidence.results.benchmark_evidence.refs).toEqual(['evidence:peer-cache'])
     expect(response.body.evidence.results.decision_history.refs).toEqual(['decision:cache-policy'])
+    expect(response.body.evidence.results.official_docs.scores[0]).toBeGreaterThan(0)
+  })
+
+  it('keeps P1 RAG API benchmark gaps explicit instead of inventing peer averages', async () => {
+    const response = await handleP1RagEvidenceApi('POST', {
+      workspaceId: 'workspace-demo',
+      query: 'cache margin',
+      topK: 1,
+      collections: {
+        official_docs: [{ id: 'google-pricing', text: 'Cache margin pricing source.' }],
+        benchmark_evidence: [],
+        decision_history: [{ id: 'cache-policy', text: 'Cache margin decision history.' }],
+      },
+    }, { store: createMemoryKvStore() })
+
+    expect(response.status).toBe(200)
+    expect(response.body.evidence.results.benchmark_evidence.refs).toEqual([])
+    expect(response.body.evidence.results.benchmark_evidence.records).toEqual([])
+    expect(response.body.evidence.results.benchmark_evidence.warnings).toContain('baseline_unavailable')
+    expect(JSON.stringify(response.body.evidence)).not.toMatch(/average|peerAverage|mean/i)
+  })
+
+  it('stores external action drafts and blocks execution before approval', async () => {
+    const store = createMemoryKvStore()
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'slack_alert',
+      title: 'Margin breach alert',
+      payload: { channel: '#ops', message: 'Margin breach needs review.' },
+      sourceRefs: ['basis:rule:gross_margin_thin_pct'],
+    }, { store })
+    const blocked = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId: draft.body.action?.id,
+    }, { store })
+
+    expect(draft.status).toBe(202)
+    expect(draft.body.action).toMatchObject({ kind: 'slack_alert', status: 'draft' })
+    expect(blocked.status).toBe(409)
+    expect(blocked.body.execution?.error).toBe('approval_required')
+    expect(blocked.body.ledger).toEqual([])
+  })
+
+  it('executes approved external actions as dry-runs and persists ledger entries', async () => {
+    const store = createMemoryKvStore()
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'email_alert',
+      title: 'Decision follow-up',
+      payload: { recipient: 'founder@example.com', message: 'Follow up is due.' },
+      sourceRefs: ['decision:follow-up'],
+    }, { store })
+    const actionId = draft.body.action?.id
+
+    const approved = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'owner@example.com',
+      reason: 'Send the weekly follow-up draft.',
+    }, { store })
+    const executed = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+    }, { store })
+    const listed = await handleP1ExternalActionsApi('GET', undefined, { store, query: { workspaceId: 'workspace-demo' } })
+
+    expect(approved.status).toBe(202)
+    expect(executed.status).toBe(202)
+    expect(executed.body.execution).toMatchObject({ status: 'executed', connectorMode: 'dry_run' })
+    expect(executed.body.ledger).toEqual([expect.objectContaining({ actionId, status: 'ledgered' })])
+    expect(listed.body.actions).toHaveLength(1)
+    expect(listed.body.ledger).toHaveLength(1)
+  })
+
+  it('keeps billing execution blocked until rollback metadata is attached', async () => {
+    const store = createMemoryKvStore()
+    const draft = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'draft',
+      kind: 'billing_change',
+      title: 'Usage cap draft',
+      payload: { policy: 'usage_cap', includedCredits: 1000 },
+      sourceRefs: ['decision:pricing'],
+    }, { store })
+    const actionId = draft.body.action?.id
+    await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'approve',
+      actionId,
+      approver: 'owner@example.com',
+      reason: 'Pricing decision approved.',
+    }, { store })
+
+    const blocked = await handleP1ExternalActionsApi('POST', {
+      workspaceId: 'workspace-demo',
+      action: 'execute',
+      actionId,
+    }, { store })
+
+    expect(blocked.status).toBe(409)
+    expect(blocked.body.execution?.error).toBe('rollback_metadata_required')
   })
 })

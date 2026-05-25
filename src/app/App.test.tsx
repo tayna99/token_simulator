@@ -114,6 +114,38 @@ describe('App AI team operations workspace', () => {
     expect(screen.getByRole('button', { name: /Run full operating review/i })).toBeInTheDocument()
   })
 
+  it('keeps P1 external automation hidden from the customer surface', () => {
+    render(<App />)
+
+    expect(screen.queryByTestId('p1-external-automation-panel')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Slack\/Email alert/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Stripe\/Metronome dry-run/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/self-hosted serving economics/i)).not.toBeInTheDocument()
+  })
+
+  it('shows P1 external automation controls in admin mode and blocks execution before approval', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    const panel = screen.getByTestId('p1-external-automation-panel')
+    expect(panel).toHaveTextContent(/Data Room/i)
+    expect(panel).toHaveTextContent(/Slack\/Email alert/i)
+    expect(panel).toHaveTextContent(/Stripe\/Metronome dry-run/i)
+    expect(panel).toHaveTextContent(/self-hosted serving economics/i)
+    expect(panel).toHaveTextContent(/Benchmark Marketplace/i)
+    expect(panel).toHaveTextContent(/baseline unavailable/i)
+
+    expect(within(panel).getByRole('button', { name: /Execute alert/i })).toBeDisabled()
+    expect(within(panel).getByRole('button', { name: /Execute billing/i })).toBeDisabled()
+
+    await user.click(within(panel).getByRole('button', { name: /Approve alert draft/i }))
+    await user.click(within(panel).getByRole('button', { name: /Execute alert/i }))
+
+    expect(panel).toHaveTextContent(/dry_run/i)
+    expect(panel).toHaveTextContent(/ledgered/i)
+  })
+
   it('lets a customer ingest a clean SDK-lite event and see Trust status without internal metadata', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -339,6 +371,84 @@ describe('App AI team operations workspace', () => {
     expect(allHandsBody.frontOperatingSystem.dataReadinessGate.rejectedColumns).toContain('raw_prompt')
     expect(offerIds).toContain('ai_cost_snapshot')
     expect(allHandsBody.frontOperatingSystem.learningLoopRecords).toEqual([])
+  }, 15000)
+
+  it('shows an evidence drawer with explicit baseline unavailable state in the AI panel', async () => {
+    vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/agent/run')) {
+        return new Response(JSON.stringify({
+          answer: 'Cache optimization needs peer evidence review.',
+          report: 'Cache optimization needs peer evidence review.',
+          supervisorSummary: 'Cost Modeling Agent needs benchmark evidence before adoption.',
+          disagreements: ['Finance Ops needs benchmark evidence before adoption.'],
+          decisionReadiness: 'needs_review',
+          nextQuestions: ['Which peer baseline should be added before adoption?'],
+          events: [{
+            type: 'analysis',
+            message: 'Benchmark evidence is missing.',
+            toolResultRefs: ['tool:team.monthlyCostUsd'],
+            riskCardIds: [],
+            agentId: 'cost_modeling',
+            calledAgentTool: 'call_cost_modeling_agent',
+            stance: 'caution',
+            evidenceWarnings: ['baseline_unavailable'],
+            nextQuestion: 'Which peer baseline should be added before adoption?',
+          }],
+          toolResultRefs: ['tool:team.monthlyCostUsd'],
+          evidenceRefs: [],
+          riskCardIds: [],
+          assetRefs: [],
+          usedTools: ['retrieve_p1_vector_rag_evidence'],
+          usedCapabilityTools: ['retrieve_p1_vector_rag_evidence'],
+          calledAgentIds: ['cost_modeling'],
+          primaryAgentId: 'cost_modeling',
+          reviewerAgentIds: [],
+          agentRoute: { executionMode: 'stage_committee', reason: 'test evidence drawer' },
+          llmMode: 'provider-llm',
+          warnings: ['baseline_unavailable'],
+          snapshotVersion: 'snapshot:cost:evidence',
+          evidenceCoverage: {
+            officialDocs: {
+              found: true,
+              refs: ['source:google-pricing'],
+              records: [{ id: 'google-pricing', text: 'Cache pricing official docs.' }],
+              scores: [1],
+              warnings: [],
+            },
+            benchmarkEvidence: {
+              found: false,
+              refs: [],
+              records: [],
+              scores: [],
+              warnings: ['baseline_unavailable'],
+            },
+            decisionHistory: {
+              found: true,
+              refs: ['decision:cache-policy'],
+              records: [{ id: 'cache-policy', text: 'Held cache policy until QA.' }],
+              scores: [1],
+              warnings: [],
+            },
+          },
+        }), { status: 200 })
+      }
+      if (String(input).includes('/api/agent')) {
+        return new Response(JSON.stringify({ events: [] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+
+    render(<App />)
+
+    const panel = await screen.findByTestId('decision-assistant-panel')
+    await waitFor(() => expect(panel).toHaveTextContent(/Evidence drawer/i))
+    expect(panel).toHaveTextContent(/source:google-pricing/i)
+    expect(panel).toHaveTextContent(/decision:cache-policy/i)
+    expect(panel).toHaveTextContent(/baseline unavailable/i)
+    expect(panel).toHaveTextContent(/Which peer baseline should be added/i)
   }, 15000)
 
   it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {

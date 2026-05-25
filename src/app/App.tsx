@@ -65,10 +65,20 @@ import {
 } from '../features/metrics/lib/thresholdPolicy'
 import { OPERATING_AGENTS, OPERATING_ASSETS, P1_AUTOMATION_MODULES, p0OperatingAssetSummary, type OperatingAgent, type OperatingAgentId } from '../features/operating-assets/lib/operatingAssets'
 import {
+  approveExternalAction,
+  buildBenchmarkMarketplace,
   buildCustomerWorkspaceDashboard,
+  buildDataRoomWorkspace,
+  buildExternalActionDraft,
+  buildVllmServingReview,
+  executeExternalAction,
   normalizeSdkLiteUsageEvent,
   retrieveP1VectorRagEvidence,
   type CustomerWorkspaceDashboard,
+  type BenchmarkMarketplace,
+  type DataRoomWorkspace,
+  type P1ExternalAction,
+  type P1ExternalActionExecutionResult,
   type NormalizedP1SdkLiteUsageEvent,
   type P1RagRecord,
   type P1SdkLiteUsageEvent,
@@ -318,6 +328,11 @@ const EMPTY_AGENT_RUN_RESPONSE: AgentRunResponse = {
   riskCardIds: [],
   decisionIds: [],
   evidenceRefs: [],
+  evidenceCoverage: {
+    officialDocs: { found: false, refs: [], records: [], scores: [], warnings: ['official_docs_unavailable'] },
+    benchmarkEvidence: { found: false, refs: [], records: [], scores: [], warnings: ['baseline_unavailable'] },
+    decisionHistory: { found: false, refs: [], records: [], scores: [], warnings: ['decision_history_unavailable'] },
+  },
   assetRefs: [],
   warnings: [],
 }
@@ -1123,6 +1138,47 @@ function customerSafeReportText(text: string): string {
     .replace(/\s*Evidence refs:.*$/i, ' 근거 기록은 관리자 감사 기록에 저장됩니다.')
 }
 
+function EvidenceCoverageDrawer({ coverage }: { coverage: AgentRunResponse['evidenceCoverage'] }) {
+  const sections = [
+    ['official_docs', coverage.officialDocs],
+    ['benchmark_evidence', coverage.benchmarkEvidence],
+    ['decision_history', coverage.decisionHistory],
+  ] as const
+
+  return (
+    <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+      <p className="text-xs font-semibold uppercase text-primary-normal">Evidence drawer</p>
+      <div className="mt-2 grid gap-2">
+        {sections.map(([label, item]) => (
+          <div key={label} className="rounded-wds border border-line-neutral bg-fill-alternative p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-label-normal" translate="no">{label}</p>
+              <Badge tone={item.found ? 'positive' : 'caution'}>
+                {item.found ? 'found' : 'missing'}
+              </Badge>
+            </div>
+            {item.warnings.length > 0 && (
+              <p className="mt-1 text-xs text-status-cautionary">
+                {item.warnings.map(warning => warning === 'baseline_unavailable' ? 'baseline unavailable' : warning).join(', ')}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-1">
+              {item.refs.slice(0, 4).map(refId => (
+                <ToolRefChip key={`${label}-${refId}`} refId={refId} />
+              ))}
+            </div>
+            {item.records.length > 0 && (
+              <p className="mt-2 text-xs text-label-alternative">
+                {item.records.length} record{item.records.length === 1 ? '' : 's'} retrieved
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function LifecycleNavigation({
   activeStage,
   operatingAgents,
@@ -1472,6 +1528,140 @@ function P1RagEvidencePanel({
   )
 }
 
+function P1ExternalAutomationPanel({
+  dataRoom,
+  alertAction,
+  alertExecution,
+  billingAction,
+  billingExecution,
+  vllmReview,
+  benchmark,
+  onApproveAlert,
+  onExecuteAlert,
+  onApproveBilling,
+  onExecuteBilling,
+}: {
+  dataRoom: DataRoomWorkspace
+  alertAction: P1ExternalAction
+  alertExecution: P1ExternalActionExecutionResult | null
+  billingAction: P1ExternalAction
+  billingExecution: P1ExternalActionExecutionResult | null
+  vllmReview: ReturnType<typeof buildVllmServingReview>
+  benchmark: BenchmarkMarketplace
+  onApproveAlert: () => void
+  onExecuteAlert: () => void
+  onApproveBilling: () => void
+  onExecuteBilling: () => void
+}) {
+  const alertCanExecute = alertAction.status === 'approved'
+  const billingCanExecute = billingAction.status === 'approved'
+  const storedArtifacts = dataRoom.artifactInventory.filter(item => item.stored)
+  const excludedArtifacts = dataRoom.artifactInventory.filter(item => !item.stored)
+
+  return (
+    <section data-testid="p1-external-automation-panel" className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase text-primary-normal">P1 external execution</p>
+          <h2 className="mt-1 text-base font-semibold text-label-normal">Draft → approval → execute → ledger</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-label-alternative">
+            External mutation stays blocked until a human approval is recorded. The default connector mode is dry_run.
+          </p>
+        </div>
+        <Badge tone="caution">approval gate required</Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-sm font-semibold text-label-normal">Data Room</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            Artifact inventory tracks what is retained and what is never stored by default.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge tone="positive">{storedArtifacts.length} stored artifacts</Badge>
+            <Badge tone="neutral">{excludedArtifacts.length} not stored</Badge>
+            <Badge tone="primary">audit export draft</Badge>
+          </div>
+          <ul className="mt-2 grid gap-1 text-xs text-label-neutral">
+            {excludedArtifacts.map(item => (
+              <li key={item.id}>{item.label}: not stored</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-sm font-semibold text-label-normal">Slack/Email alert</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            Draft preview only until approval. Execute records a dry_run ledger entry.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={onApproveAlert} disabled={alertAction.status !== 'draft'}>
+              Approve alert draft
+            </Button>
+            <Button size="sm" variant="primary" onClick={onExecuteAlert} disabled={!alertCanExecute}>
+              Execute alert
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-label-neutral" translate="no">
+            status: {alertAction.status}
+            {alertExecution ? ` / ${alertExecution.connectorMode} / ${alertExecution.ledgerEntry?.status ?? alertExecution.error}` : ''}
+          </p>
+        </div>
+
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-sm font-semibold text-label-normal">Stripe/Metronome dry-run</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            Billing changes require approval and rollback metadata before any execution path opens.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={onApproveBilling} disabled={billingAction.status !== 'draft'}>
+              Approve billing draft
+            </Button>
+            <Button size="sm" variant="primary" onClick={onExecuteBilling} disabled={!billingCanExecute}>
+              Execute billing
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-label-neutral" translate="no">
+            rollback: {billingAction.rollbackRef ?? 'missing'} / status: {billingAction.status}
+            {billingExecution ? ` / ${billingExecution.connectorMode} / ${billingExecution.ledgerEntry?.status ?? billingExecution.error}` : ''}
+          </p>
+        </div>
+
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-sm font-semibold text-label-normal">self-hosted serving economics</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            vLLM/GPU economics stay separate from provider API cost. Every savings item is validation-required.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge tone="primary">{vllmReview.costAuthority}</Badge>
+            <Badge tone="positive">provider API cost excluded</Badge>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {vllmReview.bottlenecks.map(item => <Badge key={item} tone="caution">{item}</Badge>)}
+          </div>
+        </div>
+
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 xl:col-span-2">
+          <p className="text-sm font-semibold text-label-normal">Benchmark Marketplace</p>
+          <p className="mt-1 text-xs text-label-alternative">
+            Verified corpus, customer peer cohort imports, and sparse benchmark gaps are tracked separately.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge tone={benchmark.basis.status === 'available' ? 'positive' : 'caution'}>
+              {benchmark.basis.status === 'baseline_unavailable' ? 'baseline unavailable' : benchmark.basis.basis}
+            </Badge>
+            {benchmark.records.map(record => (
+              <Badge key={record.id} tone={record.status === 'verified' ? 'positive' : 'caution'}>
+                {record.sourceType}: {record.status}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function DecisionAssistantPanel({
   activeStage,
   teamEstimate,
@@ -1637,6 +1827,13 @@ function DecisionAssistantPanel({
         ) : (
           <p className="mt-3 text-xs text-label-alternative">
             근거와 실행 경로는 결정 기록에 저장됩니다. 내부 ref는 관리자 모드에서만 표시됩니다.
+          </p>
+        )}
+        {showInternal ? (
+          <EvidenceCoverageDrawer coverage={agentRun.evidenceCoverage} />
+        ) : (
+          <p className="mt-3 text-xs text-label-alternative">
+            Evidence is summarized for customers; source refs are available in admin mode.
           </p>
         )}
       </div>
@@ -1949,6 +2146,23 @@ function App() {
   const [remoteBackendMessage, setRemoteBackendMessage] = useState('Checking P1 backend persistence')
   const [sdkLitePanel, setSdkLitePanel] = useState<SdkLitePanelState>(EMPTY_SDK_LITE_PANEL_STATE)
   const [p1RagEvidencePanel, setP1RagEvidencePanel] = useState<P1RagEvidencePanelState>(EMPTY_P1_RAG_EVIDENCE_STATE)
+  const [p1AlertAction, setP1AlertAction] = useState<P1ExternalAction>(() => buildExternalActionDraft({
+    workspaceId,
+    kind: 'slack_alert',
+    title: 'Margin breach alert',
+    payload: { channel: '#ops', message: 'Margin breach needs review.' },
+    sourceRefs: ['basis:rule:gross_margin_thin_pct'],
+  }))
+  const [p1AlertExecution, setP1AlertExecution] = useState<P1ExternalActionExecutionResult | null>(null)
+  const [p1BillingAction, setP1BillingAction] = useState<P1ExternalAction>(() => buildExternalActionDraft({
+    workspaceId,
+    kind: 'billing_change',
+    title: 'Usage cap billing draft',
+    payload: { policy: 'usage_cap', includedCredits: 1000, customerCapUsd: 250 },
+    sourceRefs: ['decision:pricing'],
+    rollbackRef: 'rollback:pricing-v1',
+  }))
+  const [p1BillingExecution, setP1BillingExecution] = useState<P1ExternalActionExecutionResult | null>(null)
   const [importedUsage, setImportedUsage] = useState<UsageImportSummary | null>(null)
   const [usageSnapshotRef, setUsageSnapshotRef] = useState<string | null>(null)
   const [usageHistory, setUsageHistory] = useState<RemoteUsageHistoryEntry[]>([])
@@ -2264,6 +2478,30 @@ function App() {
     importedUsage?.importHealthReport?.status,
     operatingAssetSummary.activeAgentCount,
   ])
+  const p1DataRoom = useMemo(() => buildDataRoomWorkspace({
+    workspaceId,
+    hasRawUpload: Boolean(importedUsage),
+    hasRawPrompt: true,
+    hasApiKey: true,
+    hasPii: true,
+  }), [importedUsage, workspaceId])
+  const p1VllmReview = useMemo(() => buildVllmServingReview({
+    ttftMs: 2600,
+    itlMs: 130,
+    throughputTokensPerSecond: 180,
+    gpuUtilizationPct: 0.4,
+    kvCacheUsagePct: 0.9,
+    p95LatencyMs: 9000,
+    p99LatencyMs: 13000,
+    prefixCacheHitRate: 0.2,
+    batchingEfficiency: 0.35,
+    p95ContextTokens: 48000,
+  }), [])
+  const p1BenchmarkMarketplace = useMemo(() => buildBenchmarkMarketplace({
+    selfBaselineCount: 0,
+    verifiedPublicRecords: [],
+    customerPeerRows: [],
+  }), [])
   const customerDashboard = useMemo(() => buildCustomerWorkspaceDashboard({
     workspaceId,
     organizationName: 'SparkClaw',
@@ -2480,6 +2718,38 @@ function App() {
     }
   }
 
+  const handleApproveP1Alert = () => {
+    setP1AlertAction(action => approveExternalAction({
+      action,
+      approver: 'workspace_admin',
+      reason: 'Approved alert draft in admin workspace.',
+    }))
+  }
+
+  const handleExecuteP1Alert = () => {
+    setP1AlertAction(action => {
+      const execution = executeExternalAction({ action, connectorMode: 'dry_run' })
+      setP1AlertExecution(execution)
+      return execution.status === 'executed' ? { ...action, status: 'executed' } : action
+    })
+  }
+
+  const handleApproveP1Billing = () => {
+    setP1BillingAction(action => approveExternalAction({
+      action,
+      approver: 'workspace_admin',
+      reason: 'Approved billing dry-run in admin workspace.',
+    }))
+  }
+
+  const handleExecuteP1Billing = () => {
+    setP1BillingAction(action => {
+      const execution = executeExternalAction({ action, connectorMode: 'dry_run' })
+      setP1BillingExecution(execution)
+      return execution.status === 'executed' ? { ...action, status: 'executed' } : action
+    })
+  }
+
   const decisionAuditSnapshot = () => ({
     thresholdSnapshot: thresholdPolicy,
     factSourceSnapshot: currentFactSources,
@@ -2603,6 +2873,16 @@ function App() {
       providerRegistry: agentSnapshot.providerRegistry,
       modelPerfMatrix: agentSnapshot.modelPerfMatrix,
       operatingLedger: agentSnapshot.operatingLedger,
+      officialSourceRegistry: agentSnapshot.officialSourceRegistry,
+      officialSourceSnippets: agentSnapshot.officialSourceSnippets,
+      modelReleaseCandidates: agentSnapshot.modelReleaseCandidates,
+      pricingFactCandidates: agentSnapshot.pricingFactCandidates,
+      fxRateSnapshots: agentSnapshot.fxRateSnapshots,
+      ragCollections: {
+        official_docs: agentSnapshot.officialSourceSnippets ?? [],
+        benchmark_evidence: agentSnapshot.benchmarkCards,
+        decision_history: agentSnapshot.decisionHistory,
+      },
       trustInspection: agentSnapshot.trustInspection,
       formulaVersion: agentSnapshot.formulaVersion,
       providerRegistryVersion: agentSnapshot.providerRegistryVersion,
@@ -3562,6 +3842,22 @@ function App() {
             showInternal={showInternal}
             onRun={() => void handleRunP1RagEvidenceCheck()}
           />
+
+          {showInternal && (
+            <P1ExternalAutomationPanel
+              dataRoom={p1DataRoom}
+              alertAction={p1AlertAction}
+              alertExecution={p1AlertExecution}
+              billingAction={p1BillingAction}
+              billingExecution={p1BillingExecution}
+              vllmReview={p1VllmReview}
+              benchmark={p1BenchmarkMarketplace}
+              onApproveAlert={handleApproveP1Alert}
+              onExecuteAlert={handleExecuteP1Alert}
+              onApproveBilling={handleApproveP1Billing}
+              onExecuteBilling={handleExecuteP1Billing}
+            />
+          )}
 
           <div className="rounded-wds-lg border border-line-neutral bg-surface-normal p-4">
             <p className="text-xs font-semibold uppercase text-primary-normal">Deterministic setup</p>

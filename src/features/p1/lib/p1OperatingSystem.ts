@@ -42,6 +42,9 @@ export interface CustomerWorkspaceDashboard {
 export type P1RagKind = 'official_docs' | 'benchmark' | 'decision_history'
 export type P1VectorRagKind = 'official_docs' | 'benchmark_evidence' | 'decision_history'
 export type P1ApprovalStatus = 'draft' | 'approved' | 'rejected' | 'executed'
+export type P1ExternalActionKind = 'retention_reminder' | 'audit_export' | 'slack_alert' | 'email_alert' | 'billing_change'
+export type P1ExternalActionStatus = 'draft' | 'approved' | 'rejected' | 'executed'
+export type P1ExternalConnectorMode = 'dry_run' | 'live'
 
 export interface P1RagRecord {
   id: string
@@ -55,6 +58,7 @@ export interface P1RagEvidenceResult {
   refs: string[]
   mayOverrideFacts: false
   records: P1RagRecord[]
+  scores: number[]
   warnings: string[]
 }
 
@@ -74,6 +78,47 @@ export interface P1OperatingContract {
     phaseOrder: ['draft', 'human_approval', 'execute', 'rollback_metadata', 'ledger']
     externalMutationAllowed: false
   }
+}
+
+export interface P1ExternalAction {
+  id: string
+  workspaceId: string
+  kind: P1ExternalActionKind
+  title: string
+  status: P1ExternalActionStatus
+  requiresHumanApproval: true
+  payload: Record<string, unknown>
+  sourceRefs: string[]
+  rollbackRef?: string
+  createdAt: string
+  approval?: {
+    approver: string
+    reason: string
+    decidedAt: string
+  }
+}
+
+export interface P1ExternalActionLedgerEntry {
+  id: string
+  workspaceId: string
+  actionId: string
+  kind: P1ExternalActionKind
+  status: 'ledgered'
+  connectorMode: P1ExternalConnectorMode
+  dryRunRef?: string
+  externalRef?: string
+  sourceRefs: string[]
+  executedAt: string
+}
+
+export interface P1ExternalActionExecutionResult {
+  status: 'blocked' | 'executed'
+  connectorMode: P1ExternalConnectorMode
+  actionId: string
+  error?: 'approval_required' | 'rollback_metadata_required'
+  dryRunRef?: string
+  externalRef?: string
+  ledgerEntry: P1ExternalActionLedgerEntry | null
 }
 
 export type P1UsageAdapterSource =
@@ -186,6 +231,15 @@ export interface VllmServingAnalysis {
   caveats: string[]
 }
 
+export interface VllmServingReview extends VllmServingAnalysis {
+  providerApiCostExcluded: true
+  whatIfComparisons: Array<{
+    id: string
+    label: string
+    status: 'validation_required'
+  }>
+}
+
 export type P1AlertType =
   | 'margin_breach'
   | 'retry_spike'
@@ -230,6 +284,18 @@ export interface BenchmarkBasisSelection {
   status: 'available' | 'baseline_unavailable'
 }
 
+export interface BenchmarkMarketplaceRecord {
+  id: string
+  label: string
+  sourceType: 'self_baseline' | 'verified_public_evidence' | 'customer_peer_cohort'
+  status: 'verified' | 'needs_review'
+}
+
+export interface BenchmarkMarketplace {
+  basis: BenchmarkBasisSelection
+  records: BenchmarkMarketplaceRecord[]
+}
+
 export interface RetentionAutomationPlan {
   workspaceId: string
   storedArtifacts: string[]
@@ -239,6 +305,19 @@ export interface RetentionAutomationPlan {
     label: string
     status: 'scheduled' | 'not_needed'
   }>
+}
+
+export interface DataRoomArtifactInventoryItem {
+  id: string
+  label: string
+  stored: boolean
+  note: string
+}
+
+export interface DataRoomWorkspace {
+  plan: RetentionAutomationPlan
+  artifactInventory: DataRoomArtifactInventoryItem[]
+  auditExportDraft: P1ExternalAction
 }
 
 const REQUIRED_USAGE_DIMENSIONS: NormalizedUsageDimension[] = [
@@ -277,10 +356,39 @@ function refWithPrefix(prefix: string, value: string): string {
   return value.startsWith(`${prefix}:`) ? value : `${prefix}:${value}`
 }
 
+function slug(value: string): string {
+  return value.trim().toLowerCase().replace(/[^0-9a-z_-]+/g, '-').replace(/^-+|-+$/g, '') || 'item'
+}
+
 function recordMatches(record: P1RagRecord, queryTerms: string[]): boolean {
   if (queryTerms.length === 0) return true
   const haystack = `${record.id} ${record.text} ${record.sourceUrl ?? ''}`.toLowerCase()
   return queryTerms.some(term => haystack.includes(term))
+}
+
+function queryTermsFrom(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+function recordScore(record: P1RagRecord, queryTerms: string[]): number {
+  if (queryTerms.length === 0) return 1
+  const haystack = `${record.id} ${record.text} ${record.sourceUrl ?? ''}`.toLowerCase()
+  const uniqueTerms = new Set(queryTerms)
+  const hits = Array.from(uniqueTerms).filter(term => haystack.includes(term)).length
+  if (hits === 0) return 0
+  return Number((hits / Math.sqrt(uniqueTerms.size)).toFixed(6))
+}
+
+function rankedRecords(records: P1RagRecord[], queryTerms: string[], topK?: number): Array<{ record: P1RagRecord; score: number }> {
+  const limit = Number.isFinite(topK) && topK && topK > 0 ? topK : records.length
+  return records
+    .map(record => ({ record, score: recordScore(record, queryTerms) }))
+    .filter(item => item.score > 0)
+    .sort((left, right) => (
+      right.score - left.score
+      || left.record.id.localeCompare(right.record.id)
+    ))
+    .slice(0, limit)
 }
 
 function sdkLiteCsvForTrust(event: P1SdkLiteUsageEvent): string {
@@ -332,6 +440,99 @@ export function buildP1OperatingContract(input: {
       phaseOrder: ['draft', 'human_approval', 'execute', 'rollback_metadata', 'ledger'],
       externalMutationAllowed: false,
     },
+  }
+}
+
+export function buildExternalActionDraft(input: {
+  workspaceId: string
+  kind: P1ExternalActionKind
+  title: string
+  payload: Record<string, unknown>
+  sourceRefs: string[]
+  rollbackRef?: string
+  createdAt?: string
+}): P1ExternalAction {
+  const normalizedWorkspaceId = workspaceId(input.workspaceId)
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  return {
+    id: `external:${normalizedWorkspaceId}:${input.kind}:${slug(input.title)}`,
+    workspaceId: normalizedWorkspaceId,
+    kind: input.kind,
+    title: input.title,
+    status: 'draft',
+    requiresHumanApproval: true,
+    payload: input.payload,
+    sourceRefs: unique(input.sourceRefs),
+    rollbackRef: input.rollbackRef,
+    createdAt,
+  }
+}
+
+export function approveExternalAction(input: {
+  action: P1ExternalAction
+  approver: string
+  reason: string
+  decidedAt?: string
+}): P1ExternalAction {
+  return {
+    ...input.action,
+    status: 'approved',
+    approval: {
+      approver: input.approver,
+      reason: input.reason,
+      decidedAt: input.decidedAt ?? new Date().toISOString(),
+    },
+  }
+}
+
+export function executeExternalAction(input: {
+  action: P1ExternalAction
+  connectorMode?: P1ExternalConnectorMode
+  executedAt?: string
+}): P1ExternalActionExecutionResult {
+  const connectorMode = input.connectorMode ?? 'dry_run'
+  const executedAt = input.executedAt ?? new Date().toISOString()
+  if (input.action.status !== 'approved') {
+    return {
+      status: 'blocked',
+      connectorMode,
+      actionId: input.action.id,
+      error: 'approval_required',
+      ledgerEntry: null,
+    }
+  }
+  if (input.action.kind === 'billing_change' && !input.action.rollbackRef && typeof input.action.payload.rollbackRef !== 'string') {
+    return {
+      status: 'blocked',
+      connectorMode,
+      actionId: input.action.id,
+      error: 'rollback_metadata_required',
+      ledgerEntry: null,
+    }
+  }
+
+  const refPrefix = connectorMode === 'dry_run' ? 'dry-run' : 'external'
+  const externalRef = `${refPrefix}:${input.action.workspaceId}:${input.action.kind}:${Date.parse(executedAt) || 0}`
+  const ledgerEntry: P1ExternalActionLedgerEntry = {
+    id: `ledger:${input.action.id}`,
+    workspaceId: input.action.workspaceId,
+    actionId: input.action.id,
+    kind: input.action.kind,
+    status: 'ledgered',
+    connectorMode,
+    dryRunRef: connectorMode === 'dry_run' ? externalRef : undefined,
+    externalRef: connectorMode === 'live' ? externalRef : undefined,
+    sourceRefs: input.action.sourceRefs,
+    executedAt,
+  }
+
+  return {
+    status: 'executed',
+    connectorMode,
+    actionId: input.action.id,
+    dryRunRef: ledgerEntry.dryRunRef,
+    externalRef: ledgerEntry.externalRef,
+    ledgerEntry,
   }
 }
 
@@ -392,13 +593,9 @@ export function retrieveP1RagEvidence(input: {
   records: P1RagRecord[]
   structuredFactRefs: string[]
 }): P1RagEvidenceResult {
-  const queryTerms = input.query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const records = queryTerms.length > 0
-    ? input.records.filter(record => {
-      const haystack = `${record.id} ${record.text} ${record.sourceUrl ?? ''}`.toLowerCase()
-      return queryTerms.some(term => haystack.includes(term))
-    })
-    : input.records
+  const queryTerms = queryTermsFrom(input.query)
+  const ranked = rankedRecords(input.records, queryTerms)
+  const records = ranked.map(item => item.record)
   const warnings = records.length === 0 && input.kind === 'benchmark' ? ['baseline_unavailable'] : []
 
   return {
@@ -410,6 +607,7 @@ export function retrieveP1RagEvidence(input: {
     ],
     mayOverrideFacts: false,
     records,
+    scores: ranked.map(item => item.score),
     warnings,
   }
 }
@@ -419,8 +617,14 @@ function retrieveVectorCollection(input: {
   queryTerms: string[]
   records: P1RagRecord[]
   structuredFactRefs: string[]
+  topK?: number
 }): P1RagEvidenceResult {
-  const records = input.records.filter(record => recordMatches(record, input.queryTerms))
+  const ranked = rankedRecords(
+    input.records.filter(record => recordMatches(record, input.queryTerms)),
+    input.queryTerms,
+    input.topK,
+  )
+  const records = ranked.map(item => item.record)
   const prefix = input.kind === 'official_docs'
     ? 'source'
     : input.kind === 'benchmark_evidence'
@@ -439,6 +643,7 @@ function retrieveVectorCollection(input: {
     ],
     mayOverrideFacts: false,
     records,
+    scores: ranked.map(item => item.score),
     warnings,
   }
 }
@@ -447,26 +652,30 @@ export function retrieveP1VectorRagEvidence(input: {
   query: string
   collections: Record<P1VectorRagKind, P1RagRecord[]>
   structuredFactRefs: string[]
+  topK?: number
 }): P1VectorRagEvidenceResult {
-  const queryTerms = input.query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const queryTerms = queryTermsFrom(input.query)
   const results: Record<P1VectorRagKind, P1RagEvidenceResult> = {
     official_docs: retrieveVectorCollection({
       kind: 'official_docs',
       queryTerms,
       records: input.collections.official_docs,
       structuredFactRefs: input.structuredFactRefs,
+      topK: input.topK,
     }),
     benchmark_evidence: retrieveVectorCollection({
       kind: 'benchmark_evidence',
       queryTerms,
       records: input.collections.benchmark_evidence,
       structuredFactRefs: [],
+      topK: input.topK,
     }),
     decision_history: retrieveVectorCollection({
       kind: 'decision_history',
       queryTerms,
       records: input.collections.decision_history,
       structuredFactRefs: [],
+      topK: input.topK,
     }),
   }
 
@@ -580,6 +789,23 @@ export function analyzeVllmServingEconomics(input: VllmServingInput): VllmServin
   }
 }
 
+export function buildVllmServingReview(input: VllmServingInput): VllmServingReview {
+  const analysis = analyzeVllmServingEconomics(input)
+  const whatIfComparisons = analysis.recommendations.length > 0
+    ? analysis.recommendations.map(recommendation => ({
+      id: slug(recommendation),
+      label: recommendation,
+      status: 'validation_required' as const,
+    }))
+    : [{ id: 'keep-current-serving-policy', label: 'Keep current serving policy what-if', status: 'validation_required' as const }]
+
+  return {
+    ...analysis,
+    providerApiCostExcluded: true,
+    whatIfComparisons,
+  }
+}
+
 export function draftP1Alert(input: {
   type: P1AlertType
   thresholdRef: string
@@ -646,6 +872,40 @@ export function selectBenchmarkBasis(input: BenchmarkBasisInput): BenchmarkBasis
   return { basis: null, status: 'baseline_unavailable' }
 }
 
+export function buildBenchmarkMarketplace(input: {
+  selfBaselineCount: number
+  verifiedPublicRecords: Array<{ id: string; label: string }>
+  customerPeerRows: Array<{ id: string; label: string; verified: boolean }>
+}): BenchmarkMarketplace {
+  const basis = selectBenchmarkBasis({
+    selfBaselineCount: input.selfBaselineCount,
+    verifiedPeerCount: input.verifiedPublicRecords.length,
+    customerPeerCohortCount: input.customerPeerRows.length,
+  })
+  const records: BenchmarkMarketplaceRecord[] = [
+    ...Array.from({ length: input.selfBaselineCount }, (_, index) => ({
+      id: `self-baseline-${index + 1}`,
+      label: `Self baseline ${index + 1}`,
+      sourceType: 'self_baseline' as const,
+      status: 'verified' as const,
+    })),
+    ...input.verifiedPublicRecords.map(record => ({
+      id: record.id,
+      label: record.label,
+      sourceType: 'verified_public_evidence' as const,
+      status: 'verified' as const,
+    })),
+    ...input.customerPeerRows.map(row => ({
+      id: row.id,
+      label: row.label,
+      sourceType: 'customer_peer_cohort' as const,
+      status: row.verified ? 'verified' as const : 'needs_review' as const,
+    })),
+  ]
+
+  return { basis, records: basis.status === 'baseline_unavailable' ? [] : records }
+}
+
 export function buildRetentionAutomationPlan(input: {
   workspaceId: string
   hasRawUpload: boolean
@@ -688,4 +948,40 @@ export function buildRetentionAutomationPlan(input: {
       },
     ],
   }
+}
+
+export function buildDataRoomWorkspace(input: {
+  workspaceId: string
+  hasRawUpload: boolean
+  hasRawPrompt: boolean
+  hasApiKey: boolean
+  hasPii: boolean
+}): DataRoomWorkspace {
+  const plan = buildRetentionAutomationPlan(input)
+  const artifactInventory: DataRoomArtifactInventoryItem[] = [
+    ...plan.storedArtifacts.map(artifact => ({
+      id: artifact,
+      label: artifact.replace(/_/g, ' '),
+      stored: true,
+      note: 'Stored as normalized or audit-safe metadata.',
+    })),
+    ...plan.excludedArtifacts.map(artifact => ({
+      id: artifact,
+      label: artifact.replace(/_/g, ' '),
+      stored: false,
+      note: 'Not stored by default.',
+    })),
+  ]
+  const auditExportDraft = buildExternalActionDraft({
+    workspaceId: input.workspaceId,
+    kind: 'audit_export',
+    title: 'Audit export draft',
+    payload: {
+      artifactIds: artifactInventory.filter(item => item.stored).map(item => item.id),
+      excludedArtifactIds: artifactInventory.filter(item => !item.stored).map(item => item.id),
+    },
+    sourceRefs: ['asset:data_room', 'decision:human_approval_required'],
+  })
+
+  return { plan, artifactInventory, auditExportDraft }
 }
