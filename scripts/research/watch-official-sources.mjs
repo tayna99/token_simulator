@@ -14,6 +14,11 @@ import {
   officialSourceSnippetsToRagRecords,
   serializeOfficialSourceSnippetsJsonl,
 } from './official-source-snippets.mjs'
+import {
+  buildOfficialApiDocChunks,
+  buildOfficialDocsVectorIndex,
+  createHashEmbeddingProvider,
+} from './api-doc-rag.mjs'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..', '..')
@@ -73,6 +78,7 @@ async function main() {
   const nextBaseline = { ...baseline }
   const allCandidates = []
   const snippets = []
+  const officialDocChunks = []
   const changedSources = []
   const errors = []
   const capturedAt = new Date().toISOString()
@@ -96,6 +102,7 @@ async function main() {
           candidateFromParsedModel(source, model, extracted.pricingFacts)
         )))
         snippets.push(...buildOfficialSourceSnippets({ source, text, capturedAt }))
+        officialDocChunks.push(...buildOfficialApiDocChunks({ source, text, capturedAt }))
       }
       nextBaseline[source.id] = hash
     } catch (error) {
@@ -110,6 +117,10 @@ async function main() {
   clearTimeout(timeout)
   const inbox = partitionCandidateInbox(allCandidates)
   const officialDocsRagRecords = officialSourceSnippetsToRagRecords(snippets)
+  const officialDocsVectorIndex = await buildOfficialDocsVectorIndex({
+    chunks: officialDocChunks,
+    embeddingProvider: createHashEmbeddingProvider({ dimensions: 64 }),
+  })
   mkdirSync(ARTIFACT_DIR, { recursive: true })
   const report = {
     generatedAt: capturedAt,
@@ -128,6 +139,9 @@ async function main() {
     inboxWarnings: inbox.warnings,
     snippetCount: snippets.length,
     officialDocsRagRecordCount: officialDocsRagRecords.length,
+    officialDocChunkCount: officialDocChunks.length,
+    officialDocsVectorIndexItemCount: officialDocsVectorIndex.items.length,
+    officialDocsVectorDimensions: officialDocsVectorIndex.dimensions,
     errors,
   }
   saveJson(resolve(ARTIFACT_DIR, 'latest-report.json'), report)
@@ -139,6 +153,16 @@ async function main() {
   writeFileSync(
     resolve(ARTIFACT_DIR, 'official-docs-rag.jsonl'),
     officialDocsRagRecords.map(record => JSON.stringify(record)).join('\n') + (officialDocsRagRecords.length ? '\n' : ''),
+    'utf8',
+  )
+  writeFileSync(
+    resolve(ARTIFACT_DIR, 'official-docs-chunks.jsonl'),
+    officialDocChunks.map(record => JSON.stringify(record)).join('\n') + (officialDocChunks.length ? '\n' : ''),
+    'utf8',
+  )
+  writeFileSync(
+    resolve(ARTIFACT_DIR, 'official-docs-vector-index.json'),
+    `${JSON.stringify(officialDocsVectorIndex, null, 2)}\n`,
     'utf8',
   )
   writeFileSync(
@@ -155,6 +179,8 @@ async function main() {
       `- Needs region review: ${report.needsRegionReviewCount}`,
       `- Snippet count: ${report.snippetCount}`,
       `- Official docs RAG records: ${report.officialDocsRagRecordCount}`,
+      `- Official docs chunks: ${report.officialDocChunkCount}`,
+      `- Official docs vector index items: ${report.officialDocsVectorIndexItemCount}`,
       `- Errors: ${errors.length}`,
       '',
       ...changedSources.map(source => `- changed: ${source.id} (${source.url})`),
@@ -175,6 +201,8 @@ async function main() {
     needsRegionReview: inbox.needsRegionReview.length,
     snippets: snippets.length,
     officialDocsRagRecords: officialDocsRagRecords.length,
+    officialDocChunks: officialDocChunks.length,
+    officialDocsVectorIndexItems: officialDocsVectorIndex.items.length,
     errors: errors.length,
     artifact: 'artifacts/research/official-watch/latest-report.json',
   }, null, 2))

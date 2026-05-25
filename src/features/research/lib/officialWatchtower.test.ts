@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   OFFICIAL_SOURCE_REGISTRY,
+  INITIAL_MODEL_RELEASE_CANDIDATES,
+  INITIAL_OFFICIAL_SOURCE_SNIPPETS,
   buildModelReleaseCandidate,
+  buildOfficialUpdatesReviewInbox,
   canUseNormalizedUsdPricing,
   dedupeModelReleaseCandidates,
   officialWatchtowerCoverageSummary,
@@ -125,5 +128,40 @@ describe('officialWatchtower', () => {
     expect(candidate.normalizedPricing).toBeNull()
     expect(candidate.status).toBe('needs_fx_review')
     expect(canUseNormalizedUsdPricing(candidate)).toBe(false)
+  })
+
+  it('builds an admin review inbox split by review, noisy, FX, and region queues', () => {
+    const fxCandidate = buildModelReleaseCandidate({
+      detectedAt: '2026-05-24T00:00:00.000Z',
+      sourceId: 'alibaba-model-studio-pricing',
+      sourceUrl: 'https://www.alibabacloud.com/help/en/model-studio/model-pricing',
+      title: 'Qwen CNY pricing candidate',
+      modelNames: ['Qwen3 Max'],
+      modelOwner: 'alibaba_qwen',
+      modelFamily: 'qwen',
+      servingProvider: 'alibaba_model_studio',
+      pricingRegion: 'china_mainland',
+      currency: 'CNY',
+      sourceLanguage: 'zh',
+      pricingStatusSuggestion: 'needs_fx_review',
+      officialSourceTrust: 'official_pricing',
+    })
+
+    const inbox = buildOfficialUpdatesReviewInbox({
+      candidates: [...INITIAL_MODEL_RELEASE_CANDIDATES, fxCandidate],
+      snippets: INITIAL_OFFICIAL_SOURCE_SNIPPETS,
+      noisyCandidates: [{ candidateId: 'noisy:generic-model', title: 'Generic model mention', reason: 'source_candidate_limit_exceeded' }],
+      sourceChangedCount: 2,
+    })
+
+    expect(inbox.reviewCandidates.map(candidate => candidate.candidateId)).toEqual(expect.arrayContaining([
+      'moonshot-kimi:kimi:kimi-platform:global:kimi-pricing-chat:kimi-k2-6',
+      'zai-glm:glm:baidu-qianfan:international-singapore:baidu-qianfan-pricing:glm-5',
+    ]))
+    expect(inbox.needsRegionReview.map(candidate => candidate.modelOwner)).toContain('01ai_yi')
+    expect(inbox.needsFxReview.map(candidate => candidate.modelOwner)).toContain('alibaba_qwen')
+    expect(inbox.noisyCandidates).toEqual([expect.objectContaining({ reason: 'source_candidate_limit_exceeded' })])
+    expect(inbox.ragRecordCount).toBe(INITIAL_OFFICIAL_SOURCE_SNIPPETS.length)
+    expect(inbox.sourceChangedCount).toBe(2)
   })
 })

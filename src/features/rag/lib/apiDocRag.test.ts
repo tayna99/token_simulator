@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRagContextBlocks,
   buildVectorIndex,
+  createMemoryVectorStore,
   chunkApiDoc,
   createHashEmbeddingProvider,
   normalizeApiDoc,
@@ -113,5 +114,37 @@ describe('apiDocRag', () => {
     ])
     expect(context[0].text).toContain('Cached input tokens')
     expect(context[0].text.length).toBeLessThanOrEqual(220)
+  })
+
+  it('stores official doc chunks behind a vector store boundary before search', async () => {
+    const chunks = chunkApiDoc(normalizeApiDoc({
+      source: SOURCE,
+      rawText: [
+        '# Gemini API',
+        '## Authentication',
+        'Use OAuth bearer tokens.',
+        '## Pricing',
+        'Repeated context receives a cached input discount.',
+      ].join('\n'),
+      capturedAt: CAPTURED_AT,
+    }))
+    const store = createMemoryVectorStore({
+      collection: 'official_docs',
+      embeddingProvider: createHashEmbeddingProvider({ dimensions: 32 }),
+    })
+
+    await store.upsertChunks(chunks)
+    const results = await store.search({
+      query: 'cached input discount pricing',
+      topK: 1,
+      filter: { sourceId: SOURCE.id },
+    })
+
+    expect(await store.stats()).toEqual({
+      collection: 'official_docs',
+      dimensions: 32,
+      itemCount: chunks.length,
+    })
+    expect(results[0].chunk.metadata.headingPath).toContain('Pricing')
   })
 })

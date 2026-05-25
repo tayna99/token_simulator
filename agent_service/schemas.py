@@ -135,6 +135,7 @@ class AgentRunInput(BaseModel):
     pricingFactCandidates: list[dict[str, Any]] = Field(default_factory=list)
     fxRateSnapshots: list[dict[str, Any]] = Field(default_factory=list)
     ragCollections: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    ragContextBlocks: list[dict[str, Any]] = Field(default_factory=list)
     trustInspection: dict[str, Any] | None = None
     formulaVersion: str = ""
     providerRegistryVersion: str = ""

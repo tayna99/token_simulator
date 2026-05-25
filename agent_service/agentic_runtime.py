@@ -523,6 +523,7 @@ def build_agent_tools(
     operating_ledger: Sequence[Mapping[str, Any]] = (),
     official_source_registry: Sequence[Mapping[str, Any]] = (),
     official_source_snippets: Sequence[Mapping[str, Any]] = (),
+    rag_context_blocks: Sequence[Mapping[str, Any]] = (),
     model_release_candidates: Sequence[Mapping[str, Any]] = (),
     pricing_fact_candidates: Sequence[Mapping[str, Any]] = (),
     fx_rate_snapshots: Sequence[Mapping[str, Any]] = (),
@@ -978,7 +979,11 @@ def build_agent_tools(
     @tool
     def retrieve_p1_vector_rag_evidence(query: str = "") -> str:
         """Retrieve P1 RAG evidence across official docs, benchmark/risk evidence, and decision history. Read-only."""
-        official_matches = [
+        context_matches = [
+            item for item in rag_context_blocks
+            if _matches_text(item, query)
+        ]
+        official_matches = context_matches or [
             item for item in official_source_snippets
             if _matches_text(item, query)
         ]
@@ -995,12 +1000,7 @@ def build_agent_tools(
             if _matches_text(item, query)
         ]
 
-        official_refs: list[str] = []
-        for item in official_matches:
-            if item.get("snippetId"):
-                official_refs.append(str(item.get("snippetId")))
-            else:
-                official_refs.extend(str(ref) for ref in item.get("refs", []) if ref)
+        official_refs = _official_refs(official_matches)
         benchmark_refs = [
             f"evidence:{item.get('evidenceId') or item.get('evidenceRef') or item.get('id')}"
             for item in benchmark_matches
@@ -1032,6 +1032,7 @@ def build_agent_tools(
             data={
                 "mayOverrideFacts": False,
                 "officialDocs": official_matches,
+                "contextBlocks": context_matches,
                 "benchmarkEvidence": benchmark_matches,
                 "riskEvidence": risk_matches,
                 "decisionHistory": decision_matches,
@@ -1301,6 +1302,7 @@ def _run_single_operating_agent(
         front_operating_system=payload.frontOperatingSystem,
         official_source_registry=payload.officialSourceRegistry,
         official_source_snippets=payload.officialSourceSnippets,
+        rag_context_blocks=payload.ragContextBlocks,
         model_release_candidates=payload.modelReleaseCandidates,
         pricing_fact_candidates=payload.pricingFactCandidates,
         fx_rate_snapshots=payload.fxRateSnapshots,
@@ -1324,6 +1326,7 @@ def _run_single_operating_agent(
                     "agentId": agent_id,
                     "question": payload.question,
                     "availableToolRefs": _refs_from_tool_results(payload.toolResults),
+                    "ragContextBlocks": payload.ragContextBlocks,
                 }),
             }
         ]
@@ -1384,6 +1387,7 @@ def _run_supervisor_agent_as_tool(
                     "question": payload.question,
                     "route": dict(route),
                     "availableAgentTools": [_agent_tool_name(agent_id) for agent_id in OPERATING_AGENT_IDS],
+                    "ragContextBlocks": payload.ragContextBlocks,
                 }),
             }
         ]

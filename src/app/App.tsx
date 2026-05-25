@@ -2918,6 +2918,7 @@ function App() {
         benchmark_evidence: agentSnapshot.benchmarkCards,
         decision_history: agentSnapshot.decisionHistory,
       },
+      ragContextBlocks: p1RagEvidencePanel.contextBlocks ?? [],
       trustInspection: agentSnapshot.trustInspection,
       formulaVersion: agentSnapshot.formulaVersion,
       providerRegistryVersion: agentSnapshot.providerRegistryVersion,
@@ -2933,6 +2934,7 @@ function App() {
     activeDecisionStage,
     agentExecutionMode,
     agentSnapshot,
+    p1RagEvidencePanel.contextBlocks,
     requestedOperatingAgentId,
   ])
 

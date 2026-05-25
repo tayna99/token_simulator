@@ -190,7 +190,7 @@ describe('App AI team operations workspace', () => {
   it('shows Trust blocking in customer copy and exposes SDK/RAG internals only in debug mode', async () => {
     const user = userEvent.setup()
     window.history.pushState({}, '', '/token_simulator/?debug=1')
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input)
       if (url === '/api/sdk-lite/usage') {
         return new Response(JSON.stringify({

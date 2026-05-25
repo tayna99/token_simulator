@@ -186,6 +186,14 @@ def test_capability_tools_return_grounded_envelopes():
         pricing_fact_candidates=[{"id": "fact:zai-glm-5", "modelFamily": "glm", "region": "global"}],
         fx_rate_snapshots=[{"base": "CNY", "quote": "USD", "rate": None, "source": "manual_review_required"}],
         official_source_snippets=[{"snippetId": "source:zai-pricing#glm-5", "sourceId": "zai-pricing", "text": "GLM-5 input price", "refs": ["source:zai-pricing"]}],
+        rag_context_blocks=[
+            {
+                "collection": "official_docs",
+                "text": "GLM-5 routing official vector context.",
+                "refs": ["source:zai-pricing#vector"],
+                "mayOverrideFacts": False,
+            }
+        ],
     )
     }
 
@@ -214,7 +222,8 @@ def test_capability_tools_return_grounded_envelopes():
     assert official_sources["refs"] == ["source:zai-pricing"]
     assert official_snippets["refs"] == ["source:zai-pricing#glm-5"]
     assert vector_rag["toolName"] == "retrieve_p1_vector_rag_evidence"
-    assert vector_rag["refs"] == ["source:zai-pricing#glm-5", "risk:risk-model-routing-quality"]
+    assert vector_rag["refs"] == ["source:zai-pricing#vector", "risk:risk-model-routing-quality"]
+    assert vector_rag["data"]["contextBlocks"][0]["refs"] == ["source:zai-pricing#vector"]
     assert vector_rag["data"]["mayOverrideFacts"] is False
     assert release_candidates["refs"] == ["candidate:zai:glm:z-ai:global"]
     assert "manual_review_required" in fx_snapshot["warnings"]
@@ -369,12 +378,26 @@ def test_agentic_runtime_uses_create_agent_path_with_structured_response():
             providerRegistry=[{"id": "gpt-5-mini", "sourceUrl": "https://openai.com/api/pricing/"}],
             modelPerfMatrix=[{"taskType": "classification", "modelId": "gpt-5-mini", "qualityBasis": "assumption"}],
             operatingLedger=[{"id": "decision-provider", "workstream": "Provider Registry"}],
+            ragContextBlocks=[
+                {
+                    "collection": "official_docs",
+                    "text": "Cached input tokens receive a discount.",
+                    "refs": ["source:google-pricing"],
+                    "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+                    "score": 0.82,
+                    "mayOverrideFacts": False,
+                    "metadata": {"sourceId": "google-pricing", "sectionType": "pricing"},
+                }
+            ],
         ),
         model=object(),
         agent_factory=lambda **_: fake_agent,
     )
 
     assert fake_agent.invocations
+    agent_message = json.loads(fake_agent.invocations[0]["messages"][0]["content"])
+    assert agent_message["ragContextBlocks"][0]["refs"] == ["source:google-pricing"]
+    assert agent_message["ragContextBlocks"][0]["mayOverrideFacts"] is False
     assert result.llmMode == "provider-llm"
     assert result.primaryAgentId == "cost_modeling"
     assert result.reviewerAgentIds == []

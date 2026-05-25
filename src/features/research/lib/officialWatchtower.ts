@@ -314,6 +314,38 @@ export function dedupeModelReleaseCandidates(candidates: ModelReleaseCandidate[]
   })
 }
 
+export interface OfficialUpdatesReviewInbox {
+  reviewCandidates: ModelReleaseCandidate[]
+  needsFxReview: ModelReleaseCandidate[]
+  needsRegionReview: ModelReleaseCandidate[]
+  noisyCandidates: Array<Record<string, unknown>>
+  ragRecordCount: number
+  sourceChangedCount: number
+}
+
+export function buildOfficialUpdatesReviewInbox(input: {
+  candidates: ModelReleaseCandidate[]
+  snippets: OfficialSourceSnippet[]
+  noisyCandidates?: Array<Record<string, unknown>>
+  sourceChangedCount: number
+}): OfficialUpdatesReviewInbox {
+  const candidates = dedupeModelReleaseCandidates(input.candidates)
+  const needsFxReview = candidates.filter(candidate => candidate.status === 'needs_fx_review')
+  const needsRegionReview = candidates.filter(candidate => candidate.status === 'needs_region_review')
+  const reviewCandidates = candidates.filter(candidate => (
+    candidate.status !== 'needs_fx_review' && candidate.status !== 'needs_region_review'
+  ))
+
+  return {
+    reviewCandidates,
+    needsFxReview,
+    needsRegionReview,
+    noisyCandidates: input.noisyCandidates ?? [],
+    ragRecordCount: input.snippets.length,
+    sourceChangedCount: input.sourceChangedCount,
+  }
+}
+
 export function canUseNormalizedUsdPricing(candidate: ModelReleaseCandidate): boolean {
   return !!candidate.normalizedPricing
     && !!candidate.fxRateSnapshot

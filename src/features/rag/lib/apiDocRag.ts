@@ -82,6 +82,22 @@ export interface VectorSearchResult {
   score: number
 }
 
+export interface VectorStoreStats {
+  collection: RagCollection
+  dimensions: number
+  itemCount: number
+}
+
+export interface VectorStore {
+  upsertChunks(chunks: ApiDocChunk[]): Promise<void>
+  search(input: {
+    query: string
+    topK?: number
+    filter?: Partial<ApiDocChunkMetadata>
+  }): Promise<VectorSearchResult[]>
+  stats(): Promise<VectorStoreStats>
+}
+
 export interface RagContextBlock {
   collection: RagCollection
   text: string
@@ -435,6 +451,50 @@ export async function searchVectorIndex(input: {
     .filter(result => result.score > 0)
     .sort((left, right) => right.score - left.score || left.chunk.id.localeCompare(right.chunk.id))
     .slice(0, limit)
+}
+
+export function createMemoryVectorStore(input: {
+  collection: RagCollection
+  embeddingProvider: EmbeddingProvider
+}): VectorStore {
+  let index: VectorIndex = {
+    collection: input.collection,
+    dimensions: input.embeddingProvider.dimensions,
+    items: [],
+  }
+
+  return {
+    async upsertChunks(chunks: ApiDocChunk[]) {
+      const existing = new Map(index.items.map(item => [item.chunk.id, item]))
+      const next = await buildVectorIndex({
+        collection: input.collection,
+        chunks,
+        embeddingProvider: input.embeddingProvider,
+      })
+      for (const item of next.items) existing.set(item.chunk.id, item)
+      index = {
+        collection: input.collection,
+        dimensions: input.embeddingProvider.dimensions,
+        items: Array.from(existing.values()).sort((left, right) => left.chunk.id.localeCompare(right.chunk.id)),
+      }
+    },
+    async search(searchInput) {
+      return searchVectorIndex({
+        index,
+        query: searchInput.query,
+        topK: searchInput.topK,
+        filter: searchInput.filter,
+        embeddingProvider: input.embeddingProvider,
+      })
+    },
+    async stats() {
+      return {
+        collection: index.collection,
+        dimensions: index.dimensions,
+        itemCount: index.items.length,
+      }
+    },
+  }
 }
 
 export function buildRagContextBlocks(

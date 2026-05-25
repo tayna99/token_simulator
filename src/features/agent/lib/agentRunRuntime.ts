@@ -1,5 +1,6 @@
 import type { TrustInspectionResult } from '../../trust/lib/securityMiddleware'
 import type { FrontOperatingSystemContext } from '../../front-operating/lib/frontOperatingContext'
+import type { RagContextBlock } from '../../rag/lib/apiDocRag'
 
 export type AgentRunMode = 'report' | 'ask' | 'decision_support'
 export type AgentRunStage = 'design' | 'cost' | 'bottleneck' | 'optimize' | 'decision-log'
@@ -88,6 +89,7 @@ export interface AgentRunInput {
   pricingFactCandidates?: unknown[]
   fxRateSnapshots?: unknown[]
   ragCollections?: Partial<Record<'official_docs' | 'benchmark_evidence' | 'decision_history', unknown[]>>
+  ragContextBlocks?: RagContextBlock[]
   trustInspection?: TrustInspectionResult | null
   formulaVersion?: string
   providerRegistryVersion?: string

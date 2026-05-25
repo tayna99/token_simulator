@@ -44,6 +44,28 @@ describe('runAgentRuntime', () => {
       factSources: [],
       operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
       frontOperatingSystem: AGENTCOST_FRONT_OPERATING_SYSTEM,
+      ragContextBlocks: [{
+        collection: 'official_docs',
+        text: 'Cached input tokens receive a discount for repeated context.',
+        refs: ['source:google-pricing'],
+        sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+        score: 0.82,
+        mayOverrideFacts: false,
+        metadata: {
+          sourceId: 'google-pricing',
+          provider: 'google',
+          servingProvider: 'first_party',
+          modelFamilies: ['gemini'],
+          sourceKind: 'pricing',
+          sourceLanguage: 'en',
+          pricingRegion: 'global',
+          officialSourceTrust: 'official_pricing',
+          capturedAt: '2026-05-24T00:00:00.000Z',
+          sectionType: 'pricing',
+          headingPath: ['Gemini API', 'Pricing'],
+          contentHash: 'test-context',
+        },
+      }],
     }, { runtime: 'server', fetcher })
 
     expect(fetcher).toHaveBeenCalledWith('/api/agent/run', expect.objectContaining({ method: 'POST' }))
@@ -58,6 +80,11 @@ describe('runAgentRuntime', () => {
       frontOperatingSystem: expect.objectContaining({
         assets: expect.arrayContaining([expect.objectContaining({ ref: 'asset:icp_scorecard' })]),
       }),
+      ragContextBlocks: [expect.objectContaining({
+        collection: 'official_docs',
+        mayOverrideFacts: false,
+        refs: ['source:google-pricing'],
+      })],
     })
     expect(result.llmMode).toBe('provider-llm')
     expect(result.usedTools).toContain('lookup_snapshot_value')
