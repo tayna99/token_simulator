@@ -1,9 +1,9 @@
 # PRD: AgentPayroll — 현 상태 기준 (Implementation Truth Record)
 
 문서 버전: current-state · 2026-05-25
-상태: 사실 기록 (내부 정렬용)
-성격: 이 문서는 **방향이나 다음 MVP를 정의하지 않는다.** 오직 *"지금 코드에 무엇이 실제로 존재하고, 무엇이 검증됐고, 무엇이 아직 검증 안 됐는가"* 를 정직하게 기록한다.
-관계: `docs/PRD-v3.md`(v3.2, 합의된 방향+다음 MVP)와 병존한다. v3.2가 "가야 할 곳"이라면 이 문서는 "지금 있는 곳"이다. 충돌 시 이 문서가 현 구현 사실의 정본이다.
+상태: 사실 기록 + 2026-05-25 확정 전환 방향 (내부 정렬용)
+성격: §1~§8은 *"지금 코드에 무엇이 실제로 존재하고, 무엇이 검증됐고, 무엇이 아직 검증 안 됐는가"* 를 정직하게 기록한다. §9~§11은 이미 확정된 **Next.js primary frontend + Production Demo First** 방향을 UI/UX 기획으로 내려쓰기 위한 실행 기준이다.
+관계: `docs/PRD-v3.md`(v3.2, 합의된 방향+다음 MVP)와 병존한다. v3.2가 "가야 할 곳"이라면 이 문서는 "지금 있는 곳 + 지금부터 Next.js로 옮길 때 지켜야 할 UX 기준"이다. 충돌 시 구현 사실은 §1~§8, Next 전환/UX 기준은 §9~§11을 우선한다.
 
 ---
 
@@ -165,10 +165,11 @@ audience: internal | customer                                        (얼마나 
 후보(우선순위):
 
 1. **Next.js primary frontend 전환 착수 (§10 참조)** — A/B 질문은 폐기한다. Next.js App Router가 주 프론트이고, Vite는 전환 중 legacy baseline이다.
-2. Production demo tenant 완성 — Supabase Auth, workspace membership, pgvector RAG, accepted fact ledger, report artifact, sandbox connector path가 모두 연결되어야 데모 성공으로 본다.
-3. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
-4. RAG 코퍼스 운영화 — C4 usage-schema → C9 decision-history → C2 manual-review benchmark queue
-5. Rate card draft UX — "왜/언제 export/billing 아님" 시각 강조
+2. **Next.js UI/UX 상세 기획 (§11 참조)** — Production Demo First를 전제로 IA, 화면 상태, 컴포넌트, 사용자 흐름을 확정한다.
+3. Production demo tenant 완성 — Supabase Auth, workspace membership, pgvector RAG, accepted fact ledger, report artifact, sandbox connector path가 모두 연결되어야 데모 성공으로 본다.
+4. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
+5. RAG 코퍼스 운영화 — C4 usage-schema → C9 decision-history → C2 manual-review benchmark queue
+6. Rate card draft UX — "왜/언제 export/billing 아님" 시각 강조
 
 미결정:
 - v3.2 방향 문서와 이 사실 문서의 정본 관계를 어디까지 합칠 것인가
@@ -213,7 +214,140 @@ audience: internal | customer                                        (얼마나 
 
 ---
 
-## 11. 참조 인덱스
+## 11. Next.js UI/UX 상세 기획 기준
+
+목적: 이 섹션은 디자이너/PM/프런트엔드 구현자가 같은 그림을 잡기 위한 UI/UX brief다. 핵심은 "멋진 데모 화면"이 아니라 **production stack 위에서 실제로 연결됐는지, 어디가 막혔는지, 어떤 결정을 내려야 하는지**를 사용자가 즉시 이해하는 것이다. 데모 성공은 화면 연출이 아니라 Supabase/Auth/RAG/Watchtower/report/agent_service 연결 상태로 판정한다.
+
+### 11.1 UX 원칙
+
+- **Production truth first:** 연결되지 않은 기능은 성공처럼 보이지 않는다. `unavailable`, `connector_not_configured`, `deterministic_preview`, `baseline_unavailable`을 숨기지 않고 사용자 행동으로 이어지게 한다.
+- **Decision workspace, not dashboard museum:** 첫 화면은 많은 카드를 보여주는 곳이 아니라 "어떤 고객/기능/플랜이 마진을 깨고, 무엇을 승인/보류/수정해야 하는지"를 드러내야 한다.
+- **Same numbers, different emphasis:** developer/PM/CEO는 같은 snapshot을 보되 우선순위와 설명 깊이가 다르다. 숫자는 항상 `calculator.ts`/`format.ts` 경로를 통과한다.
+- **Evidence is inspectable:** RAG/Watchtower/benchmark 결과는 신뢰 배지, source, accepted/review 상태, stale 여부를 함께 보여준다.
+- **Operations are gated:** Slack/Email/Billing/Retention 같은 실행 UI는 approval, idempotency, rollback, ledger 조건을 먼저 보여주고 조건 누락 시 실행 버튼 대신 block reason을 보여준다.
+- **Dense but calm:** SaaS 운영 도구답게 스캔 가능하고 조용해야 한다. 앱 내부에서는 랜딩식 hero, 과한 카드 장식, 보라 그라데이션 중심 팔레트를 피한다.
+
+### 11.2 Information Architecture
+
+| Route | 목적 | 주요 사용자 | 화면의 첫 질문 | 성공 상태 | 실패/빈 상태 |
+|---|---|---|---|---|---|
+| `/` | 공개 SSR/마케팅 진입 | founder, buyer, evaluator | "이게 무엇을 운영해 주는가?" | 제품 카테고리, production demo CTA, persisted report 예시 링크 | fake screenshot 대신 demo 준비 상태 안내 |
+| `/login` | Supabase Auth 진입 | demo user, tenant user | "어떤 workspace로 들어갈 수 있는가?" | cookie session 생성 후 `/w/demo` 또는 membership workspace로 이동 | auth env 누락, 로그인 실패, membership 없음 |
+| `/w/[workspaceId]` | 메인 운영 워크스페이스 | dev, PM, CEO | "지금 마진/비용/근거/결정 중 무엇이 위험한가?" | production demo checks 통과 + deterministic snapshot + evidence + decision queue | `production_demo_unavailable`과 missing checklist |
+| `/w/[workspaceId]/admin` | tenant 운영/설정 | owner, admin | "데모/운영 경로가 왜 막혔는가, 무엇을 연결해야 하는가?" | connector, seed, RLS, watchtower, retention 상태 관리 | 권한 없음, env 누락, connector 미설정 |
+| `/reports/[id]` | persisted artifact 조회 | buyer, CEO, customer-facing owner | "이 리포트가 어떤 결정과 근거에서 나왔는가?" | 저장된 Markdown/JSON/PDF artifact와 download CTA | persisted artifact 없음, workspace 권한 없음 |
+
+### 11.3 Primary User Flows
+
+1. **Production demo readiness flow**
+   - `/`에서 "Open production demo" 선택 → `/login` → Supabase session 생성 → `/w/demo`.
+   - `/w/demo`은 env, membership, usage rows, accepted facts, latest watchtower run, rag chunks, report artifact, `agent_service` reachability를 체크한다.
+   - 실패 시 fake dashboard로 대체하지 않고, missing checklist와 admin deep link를 제공한다.
+
+2. **Cost-to-decision flow**
+   - workspace overview → usage/cost attribution → margin risk → pricing scenario → adopt/reject/hold.
+   - 각 단계는 같은 deterministic snapshot id를 공유한다.
+   - decision이 없으면 report export는 잠금 상태이며, 잠금 이유를 한 문장으로 보여준다.
+
+3. **Evidence review flow**
+   - risk/agent card에서 evidence drawer 열기 → source, trust tier, accepted fact 여부, watchtower run timestamp 확인.
+   - low-confidence parser 결과는 "review inbox"로만 보이고 accepted ledger처럼 렌더하지 않는다.
+   - baseline이 없으면 비교 차트 대신 `baseline_unavailable` 상태와 필요한 corpus 항목을 보여준다.
+
+4. **Agent run flow**
+   - 사용자가 질문/작업 선택 → `/api/agent/run` BFF → Python `agent_service`.
+   - provider path만 `provider_llm`, `providerRunId`, `agentInvocationProof`를 표시한다.
+   - 서버/모델/env가 없으면 `runtime_unavailable`이며 `call_*_agent`처럼 보이는 이벤트를 만들지 않는다.
+
+5. **External action/rate card flow**
+   - pricing recommendation → rate card draft → human approval → connector config validation → sandbox/test HTTP execution → ledger row.
+   - Slack/Email/Stripe/Metronome 중 하나라도 env/approval/idempotency/rollback metadata가 없으면 실행 CTA는 blocked state로 바뀐다.
+
+6. **Report/retention flow**
+   - adopted decision → report artifact 생성 → `/reports/[id]` SSR 조회/download.
+   - retention admin은 job status, deletion/export audit row, artifact availability를 보여준다.
+   - 삭제된 artifact는 "없음"이 아니라 deletion status와 audit ref를 보여준다.
+
+### 11.4 Workspace 화면 구조
+
+`/w/[workspaceId]`의 1차 정보 구조는 다음 순서를 기본값으로 둔다. 역할 projection이 들어오면 같은 블록을 재배치하거나 접지만, 숨겨진 숫자를 새로 만들지 않는다.
+
+1. **Workspace health header:** workspace name/id, role/audience switch, production status, snapshot timestamp, stale badge.
+2. **Decision KPI strip:** monthly AI cost, gross margin risk, loss-making customers/features, recommended next decision. 모든 값은 format 모듈을 통과한다.
+3. **Stage navigator:** Design → Cost → Bottleneck → Optimize+Risk → Decision Log. 현재 단계와 잠긴 단계를 명확히 표시한다.
+4. **Main work area:** 선택 stage의 테이블/차트/시나리오/agent recommendation. 앱 내부에서는 한 화면에 2-3개 핵심 패널만 노출한다.
+5. **Evidence & agent side panel:** evidence refs, agent run proof, unavailable/block reason, accepted fact review.
+6. **Decision ledger footer/rail:** adopt/reject/hold 기록, report export gate, last actor/time.
+
+### 11.5 화면별 UI 요구사항
+
+| 화면 | 반드시 보여줄 것 | 기본 액션 | 금지/주의 |
+|---|---|---|---|
+| Marketing | 제품명/카테고리, production demo 조건, report 예시 링크 | Login/demo 진입 | production 연결 없는 mock dashboard를 hero로 사용하지 않음 |
+| Login | Supabase Auth 설명, email/password, auth error | Sign in | demo credential을 코드에 하드코딩 노출하지 않음 |
+| Workspace unavailable | missing env/table/service checklist, admin link, retry | Fix setup / retry | fake KPI, fake chart, fake agent success 금지 |
+| Workspace connected | KPI strip, stage nav, attribution/margin/pricing/decision data | Review next decision | 숫자 inline 계산 금지 |
+| Admin | membership role, connector config status, seed/watchtower/RAG/report/retention readiness | Run checks / review queue | owner/admin 아닌 사용자의 connector 실행 UI 노출 금지 |
+| Report | artifact metadata, source decision, content type, download choices | Download Markdown/JSON/PDF | 저장되지 않은 markdown 문자열 즉석 report처럼 렌더 금지 |
+
+### 11.6 상태 모델
+
+모든 주요 패널은 아래 상태를 명시적으로 설계한다.
+
+- `connected`: production store/service에서 읽은 정상 데이터.
+- `loading`: 서버 컴포넌트/route handler 응답 대기. skeleton은 레이아웃 흔들림 없이 고정 높이를 가진다.
+- `unavailable`: env, DB, service, membership, corpus가 없어 production path를 탈 수 없음.
+- `blocked`: 권한/approval/idempotency/rollback/ledger 조건 누락으로 액션 불가.
+- `deterministic_preview`: 계산 엔진만으로 보여주는 preview. agent/provider 실행 완료처럼 표현하지 않는다.
+- `empty`: 연결은 됐지만 row가 없음. seed/provisioning 또는 import CTA를 제안한다.
+- `stale`: watchtower/fact/corpus snapshot이 freshness SLA를 넘김.
+- `error`: 예외 발생. 사용자 메시지는 원인/다음 행동/trace ref를 분리한다.
+
+### 11.7 컴포넌트 후보
+
+- `MarketingHero`: 공개 진입용. 제품 카테고리와 production demo 조건을 설명한다.
+- `AuthPanel`: Supabase login/error/session 상태.
+- `AppShell`: workspace header, nav, role/audience control, responsive layout.
+- `ProductionStatusBanner`: missing checks와 연결 상태를 한 줄/확장형으로 보여준다.
+- `KpiStrip`: 공통 deterministic KPI 3-5개.
+- `StageNavigator`: 5단계 decision flow와 잠금 상태.
+- `WorkspaceStagePanel`: stage별 content outlet. Vite legacy App을 감싸는 대신 Next-native 블록으로 재구성한다.
+- `EvidenceDrawer`: source, trust tier, accepted/review/stale 상태.
+- `AgentRunPanel`: providerRunId, invocation proof, fallback reason, runtime status.
+- `DecisionLedgerPanel`: adopt/reject/hold, actor, timestamp, export gate.
+- `ConnectorApprovalPanel`: approval/idempotency/rollback/ledger checklist.
+- `ReportArtifactViewer`: persisted artifact render/download.
+
+### 11.8 반응형/접근성/콘텐츠 기준
+
+- **Desktop:** 운영자는 반복 스캔을 하므로 좌측 stage nav + 중앙 work area + 우측 evidence rail을 기본으로 둔다.
+- **Mobile:** PC 화면을 축소하지 않는다. health → next decision → KPI → evidence summary → ledger 순서의 단일 컬럼으로 재편한다.
+- **Accessibility:** 모든 액션 버튼은 disabled 이유가 텍스트로 연결되어야 하며, table/chart는 숫자 요약을 함께 제공한다.
+- **Language:** 내부 운영 텍스트는 한국어 기본, provider/model/source id와 code ref는 `translate="no"` 또는 `lang="en"` 보호를 적용한다.
+- **Tone:** 성공/실패를 과장하지 않는다. "실행 완료"는 ledger row와 externalRef가 있을 때만 쓴다.
+
+### 11.9 UI/UX 수용 조건
+
+- production route/page(`app/**`)에서 `DEMO_*`, memory fallback, request body fixture를 import하지 않는다.
+- `/w/demo`에서 production checks 실패 시 KPI/chart/agent success가 나타나지 않는다.
+- 로그인하지 않은 사용자는 workspace data를 보지 못하고 `/login` 또는 unavailable state로 안내된다.
+- 같은 snapshot에서 role을 바꿔도 핵심 비용/마진 숫자는 동일하다.
+- report page는 저장된 artifact가 없으면 `production_report_unavailable`을 보여준다.
+- connector 실행 UI는 approval/idempotency/rollback/ledger 조건이 모두 충족되기 전까지 blocked state다.
+- 모바일 375px 폭에서 버튼/카드 텍스트가 부모 영역을 넘지 않는다.
+- 자동번역 보호가 layout, report, provider/model/source id에 유지된다.
+
+### 11.10 아직 정해야 할 UX 결정
+
+- 제품명 표기: 문서에는 `AgentPayroll`, 구현/랜딩에는 `AgentCost`가 함께 남아 있다. Next UI에서 하나의 primary name을 정해야 한다.
+- 역할별 기본 홈: demo workspace의 기본 persona를 CEO, PM, Developer 중 무엇으로 둘지 정해야 한다.
+- demo login 정책: 사용자가 직접 credential을 입력할지, 초대/매직링크/seeded account 안내만 둘지 정해야 한다.
+- report download 우선순위: Markdown, JSON, PDF 중 첫 CTA를 무엇으로 둘지 정해야 한다.
+- admin 노출 범위: demo 환경에서 connector/retention 실행 UI를 얼마나 실제로 열어둘지 정해야 한다.
+
+---
+
+## 12. 참조 인덱스
 
 - 헌법: `CLAUDE.md`
 - 방향 PRD: `docs/PRD-v3.md`(v3.2), `docs/PRD-v2.md`(v2.5 복구 정본)
