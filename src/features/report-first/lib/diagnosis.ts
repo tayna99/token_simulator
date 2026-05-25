@@ -7,6 +7,7 @@ import { customerProfitability, heavyUserDetection, marginByPlan } from '../../u
 import { calculatePricingScenario, type PricingPolicy, type ScenarioResult } from '../../pricing/lib/pricingScenario'
 import type { OnePageReportArtifactInput } from '../../report/lib/reportArtifacts'
 
+export type MoneyLeakDecisionChoice = 'adopt' | 'reject' | 'hold'
 export type DiagnosisInsightKind = 'loss_customers' | 'margin_breaking_feature' | 'policy_candidate'
 export type ReportGateStatus = 'preview_ready' | 'needs_mapping' | 'blocked'
 export type DiagnosisDecisionKind = 'usage_limit' | 'pricing_policy' | 'model_routing'
@@ -31,7 +32,6 @@ export interface DiagnosisDecisionCandidate {
   kind: DiagnosisDecisionKind
   title: string
   body: string
-  decisionChoice: 'adopt' | 'reject' | 'hold'
   refs: string[]
 }
 
@@ -264,7 +264,6 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       kind: 'usage_limit',
       title: '손해 고객 사용량 제한 검토',
       body: `${fmtTokens(lossCustomers.length)} 손해 고객과 top-decile 비용 share ${fmtPercent(heavyUsers.topDecileShare)}를 기준으로 제한 정책을 검토합니다.`,
-      decisionChoice: 'hold',
       refs: ['tool:diagnosis.loss_customers'],
     },
     {
@@ -274,7 +273,6 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       body: selectedScenario
         ? `${selectedScenario.policy} 정책 후보의 예상 gross margin은 ${fmtPercent(selectedScenario.grossMarginPct)}입니다.`
         : '요금제 후보를 계산할 수 없습니다.',
-      decisionChoice: 'hold',
       refs: ['tool:diagnosis.policy_candidate'],
     },
     {
@@ -284,7 +282,6 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       body: topModel
         ? `${topModel.label} 모델 비용이 ${fmtCurrency(topModel.totalCostUsd)}입니다. 품질 검증 후 라우팅 변경을 검토합니다.`
         : '모델별 비용을 계산할 수 없습니다.',
-      decisionChoice: 'hold',
       refs: ['tool:diagnosis.model_routing'],
     },
   ]
@@ -317,13 +314,18 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
 export function reportFirstPayloadFromDiagnosis(
   snapshot: DiagnosisSnapshot,
   decisionCandidateId: string,
+  decisionChoice: MoneyLeakDecisionChoice,
 ): OnePageReportArtifactInput {
   const candidate = snapshot.decisionCandidates.find(item => item.id === decisionCandidateId)
+  if (!candidate) {
+    throw new Error('money_leak_decision_candidate_missing')
+  }
+
   return {
     title: 'AgentPayroll AI SaaS 마진 진단 리포트',
     executiveSummary: snapshot.insights.map(insight => `${insight.title}: ${insight.body}`).join(' '),
     metrics: snapshot.metrics.map(metric => ({ label: metric.label, value: metric.value })),
-    recommendations: candidate ? [candidate.body] : snapshot.decisionCandidates.map(item => item.body),
+    recommendations: [candidate.body],
     risks: snapshot.reportGate.warnings.length > 0 ? snapshot.reportGate.warnings : ['저장된 artifact 생성 전에는 PDF 공유를 완료로 표시하지 않습니다.'],
     refs: snapshot.refs,
     trust: {
@@ -334,8 +336,8 @@ export function reportFirstPayloadFromDiagnosis(
     formulaVersion: 'cost_formula_v0.3',
     providerRegistryVersion: 'provider_registry_v0.4',
     snapshotVersion: snapshot.snapshotRef ?? 'diagnosis_preview',
-    decisionRefs: candidate ? [candidate.id] : [],
-    decisionChoice: candidate?.decisionChoice,
+    decisionRefs: [candidate.id],
+    decisionChoice,
   }
 }
 

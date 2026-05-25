@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MODELS } from '../../../data/models'
 import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE, SPARK_CLAW_SAMPLE_CSV } from '../../usage/data/sparkClawSample'
 import { parseUsageCsv } from '../../usage/lib/usageImport'
-import { buildDiagnosisSnapshot, buildMarginDiagnosisSummary } from './diagnosis'
+import { buildDiagnosisSnapshot, buildMarginDiagnosisSummary, reportFirstPayloadFromDiagnosis } from './diagnosis'
 
 describe('buildDiagnosisSnapshot', () => {
   it('summarizes the margin diagnosis as customer-safe findings and actions', () => {
@@ -60,6 +60,52 @@ describe('buildDiagnosisSnapshot', () => {
       'usage:p1:workspace-demo:2026-05',
     ]))
     expect(snapshot.decisionCandidates.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('does not preselect Adopt Reject or Hold on decision candidates', () => {
+    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: CUSTOMER_MONTHLY_REVENUE,
+      planRevenueUsd: PLAN_MONTHLY_REVENUE,
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(snapshot.decisionCandidates.length).toBeGreaterThan(0)
+    expect(snapshot.decisionCandidates.every(candidate => !('decisionChoice' in candidate))).toBe(true)
+  })
+
+  it('requires an explicit user decision choice when building the report-first payload', () => {
+    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: CUSTOMER_MONTHLY_REVENUE,
+      planRevenueUsd: PLAN_MONTHLY_REVENUE,
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    const payload = reportFirstPayloadFromDiagnosis(
+      snapshot,
+      'decision:diagnosis:pricing-policy',
+      'adopt',
+    )
+
+    expect(payload.decisionRefs).toEqual(['decision:diagnosis:pricing-policy'])
+    expect(payload.decisionChoice).toBe('adopt')
+    expect(payload.recommendations[0]).toMatch(/gross margin|정책|요금제/)
+  })
+
+  it('throws a clear error when the selected decision candidate is missing', () => {
+    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const snapshot = buildDiagnosisSnapshot({ workspaceId: 'workspace-demo', summary })
+
+    expect(() => reportFirstPayloadFromDiagnosis(
+      snapshot,
+      'decision:diagnosis:not-found',
+      'hold',
+    )).toThrow('money_leak_decision_candidate_missing')
   })
 
   it('keeps mapping gaps as needs_mapping and disables persisted report creation', () => {
