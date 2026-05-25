@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.next
 *.local
 
 # Local reference artifacts
@@ -23,6 +24,7 @@ dist-ssr
 # Local env and runtime artifacts
 .env
 artifacts/
+supabase/.temp/
 
 # Local git worktrees
 .worktrees/

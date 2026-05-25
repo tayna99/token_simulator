@@ -1,11 +1,12 @@
 # LLM Cost Simulator — 프로젝트 헌법
 
 ## 기술 스택
-- Vite 6 + React 18 + TypeScript 5
+- Next.js App Router + React 19 + TypeScript 5
+- Legacy baseline: Vite 6 + React + TypeScript (`legacy:vite:*` 명령으로만 유지)
 - Tailwind CSS 3
 - Recharts (차트), html-to-image (export)
 - Vitest 4 + @testing-library/react 16 (test; setup는 `src/test-setup.ts`에서 `@testing-library/jest-dom/vitest` import)
-- 프런트와 계산 엔진은 client-first. Agent/RAG/checkpoint/report/connector/retention 운영면은 Vercel API + Python `agent_service` + Supabase Postgres/pgvector production backend를 공식 경로로 인정한다.
+- Next.js가 primary frontend다. Agent/RAG/checkpoint/report/connector/retention 운영면은 Next Route Handlers + Python `agent_service` + Supabase Auth/Postgres/pgvector production backend를 공식 경로로 인정한다.
 
 ## 아키텍처 규칙
 - CRITICAL: 모든 비용 계산은 `src/lib/calculator.ts` 의 `calculateCost` / `calculateMigrationDelta` 단일 경로를 통과한다. 컴포넌트 내에서 가격 연산 금지.
@@ -15,6 +16,8 @@
 - CRITICAL: 컴포넌트 테스트는 **state 변화 시 값이 갱신되는지** 를 반드시 검증한다 (`rerender` 사용). 단일 정적 `BASE_STATE` 만으로는 state sync 회귀를 잡지 못함.
 - CRITICAL: Agent/RAG/backend/connector/영속성 경로는 production env가 없으면 실행 완료처럼 렌더하지 않는다. `provider_llm` 또는 실제 connector ledger가 아닌 값은 `unavailable`, `deterministic_preview`, `connector_not_configured`로 표시한다.
 - CRITICAL: demo/static seed 데이터는 production-connected evidence/fact/watchtower/result로 표시하지 않는다. demo preview는 명시적인 demo/preview 모드에서만 허용한다.
+- CRITICAL: Next production route/page(`app/**`, `proxy.ts`)에서 `DEMO_*`, `VITE_AGENTCOST_DEMO_SEED`, memory fallback, request body fixture를 production demo처럼 사용하거나 import하지 않는다. 데모 데이터는 Supabase provisioning seed가 넣은 production-shaped row에서만 읽는다.
+- CRITICAL: `<meta name="google" content="notranslate" />` 와 root `translate="no"` 는 Next `app/layout.tsx`에서도 반드시 유지한다.
 - NaN 가드: 산술 연산 전 `Number.isFinite()` 체크. NaN → `—` 렌더 (format.ts가 공통 처리).
 - 페르소나 간 일관성: Migration, Scenario, Summary 가 보는 수치는 **같은 입력으로 같은 값**이어야 함. 어느 한 곳에서만 다른 숫자가 나오면 즉시 근본 원인 추적.
 
@@ -32,9 +35,11 @@
 - glass morphism, 보라 그라데이션 텍스트, 네온 글로우, 과도한 이모지 ❌
 
 ## 명령어
-- `npm run dev` — 로컬 개발 서버 (http://localhost:5173)
-- `npm run build` — 프로덕션 빌드 (dist/)
-- `npm run preview` — 빌드 결과 미리보기 (http://localhost:4173, base: `/token_simulator/`)
+- `npm run dev` — Next 로컬 개발 서버
+- `npm run build` — Next 프로덕션 빌드
+- `npm run start` — Next 프로덕션 서버
+- `npm run legacy:vite:dev` — legacy Vite 개발 서버 (전환 중 baseline)
+- `npm run legacy:vite:build` — legacy Vite 빌드 (전환 중 regression gate)
 - `npm run test` — watch 모드 테스트
 - `npm run test:run` — CI 모드 테스트 (한 번만 실행)
 

@@ -210,7 +210,10 @@ describe('App AI team operations workspace', () => {
     window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
-    const panel = await screen.findByTestId('official-updates-panel')
+    await waitFor(() => {
+      expect(screen.getByTestId('official-updates-panel')).toHaveTextContent(/Gemini Omni official announcement/i)
+    })
+    const panel = screen.getByTestId('official-updates-panel')
     expect(panel).toHaveTextContent(/Gemini Omni official announcement/i)
     expect(panel).toHaveTextContent(/Noisy quarantine/i)
     expect(panel).toHaveTextContent(/Qwen CNY pricing/i)
