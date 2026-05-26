@@ -282,6 +282,77 @@ def test_front_operating_tools_expose_customer_selection_and_learning_assets():
     assert learning["data"]["learningLoopRecords"][0]["customerId"] == "cust_1"
 
 
+def test_p1_vector_rag_tool_keeps_collections_separated():
+    tools = {
+        tool.name: tool for tool in build_agent_tools(
+            tool_results={"monthlyAiCogs": 4820},
+            threshold_policy={},
+            metric_flags=[],
+            risk_cards=[],
+            benchmark_cards=[],
+            decision_history=[],
+            fact_sources=[],
+            operating_agents=OPERATING_AGENTS,
+            operating_assets=[],
+            rag_collections={
+                "official_docs": [
+                    {
+                        "id": "source:google-pricing#pricing",
+                        "collection": "official_docs",
+                        "text": "Cached input token pricing.",
+                        "refs": ["source:google-pricing"],
+                        "mayOverrideFacts": False,
+                    }
+                ],
+                "benchmark_evidence": [
+                    {
+                        "id": "bench:peer-margin",
+                        "collection": "benchmark_evidence",
+                        "text": "Peer margin benchmark for token-heavy reporting.",
+                        "refs": ["evidence:peer-margin"],
+                        "mayOverrideFacts": False,
+                    }
+                ],
+                "decision_history": [
+                    {
+                        "id": "decision:routing-hold",
+                        "collection": "decision_history",
+                        "text": "Held token reporting routing change until Trust Gate review.",
+                        "mayOverrideFacts": False,
+                    }
+                ],
+            },
+            rag_context_blocks=[
+                {
+                    "collection": "benchmark_evidence",
+                    "text": "Token-heavy reporting benchmark from retrieved context.",
+                    "refs": ["evidence:context-benchmark"],
+                    "mayOverrideFacts": False,
+                }
+            ],
+        )
+    }
+
+    vector_rag = json.loads(tools["retrieve_p1_vector_rag_evidence"].invoke({"query": "token reporting"}))
+
+    assert vector_rag["toolName"] == "retrieve_p1_vector_rag_evidence"
+    assert vector_rag["refs"] == [
+        "source:google-pricing#pricing",
+        "source:google-pricing",
+        "evidence:peer-margin",
+        "evidence:context-benchmark",
+        "decision:routing-hold",
+    ]
+    assert vector_rag["data"]["mayOverrideFacts"] is False
+    assert [item["collection"] for item in vector_rag["data"]["officialDocs"]] == ["official_docs"]
+    assert [item["collection"] for item in vector_rag["data"]["benchmarkEvidence"]] == [
+        "benchmark_evidence",
+        "benchmark_evidence",
+    ]
+    assert [item["collection"] for item in vector_rag["data"]["decisionHistory"]] == ["decision_history"]
+    assert vector_rag["warnings"] == []
+
+
 def test_agent_tool_permission_matrix_keeps_calculation_tools_out():
     assert set(AGENT_TOOL_PERMISSION_MATRIX) == {agent["id"] for agent in OPERATING_AGENTS}
     for allowed_tools in AGENT_TOOL_PERMISSION_MATRIX.values():

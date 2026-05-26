@@ -103,6 +103,7 @@ P0 runtime은 11개 Operating Agent를 전부 전면에 보여주지 않는다. 
 - `found=false`이면 문장은 unavailable 또는 needs_review로 낮춘다.
 - tool은 read-only만 허용한다.
 - tool data에는 raw prompt, API key, secret, PII 원문을 넣지 않는다.
+- RAG tool은 `official_docs`, `benchmark_evidence`, `decision_history`를 섞지 않고 분리된 collection으로 유지한다.
 
 ## 7. Output 계약
 

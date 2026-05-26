@@ -558,6 +558,7 @@ def build_agent_tools(
     operating_ledger: Sequence[Mapping[str, Any]] = (),
     official_source_registry: Sequence[Mapping[str, Any]] = (),
     official_source_snippets: Sequence[Mapping[str, Any]] = (),
+    rag_collections: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     rag_context_blocks: Sequence[Mapping[str, Any]] = (),
     model_release_candidates: Sequence[Mapping[str, Any]] = (),
     pricing_fact_candidates: Sequence[Mapping[str, Any]] = (),
@@ -566,6 +567,7 @@ def build_agent_tools(
     allowed_tool_names: set[str] | None = None,
 ):
     normalized_snapshot = {_tool_ref(key): value for key, value in tool_results.items()}
+    collection_records = rag_collections or {}
     front_context = front_operating_system or {}
     front_assets_raw = front_context.get("assets", [])
     front_assets: Sequence[Mapping[str, Any]] = (
@@ -1014,20 +1016,43 @@ def build_agent_tools(
             item for item in rag_context_blocks
             if _matches_text(item, query)
         ]
-        official_matches = context_matches or [
+
+        def collection_matches(collection_name: str) -> list[Mapping[str, Any]]:
+            records = collection_records.get(collection_name, [])
+            return [
+                item for item in records
+                if isinstance(item, Mapping) and _matches_text(item, query)
+            ]
+
+        def context_matches_for(collection_name: str) -> list[Mapping[str, Any]]:
+            return [
+                item for item in context_matches
+                if str(item.get("collection", "")) == collection_name
+            ]
+
+        official_matches = [
+            *collection_matches("official_docs"),
+            *context_matches_for("official_docs"),
+        ] or [
             item for item in official_source_snippets
             if _matches_text(item, query)
         ]
         benchmark_matches = [
+            *collection_matches("benchmark_evidence"),
+            *context_matches_for("benchmark_evidence"),
+        ] or [
             item for item in benchmark_cards
+            if _matches_text(item, query)
+        ]
+        decision_matches = [
+            *collection_matches("decision_history"),
+            *context_matches_for("decision_history"),
+        ] or [
+            item for item in decision_history
             if _matches_text(item, query)
         ]
         risk_matches = [
             item for item in risk_cards
-            if _matches_text(item, query)
-        ]
-        decision_matches = [
-            item for item in decision_history
             if _matches_text(item, query)
         ]
 
@@ -1038,11 +1063,7 @@ def build_agent_tools(
             for item in risk_matches
             if item.get("id")
         ]
-        decision_refs = [
-            f"decision:{item.get('id')}"
-            for item in decision_matches
-            if item.get("id")
-        ]
+        decision_refs = _decision_refs(decision_matches)
         refs = _unique([*official_refs, *benchmark_refs, *risk_refs, *decision_refs])
         warnings = []
         if not benchmark_matches:
@@ -1349,6 +1370,7 @@ def _run_single_operating_agent(
         front_operating_system=payload.frontOperatingSystem,
         official_source_registry=payload.officialSourceRegistry,
         official_source_snippets=payload.officialSourceSnippets,
+        rag_collections=payload.ragCollections,
         rag_context_blocks=payload.ragContextBlocks,
         model_release_candidates=payload.modelReleaseCandidates,
         pricing_fact_candidates=payload.pricingFactCandidates,
