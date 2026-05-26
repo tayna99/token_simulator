@@ -31,6 +31,7 @@ import {
   type DiagnosisSnapshot,
   type MoneyLeakDecisionChoice,
 } from '../lib/diagnosis'
+import { importTemplatesByKind, type ImportTemplateProfile } from '../lib/importTemplates'
 import {
   MONEY_LEAK_STEPS,
   deriveMoneyLeakStepStates,
@@ -367,6 +368,29 @@ function MoneyLeakStepRail({ states }: { states: Record<MoneyLeakStepId, MoneyLe
   )
 }
 
+function ImportTemplateButtons({
+  title,
+  templates,
+  onSelect,
+}: {
+  title: string
+  templates: ImportTemplateProfile[]
+  onSelect: (template: ImportTemplateProfile) => void
+}) {
+  return (
+    <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+      <p className="text-xs font-semibold text-label-normal">{title}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {templates.map(template => (
+          <Button key={template.id} type="button" variant="secondary" size="sm" onClick={() => onSelect(template)}>
+            {template.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function LocalReportPreview({
   snapshot,
   selectedDecisionId,
@@ -433,6 +457,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const selectedDecision = snapshot?.decisionCandidates.find(item => item.id === selectedDecisionId)
   const roleView = snapshot?.roleViews[activeRole]
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
+  const usageTemplates = useMemo(() => importTemplatesByKind('usage'), [])
+  const allowanceTemplates = useMemo(() => importTemplatesByKind('allowance'), [])
   const pdcaInstrumentation = useMemo(() => buildAgentPayrollPdcaInstrumentation({
     icp: {
       hasProductionAiFeature: Boolean(snapshot?.reportGate.canPreview),
@@ -509,6 +535,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
   function updateSummaryJson(value: string) {
     setSummaryJson(value)
+    resetDerivedReportState()
+  }
+
+  function applyUsageTemplate(template: ImportTemplateProfile) {
+    setInputMode('csv')
+    setRawCsv(template.sampleCsv)
+    resetDerivedReportState()
+  }
+
+  function applyAllowanceTemplate(template: ImportTemplateProfile) {
+    setInputMode('csv')
+    setRevenueCsv(template.sampleCsv)
     resetDerivedReportState()
   }
 
@@ -769,6 +807,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
         {inputMode === 'csv' || audience === 'customer' ? (
           <div className="grid gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <ImportTemplateButtons
+                title="usage CSV templates"
+                templates={usageTemplates}
+                onSelect={applyUsageTemplate}
+              />
+              <ImportTemplateButtons
+                title="allowance/revenue templates"
+                templates={allowanceTemplates}
+                onSelect={applyAllowanceTemplate}
+              />
+            </div>
             <Field label="사용량 CSV" htmlFor="report-first-csv" help="필수 컬럼: customer_id, feature, model, input_tokens, output_tokens. 권장: total_cost, latency_ms, status. plan_id는 보조 분류값입니다.">
               <textarea
                 id="report-first-csv"

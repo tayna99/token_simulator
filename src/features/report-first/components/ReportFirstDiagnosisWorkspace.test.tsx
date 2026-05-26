@@ -21,6 +21,10 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.getByText(/300,000원 - 1,000,000원/i)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /사용량 CSV 업로드/ }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: /allowance\/revenue CSV 업로드/ }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Helicone usage/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Langfuse usage/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /OpenAI usage/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Stripe allowance/ })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /샘플로 보기/ }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /Summary JSON/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/RAG evidence|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
@@ -28,6 +32,26 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.queryByText(/production_demo_unavailable|UsageImportSummary|trustInspection|artifact|PDF gate|waiting_for_upload|raw_upload_delete/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ })[0]).toBeDisabled()
+  })
+
+  it('loads report-first import templates into the usage and allowance CSV inputs', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Helicone usage/ }))
+    const usageCsvInput = screen.getByLabelText(/사용량 CSV/i) as HTMLTextAreaElement
+    expect(usageCsvInput.value).toContain('hc_req_001')
+    expect(usageCsvInput.value).toContain('input_tokens')
+
+    fireEvent.click(screen.getByRole('button', { name: /Stripe allowance/ }))
+    const allowanceCsvInput = screen.getByLabelText(/token allowance\/revenue CSV/i) as HTMLTextAreaElement
+    expect(allowanceCsvInput.value).toContain('included_tokens')
+    expect(allowanceCsvInput.value).toContain('cus_heavy')
+
+    fireEvent.click(screen.getByRole('button', { name: /분석 시작/ }))
+
+    expect(screen.getByRole('heading', { name: /Token leak 분석 완료/ })).toBeInTheDocument()
+    expect(screen.getAllByText(/Token allowance \+ overage 정책 후보/).length).toBeGreaterThan(0)
+    expect(screen.getByTestId('pdf-disabled-reason')).toHaveTextContent(/결정 후보를 먼저 선택하세요/)
   })
 
   it('updates the diagnosis preview when CSV state changes', () => {
@@ -292,6 +316,29 @@ describe('ReportFirstDiagnosisWorkspace', () => {
         agentInvocationProof: [],
       },
     })
+  })
+
+  it('clears the local report preview when a different usage template is applied', () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/usage/import')) {
+        return new Response(JSON.stringify({ snapshotRef: 'usage:p1:workspace-demo:2026-05' }), { status: 202 })
+      }
+      return new Response('{}', { status: 404 })
+    })
+
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" fetcher={fetcher} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+
+    expect(screen.getByTestId('local-report-preview')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Langfuse usage/ }))
+
+    expect(screen.queryByTestId('local-report-preview')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))).toBeUndefined()
   })
 
   it('connects unit economics PDCA instrumentation to the visible report workflow', () => {

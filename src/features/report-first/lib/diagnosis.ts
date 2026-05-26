@@ -220,6 +220,8 @@ function reportGateFrom(
       ? warning !== 'revenue_missing'
         && warning !== 'loss_customer'
         && warning !== 'customer_profitability'
+        && warning !== 'plan_margin'
+        && warning !== 'plan_id_missing'
         && (warning !== 'mapping_gap' || keepUsageMappingGap)
       : true
   ))

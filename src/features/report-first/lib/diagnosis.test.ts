@@ -123,6 +123,44 @@ describe('buildDiagnosisSnapshot', () => {
     ]))
   })
 
+  it('lets customer-level token economics unlock the report even when plan_id is absent', () => {
+    const summary = parseUsageCsv([
+      'timestamp,request_id,customer_id,feature,model,input_tokens,output_tokens,total_cost',
+      '2026-05-01,req_1,cus_heavy,report_generation,claude-sonnet-4.6,1000,500,120',
+      '2026-05-01,req_2,cus_light,summary,claude-sonnet-4.6,1000,500,10',
+    ].join('\n'), MODELS, {
+      revenueBasis: 'manual_map',
+    })
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: {
+        cus_heavy: 49,
+        cus_light: 199,
+      },
+      customerIncludedTokens: {
+        cus_heavy: 1000,
+        cus_light: 5000,
+      },
+      customerOverageRateUsdPer1kTokens: {
+        cus_heavy: 0.18,
+        cus_light: 0.12,
+      },
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(summary.trustInspection?.warnings).toContain('plan_id_missing')
+    expect(snapshot.reportGate).toMatchObject({
+      status: 'preview_ready',
+      canPreview: true,
+      canCreateArtifact: true,
+      reason: 'ready',
+    })
+    expect(snapshot.reportGate.warnings).not.toContain('plan_id_missing')
+    expect(snapshot.reportGate.warnings).not.toContain('plan_margin')
+    expect(snapshot.tokenLeakProof.topCustomer?.customerId).toBe('cus_heavy')
+  })
+
   it('does not preselect Adopt Reject or Hold on decision candidates', () => {
     const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
