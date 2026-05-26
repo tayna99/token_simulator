@@ -81,6 +81,12 @@ export interface TokenLeakFeature {
   totalCostUsd: number
   shareOfTokens: number
   shareOfCost: number
+  featureCostShare: number
+  affectedPlanId: string | null
+  planFeatureCostUsd: number
+  planRevenueUsd: number
+  featureCostToPlanRevenuePct: number
+  planGrossMarginPct: number
 }
 
 export interface TokenPolicyRecommendation {
@@ -251,6 +257,69 @@ function usageTokens(row: UsageImportSummary['rows'][number]): number {
   return Math.max(0, row.inputTokens) + Math.max(0, row.outputTokens)
 }
 
+function finiteNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function featureDisplayName(feature: string): string {
+  if (feature === 'report_generation') return 'Report Generator'
+  if (feature === 'faq_summary') return 'FAQ Summary'
+  return feature
+}
+
+function allowanceTierLabel(planId: string | null): string {
+  if (!planId) return 'mapped allowance tier'
+  return `${planId.charAt(0).toUpperCase()}${planId.slice(1)} allowance tier`
+}
+
+function revenueForPlanFromCustomers(
+  planRows: UsageImportSummary['rows'],
+  customerRevenueUsd: Record<string, number>,
+): number {
+  return unique(planRows.map(row => row.customerId ?? '')).reduce((sum, customerId) => (
+    sum + finiteNonNegative(customerRevenueUsd[customerId] ?? 0)
+  ), 0)
+}
+
+function featurePlanImpactFrom(input: {
+  rows: UsageImportSummary['rows']
+  feature: string
+  planRevenueUsd: Record<string, number>
+  customerRevenueUsd: Record<string, number>
+}): Pick<TokenLeakFeature, 'affectedPlanId' | 'planFeatureCostUsd' | 'planRevenueUsd' | 'featureCostToPlanRevenuePct' | 'planGrossMarginPct'> {
+  const featurePlanIds = Array.from(new Set(input.rows
+    .filter(row => row.feature === input.feature)
+    .map(row => row.planId ?? '')))
+  const impacts = featurePlanIds.map(planId => {
+    const planRows = input.rows.filter(row => (row.planId ?? '') === planId)
+    const featurePlanRows = planRows.filter(row => row.feature === input.feature)
+    const planFeatureCostUsd = featurePlanRows.reduce((sum, row) => sum + finiteNonNegative(row.totalCostUsd), 0)
+    const planTotalCostUsd = planRows.reduce((sum, row) => sum + finiteNonNegative(row.totalCostUsd), 0)
+    const planRevenueUsd = mapHasKey(input.planRevenueUsd, planId)
+      ? finiteNonNegative(input.planRevenueUsd[planId] ?? 0)
+      : revenueForPlanFromCustomers(planRows, input.customerRevenueUsd)
+
+    return {
+      affectedPlanId: planId || null,
+      planFeatureCostUsd,
+      planRevenueUsd,
+      featureCostToPlanRevenuePct: planRevenueUsd > 0 ? planFeatureCostUsd / planRevenueUsd : 0,
+      planGrossMarginPct: planRevenueUsd > 0 ? (planRevenueUsd - planTotalCostUsd) / planRevenueUsd : 0,
+    }
+  })
+
+  return impacts.sort((left, right) => (
+    right.featureCostToPlanRevenuePct - left.featureCostToPlanRevenuePct
+      || right.planFeatureCostUsd - left.planFeatureCostUsd
+  ))[0] ?? {
+    affectedPlanId: null,
+    planFeatureCostUsd: 0,
+    planRevenueUsd: 0,
+    featureCostToPlanRevenuePct: 0,
+    planGrossMarginPct: 0,
+  }
+}
+
 function valueForCustomerOrPlan(
   customerMap: Record<string, number>,
   planMap: Record<string, number>,
@@ -350,17 +419,28 @@ function tokenLeakProofFrom(input: {
   const totalTokens = input.summary.rows.reduce((sum, row) => sum + usageTokens(row), 0)
   const topFeatureSummary = [...input.summary.featureSummaries]
     .sort((left, right) => (
-      (right.inputTokens + right.outputTokens) - (left.inputTokens + left.outputTokens)
-        || right.totalCostUsd - left.totalCostUsd
+      right.totalCostUsd - left.totalCostUsd
+        || (right.inputTokens + right.outputTokens) - (left.inputTokens + left.outputTokens)
     ))[0]
   const topFeature = topFeatureSummary
-    ? {
-        feature: topFeatureSummary.feature,
-        usedTokens: topFeatureSummary.inputTokens + topFeatureSummary.outputTokens,
-        totalCostUsd: topFeatureSummary.totalCostUsd,
-        shareOfTokens: totalTokens > 0 ? (topFeatureSummary.inputTokens + topFeatureSummary.outputTokens) / totalTokens : 0,
-        shareOfCost: topFeatureSummary.shareOfCost,
-      }
+    ? (() => {
+        const planImpact = featurePlanImpactFrom({
+          rows: input.summary.rows,
+          feature: topFeatureSummary.feature,
+          planRevenueUsd: input.planRevenueUsd,
+          customerRevenueUsd: input.customerRevenueUsd,
+        })
+
+        return {
+          feature: topFeatureSummary.feature,
+          usedTokens: topFeatureSummary.inputTokens + topFeatureSummary.outputTokens,
+          totalCostUsd: topFeatureSummary.totalCostUsd,
+          shareOfTokens: totalTokens > 0 ? (topFeatureSummary.inputTokens + topFeatureSummary.outputTokens) / totalTokens : 0,
+          shareOfCost: topFeatureSummary.shareOfCost,
+          featureCostShare: topFeatureSummary.shareOfCost,
+          ...planImpact,
+        }
+      })()
     : null
 
   const recommendedPolicy = topCustomer
@@ -561,7 +641,7 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       title: 'token allowance 소진 기능',
       value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtTokens(0),
       body: topTokenFeature
-        ? `${topTokenFeature.feature} 기능이 전체 token 사용량의 ${fmtPercent(topTokenFeature.shareOfTokens)}와 AI 원가 ${fmtCurrency(topTokenFeature.totalCostUsd)}를 만들고, 포함 token allowance를 가장 빠르게 소진시키는 후보입니다.`
+        ? `${featureDisplayName(topTokenFeature.feature)}(${topTokenFeature.feature}) 기능이 전체 AI 비용의 ${fmtPercent(topTokenFeature.featureCostShare)}를 만들고, ${allowanceTierLabel(topTokenFeature.affectedPlanId)} 매출 대비 ${fmtPercent(topTokenFeature.featureCostToPlanRevenuePct)}를 태워 마진을 깎고 있습니다.`
         : '기능별 token 원가를 계산할 수 없습니다.',
       refs: ['tool:diagnosis.token_burning_feature'],
     },

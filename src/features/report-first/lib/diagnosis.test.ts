@@ -72,9 +72,8 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.insights[0].body).toContain('미회수 AI 원가 $149')
     expect(snapshot.insights[1].title).toBe('token allowance 소진 기능')
     expect(snapshot.insights[1].body).toContain('report_generation')
-    expect(snapshot.insights[1].body).toContain('전체 token 사용량의 44%')
-    expect(snapshot.insights[1].body).toContain('AI 원가 $225')
-    expect(snapshot.insights[1].body).toContain('포함 token allowance를 가장 빠르게 소진시키는 후보')
+    expect(snapshot.insights[1].body).toContain('전체 AI 비용의 51%')
+    expect(snapshot.insights[1].body).toContain('Pro allowance tier 매출 대비 259%')
     expect(snapshot.insights[2].title).toBe('Token policy 후보')
     expect(snapshot.insights[2].body).toContain('예상 회수 후보: $149')
     expect(snapshot.metrics.map(metric => metric.value).join(' ')).toContain('$')
@@ -97,10 +96,15 @@ describe('buildDiagnosisSnapshot', () => {
       feature: 'report_generation',
       usedTokens: 730000,
       totalCostUsd: 225,
+      affectedPlanId: 'pro',
+      planFeatureCostUsd: 225,
+      planRevenueUsd: 87,
     })
     expect(snapshot.tokenLeakProof.topFeature?.shareOfTokens).toBeCloseTo(730000 / 1644000)
     expect(snapshot.tokenLeakProof.topFeature?.shareOfCost).toBeCloseTo(225 / 444)
-    expect(snapshot.insights[1].body).not.toContain('Pro')
+    expect(snapshot.tokenLeakProof.topFeature?.featureCostShare).toBeCloseTo(225 / 444)
+    expect(snapshot.tokenLeakProof.topFeature?.featureCostToPlanRevenuePct).toBeCloseTo(225 / 87)
+    expect(snapshot.tokenLeakProof.topFeature?.planGrossMarginPct).toBeCloseTo((87 - 321) / 87)
   })
 
   it('builds buyer-facing ROI proof for unrecovered token COGS, heavy-user subsidy, and overage recovery', () => {
