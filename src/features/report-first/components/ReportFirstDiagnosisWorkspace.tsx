@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 
 import { MODELS } from '../../../data/models'
-import { fmtKrwRange, fmtNumber } from '../../../lib/format'
+import { fmtKrw, fmtKrwRange, fmtNumber } from '../../../lib/format'
 import { Badge, Button, Field, MetricTile, Surface } from '../../../shared/ui/primitives'
 import { AI_COST_SNAPSHOT_OFFER } from '../../front-operating/lib/customerServiceOffer'
 import {
@@ -31,6 +31,11 @@ import {
   type DiagnosisSnapshot,
   type MoneyLeakDecisionChoice,
 } from '../lib/diagnosis'
+import {
+  assessIcpTimingGate,
+  type IcpTimingDecisionUrgency,
+  type IcpTimingGateAssessment,
+} from '../lib/icpTimingGate'
 import { importTemplatesByKind, type ImportTemplateProfile } from '../lib/importTemplates'
 import {
   MONEY_LEAK_STEPS,
@@ -44,7 +49,7 @@ type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respons
 type InputMode = 'csv' | 'summary'
 type RoleTab = 'developer' | 'pm' | 'ceo'
 type EvidenceAudience = 'customer' | 'expert'
-type DecisionUrgency = 'pricing_or_margin_now' | 'exploratory' | 'none'
+type DecisionUrgency = IcpTimingDecisionUrgency
 
 interface PdfArtifact {
   id?: string
@@ -391,6 +396,115 @@ function ImportTemplateButtons({
   )
 }
 
+function IcpTimingGatePanel({
+  assessment,
+  monthlyAiSpendKrw,
+  hasCustomerRevenueMapping,
+  hasHeavyUserSuspicion,
+  decisionUrgency,
+  needsCeoFinanceReport,
+  onMonthlyAiSpendKrwChange,
+  onHasCustomerRevenueMappingChange,
+  onHasHeavyUserSuspicionChange,
+  onDecisionUrgencyChange,
+  onNeedsCeoFinanceReportChange,
+}: {
+  assessment: IcpTimingGateAssessment
+  monthlyAiSpendKrw: string
+  hasCustomerRevenueMapping: boolean
+  hasHeavyUserSuspicion: boolean
+  decisionUrgency: DecisionUrgency
+  needsCeoFinanceReport: boolean
+  onMonthlyAiSpendKrwChange: (value: string) => void
+  onHasCustomerRevenueMappingChange: (value: boolean) => void
+  onHasHeavyUserSuspicionChange: (value: boolean) => void
+  onDecisionUrgencyChange: (value: DecisionUrgency) => void
+  onNeedsCeoFinanceReportChange: (value: boolean) => void
+}) {
+  const monthlySpend = numericInput(monthlyAiSpendKrw)
+  const scoreLabel = `${fmtNumber(assessment.score)} / ${fmtNumber(assessment.maxScore)}`
+
+  return (
+    <div data-testid="icp-timing-gate" className="mb-4 rounded-wds border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold" lang="en">ICP timing gate</p>
+          <p className="mt-1 text-xs leading-5 text-label-neutral">
+            지금 유료 진단으로 갈지, 샘플 Snapshot으로 먼저 볼지 5문항으로 가릅니다.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1 text-xs" lang="en">
+          <Badge tone={assessment.grade === 'A' ? 'positive' : assessment.grade === 'B' ? 'caution' : 'neutral'}>
+            ICP grade: {assessment.grade}
+          </Badge>
+          <Badge tone={assessment.route === 'diagnosis_report' ? 'positive' : assessment.route === 'data_readiness_first' ? 'caution' : 'neutral'}>
+            route: {assessment.route}
+          </Badge>
+          <Badge tone="neutral">score: {scoreLabel}</Badge>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="월 LLM/API 비용 (KRW)" htmlFor="icp-monthly-ai-spend" help="월 300,000원 이상이면 유료 진단 후보로 봅니다.">
+            <input
+              id="icp-monthly-ai-spend"
+              value={monthlyAiSpendKrw}
+              onChange={event => onMonthlyAiSpendKrwChange(event.currentTarget.value)}
+              inputMode="numeric"
+              className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+            />
+          </Field>
+          <Field label="가격/마진 결정 긴급도" htmlFor="icp-decision-urgency">
+            <select
+              id="icp-decision-urgency"
+              value={decisionUrgency}
+              onChange={event => onDecisionUrgencyChange(event.currentTarget.value as DecisionUrgency)}
+              className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+            >
+              <option value="pricing_or_margin_now">pricing_or_margin_now</option>
+              <option value="exploratory">exploratory</option>
+              <option value="none">none</option>
+            </select>
+          </Field>
+          <label className="flex items-center gap-2 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs font-semibold text-label-neutral">
+            <input
+              type="checkbox"
+              checked={hasCustomerRevenueMapping}
+              onChange={event => onHasCustomerRevenueMappingChange(event.currentTarget.checked)}
+            />
+            <span>customer_id와 revenue_collected 매핑 가능</span>
+          </label>
+          <label className="flex items-center gap-2 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs font-semibold text-label-neutral">
+            <input
+              type="checkbox"
+              checked={hasHeavyUserSuspicion}
+              onChange={event => onHasHeavyUserSuspicionChange(event.currentTarget.checked)}
+            />
+            <span>heavy user가 포함 token을 넘기는 것 같음</span>
+          </label>
+          <label className="flex items-center gap-2 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs font-semibold text-label-neutral md:col-span-2">
+            <input
+              type="checkbox"
+              checked={needsCeoFinanceReport}
+              onChange={event => onNeedsCeoFinanceReportChange(event.currentTarget.checked)}
+            />
+            <span>CEO/Finance 보고 필요</span>
+          </label>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs">
+          <p className="font-semibold text-label-normal">{assessment.headline}</p>
+          <p className="mt-2 text-label-neutral">현재 입력 비용: <span translate="no">{fmtKrw(monthlySpend)}</span></p>
+          <p className="mt-2 font-semibold text-primary-normal">{assessment.primaryCta}</p>
+          <p className="mt-2 text-label-alternative" lang="en">
+            missing: {assessment.missing.join(', ') || 'none'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LocalReportPreview({
   snapshot,
   selectedDecisionId,
@@ -448,6 +562,9 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [snapshotMinutes, setSnapshotMinutes] = useState('')
   const [monthlyReviewMinutes, setMonthlyReviewMinutes] = useState('')
   const [operatorTouchCount, setOperatorTouchCount] = useState('')
+  const [hasCustomerRevenueMapping, setHasCustomerRevenueMapping] = useState(false)
+  const [hasHeavyUserSuspicion, setHasHeavyUserSuspicion] = useState(false)
+  const [needsCeoFinanceReport, setNeedsCeoFinanceReport] = useState(false)
   const [decisionOwnerConfirmed, setDecisionOwnerConfirmed] = useState(false)
   const [nextReviewDate, setNextReviewDate] = useState('')
   const [decisionUrgency, setDecisionUrgency] = useState<DecisionUrgency>('pricing_or_margin_now')
@@ -459,6 +576,19 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
   const usageTemplates = useMemo(() => importTemplatesByKind('usage'), [])
   const allowanceTemplates = useMemo(() => importTemplatesByKind('allowance'), [])
+  const icpTimingAssessment = useMemo(() => assessIcpTimingGate({
+    monthlyAiSpendKrw: numericInput(monthlyLlmSpendKrw),
+    hasCustomerRevenueMapping,
+    hasHeavyUserSuspicion,
+    decisionUrgency,
+    needsCeoFinanceReport,
+  }), [
+    decisionUrgency,
+    hasCustomerRevenueMapping,
+    hasHeavyUserSuspicion,
+    monthlyLlmSpendKrw,
+    needsCeoFinanceReport,
+  ])
   const pdcaInstrumentation = useMemo(() => buildAgentPayrollPdcaInstrumentation({
     icp: {
       hasProductionAiFeature: Boolean(snapshot?.reportGate.canPreview),
@@ -767,6 +897,19 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       >
         <TrustAssurancePanel result={trustResult} audience={audience} />
         <ServiceMvpOfferPanel />
+        <IcpTimingGatePanel
+          assessment={icpTimingAssessment}
+          monthlyAiSpendKrw={monthlyLlmSpendKrw}
+          hasCustomerRevenueMapping={hasCustomerRevenueMapping}
+          hasHeavyUserSuspicion={hasHeavyUserSuspicion}
+          decisionUrgency={decisionUrgency}
+          needsCeoFinanceReport={needsCeoFinanceReport}
+          onMonthlyAiSpendKrwChange={setMonthlyLlmSpendKrw}
+          onHasCustomerRevenueMappingChange={setHasCustomerRevenueMapping}
+          onHasHeavyUserSuspicionChange={setHasHeavyUserSuspicion}
+          onDecisionUrgencyChange={setDecisionUrgency}
+          onNeedsCeoFinanceReportChange={setNeedsCeoFinanceReport}
+        />
         {audience === 'expert' && (
           <UnitEconomicsPdcaPanel
             instrumentation={pdcaInstrumentation}

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ReportFirstDiagnosisWorkspace } from './ReportFirstDiagnosisWorkspace'
@@ -52,6 +52,47 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.getByRole('heading', { name: /Token leak 분석 완료/ })).toBeInTheDocument()
     expect(screen.getAllByText(/Token allowance \+ overage 정책 후보/).length).toBeGreaterThan(0)
     expect(screen.getByTestId('pdf-disabled-reason')).toHaveTextContent(/결정 후보를 먼저 선택하세요/)
+  })
+
+  it('qualifies ICP timing before a customer uploads CSV data', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    const gate = screen.getByTestId('icp-timing-gate')
+    expect(gate).toHaveTextContent(/ICP timing/i)
+    expect(gate).toHaveTextContent(/free_calculator/i)
+
+    fireEvent.change(screen.getByLabelText(/월 LLM\/API 비용/i), { target: { value: '3200000' } })
+    fireEvent.click(screen.getByLabelText(/customer_id.*revenue_collected/i))
+    fireEvent.click(screen.getByLabelText(/heavy user/i))
+    fireEvent.change(screen.getByLabelText(/가격\/마진 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
+    fireEvent.click(screen.getByLabelText(/CEO\/Finance 보고 필요/i))
+
+    expect(gate).toHaveTextContent(/ICP grade: A/i)
+    expect(gate).toHaveTextContent(/diagnosis_report/i)
+    expect(gate).toHaveTextContent(/AI Token Leakage Report 진단 시작/i)
+    expect(gate).toHaveTextContent(/3,200,000/)
+  })
+
+  it('keeps ICP timing inputs when CSV changes reset derived report state', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    fireEvent.change(screen.getByLabelText(/월 LLM\/API 비용/i), { target: { value: '3200000' } })
+    fireEvent.click(screen.getByLabelText(/customer_id.*revenue_collected/i))
+    fireEvent.click(screen.getByLabelText(/heavy user/i))
+    fireEvent.click(screen.getByLabelText(/CEO\/Finance 보고 필요/i))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+
+    expect(screen.getByTestId('local-report-preview')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/사용량 CSV/i), {
+      target: { value: csvFor('agent_workflow', 77) },
+    })
+
+    expect(screen.getByLabelText(/월 LLM\/API 비용/i)).toHaveValue('3200000')
+    expect(screen.getByTestId('icp-timing-gate')).toHaveTextContent(/diagnosis_report/i)
+    expect(screen.queryByTestId('local-report-preview')).not.toBeInTheDocument()
   })
 
   it('updates the diagnosis preview when CSV state changes', () => {
@@ -351,7 +392,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(pdcaPanel).toHaveTextContent(/monthly_review_blocked/i)
     expect(pdcaPanel).toHaveTextContent(/decision_required/i)
 
-    fireEvent.change(screen.getByLabelText(/월 LLM\/API 비용/i), { target: { value: '240000' } })
+    fireEvent.change(within(pdcaPanel).getByLabelText(/LLM\/API/i), { target: { value: '240000' } })
     fireEvent.change(screen.getByLabelText(/Free Fit Check minutes/i), { target: { value: '12' } })
     fireEvent.change(screen.getByLabelText(/Data Readiness minutes/i), { target: { value: '50' } })
     fireEvent.change(screen.getByLabelText(/Snapshot minutes/i), { target: { value: '240' } })
