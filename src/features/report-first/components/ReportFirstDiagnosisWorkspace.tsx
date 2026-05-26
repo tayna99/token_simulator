@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { MODELS } from '../../../data/models'
 import { fmtKrw, fmtKrwRange, fmtNumber } from '../../../lib/format'
@@ -133,6 +133,76 @@ function customerReportGateReason(reason: string): string {
 function numericInput(value: string): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+const SERVICE_VALIDATION_LEDGER_STORAGE_PREFIX = 'agentpayroll:service-validation-ledger:v1:'
+const SERVICE_VALIDATION_INTENTS: ServiceValidationIntent[] = ['yes', 'conditional', 'no']
+const SERVICE_VALIDATION_REPEAT_SIGNALS: RepeatReportRequestSignal[] = ['monthly', 'quarterly', 'one_more_after_change', 'no']
+const SERVICE_VALIDATION_REQUEST_TYPES: DominantRequestType[] = ['service_report', 'broad_saas_feature', 'data_readiness', 'sample_only']
+
+function serviceValidationLedgerStorageKey(workspaceId: string): string {
+  return `${SERVICE_VALIDATION_LEDGER_STORAGE_PREFIX}${workspaceId}`
+}
+
+function isServiceValidationIntent(value: unknown): value is ServiceValidationIntent {
+  return typeof value === 'string' && SERVICE_VALIDATION_INTENTS.includes(value as ServiceValidationIntent)
+}
+
+function isRepeatReportRequestSignal(value: unknown): value is RepeatReportRequestSignal {
+  return typeof value === 'string' && SERVICE_VALIDATION_REPEAT_SIGNALS.includes(value as RepeatReportRequestSignal)
+}
+
+function isDominantRequestType(value: unknown): value is DominantRequestType {
+  return typeof value === 'string' && SERVICE_VALIDATION_REQUEST_TYPES.includes(value as DominantRequestType)
+}
+
+function serviceValidationRowFromStored(value: unknown): ServiceValidationLedgerRow | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Partial<ServiceValidationLedgerRow>
+  if (typeof row.leadId !== 'string' || row.leadId.trim() === '') return null
+  if (row.icpGrade !== 'A' && row.icpGrade !== 'B' && row.icpGrade !== 'C') return null
+  if (!isServiceValidationIntent(row.dataSharingIntent)) return null
+  if (!isServiceValidationIntent(row.reportSharingIntent)) return null
+  if (!isServiceValidationIntent(row.priceOrLimitDecisionIntent)) return null
+  if (!isRepeatReportRequestSignal(row.repeatReportRequestSignal)) return null
+  if (!isDominantRequestType(row.dominantRequestType)) return null
+
+  return evaluateServiceValidationLead({
+    leadId: row.leadId,
+    icpGrade: row.icpGrade,
+    offeredPriceKrw: numericInput(String(row.offeredPriceKrw ?? 0)),
+    acceptedPriceKrw: numericInput(String(row.acceptedPriceKrw ?? 0)),
+    dataSharingIntent: row.dataSharingIntent,
+    reportSharingIntent: row.reportSharingIntent,
+    priceOrLimitDecisionIntent: row.priceOrLimitDecisionIntent,
+    repeatReportRequestSignal: row.repeatReportRequestSignal,
+    dominantRequestType: row.dominantRequestType,
+    trustSafeExportPossible: row.trustSafeExportPossible !== false,
+  })
+}
+
+function readServiceValidationLedgerRows(workspaceId: string): ServiceValidationLedgerRow[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(serviceValidationLedgerStorageKey(workspaceId))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map(serviceValidationRowFromStored)
+      .filter((row): row is ServiceValidationLedgerRow => row !== null)
+  } catch {
+    return []
+  }
+}
+
+function writeServiceValidationLedgerRows(workspaceId: string, rows: ServiceValidationLedgerRow[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(serviceValidationLedgerStorageKey(workspaceId), JSON.stringify(rows))
+}
+
+function nextServiceValidationLeadId(rows: ServiceValidationLedgerRow[]): string {
+  return `lead-${String(rows.length + 1).padStart(3, '0')}`
 }
 
 function inferPdcaAxes(summary: UsageImportSummary, hasRevenue: boolean): AgentPayrollIcpAxis[] {
@@ -610,7 +680,9 @@ function BuyerInterviewCodingPanel({
 
 function ServiceValidationLedgerPanel({
   row,
+  savedRows,
   weeklySummary,
+  leadId,
   acceptedPriceKrw,
   dataSharingIntent,
   reportSharingIntent,
@@ -618,6 +690,7 @@ function ServiceValidationLedgerPanel({
   repeatReportRequestSignal,
   dominantRequestType,
   trustSafeExportPossible,
+  onLeadIdChange,
   onAcceptedPriceKrwChange,
   onDataSharingIntentChange,
   onReportSharingIntentChange,
@@ -625,9 +698,13 @@ function ServiceValidationLedgerPanel({
   onRepeatReportRequestSignalChange,
   onDominantRequestTypeChange,
   onTrustSafeExportPossibleChange,
+  onAddLead,
+  onClearLedger,
 }: {
   row: ServiceValidationLedgerRow
+  savedRows: ServiceValidationLedgerRow[]
   weeklySummary: WeeklyServiceValidationSummary
+  leadId: string
   acceptedPriceKrw: string
   dataSharingIntent: ServiceValidationIntent
   reportSharingIntent: ServiceValidationIntent
@@ -635,6 +712,7 @@ function ServiceValidationLedgerPanel({
   repeatReportRequestSignal: RepeatReportRequestSignal
   dominantRequestType: DominantRequestType
   trustSafeExportPossible: boolean
+  onLeadIdChange: (value: string) => void
   onAcceptedPriceKrwChange: (value: string) => void
   onDataSharingIntentChange: (value: ServiceValidationIntent) => void
   onReportSharingIntentChange: (value: ServiceValidationIntent) => void
@@ -642,8 +720,10 @@ function ServiceValidationLedgerPanel({
   onRepeatReportRequestSignalChange: (value: RepeatReportRequestSignal) => void
   onDominantRequestTypeChange: (value: DominantRequestType) => void
   onTrustSafeExportPossibleChange: (value: boolean) => void
+  onAddLead: () => void
+  onClearLedger: () => void
 }) {
-  const intentOptions: ServiceValidationIntent[] = ['yes', 'conditional', 'no']
+  const intentOptions: ServiceValidationIntent[] = SERVICE_VALIDATION_INTENTS
   const repeatOptions: RepeatReportRequestSignal[] = ['no', 'one_more_after_change', 'monthly', 'quarterly']
   const requestOptions: DominantRequestType[] = ['service_report', 'data_readiness', 'sample_only', 'broad_saas_feature']
 
@@ -661,10 +741,19 @@ function ServiceValidationLedgerPanel({
             verdict: {row.verdict}
           </Badge>
           <Badge tone="neutral">ICP: {row.icpGrade}</Badge>
+          <Badge tone="neutral">saved leads: {savedRows.length}</Badge>
         </div>
       </div>
 
       <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <Field label="lead id" htmlFor="service-validation-lead-id">
+          <input
+            id="service-validation-lead-id"
+            value={leadId}
+            onChange={event => onLeadIdChange(event.currentTarget.value)}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          />
+        </Field>
         <Field label="accepted price KRW" htmlFor="service-validation-accepted-price">
           <input
             id="service-validation-accepted-price"
@@ -723,6 +812,11 @@ function ServiceValidationLedgerPanel({
         <span lang="en">trust-safe export possible</span>
       </label>
 
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={onAddLead}>Add lead to ledger</Button>
+        <Button type="button" variant="secondary" size="sm" onClick={onClearLedger} disabled={savedRows.length === 0}>Clear ledger</Button>
+      </div>
+
       <div className="mt-3 grid gap-2 md:grid-cols-2" lang="en">
         <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
           <p className="font-semibold text-label-normal">Reasons</p>
@@ -731,9 +825,26 @@ function ServiceValidationLedgerPanel({
         <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
           <p className="font-semibold text-label-normal">Weekly summary</p>
           <p className="mt-1 text-label-alternative">
-            weekly pass: {weeklySummary.pass} / conditional: {weeklySummary.conditional_pass} / fail: {weeklySummary.fail} / invalid: {weeklySummary.invalid} / repeat requests: {weeklySummary.repeatReportRequests}
+            weekly pass: {weeklySummary.pass} / conditional: {weeklySummary.conditional_pass} / fail: {weeklySummary.fail} / invalid: {weeklySummary.invalid} / paid reports: {weeklySummary.paidReportRequests} / repeat requests: {weeklySummary.repeatReportRequests} / price decision intents: {weeklySummary.priceDecisionIntents}
           </p>
         </div>
+      </div>
+      <div className="mt-3 border-t border-line-neutral pt-3" lang="en">
+        <p className="text-xs font-semibold text-label-normal">Saved lead rows</p>
+        {savedRows.length === 0 ? (
+          <p className="mt-1 text-xs text-label-alternative">No saved leads yet.</p>
+        ) : (
+          <div className="mt-2 grid gap-1 text-xs text-label-neutral">
+            {savedRows.map(savedRow => (
+              <p key={savedRow.leadId} className="flex flex-wrap gap-x-2 gap-y-1">
+                <span className="font-semibold text-label-normal">{savedRow.leadId} / {savedRow.verdict}</span>
+                <span>paid {fmtKrw(savedRow.acceptedPriceKrw)}</span>
+                <span>repeat {savedRow.repeatReportRequestSignal}</span>
+                <span>price intent {savedRow.priceOrLimitDecisionIntent}</span>
+              </p>
+            ))}
+          </div>
+        )}
       </div>
       <p className="mt-2 text-xs text-label-alternative" lang="en">{row.recommendedNextAction}</p>
     </div>
@@ -805,6 +916,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [nextReviewDate, setNextReviewDate] = useState('')
   const [decisionUrgency, setDecisionUrgency] = useState<DecisionUrgency>('none')
   const [pdcaAttributionAxes, setPdcaAttributionAxes] = useState<AgentPayrollIcpAxis[]>([])
+  const [serviceLedgerRows, setServiceLedgerRows] = useState<ServiceValidationLedgerRow[]>(() => readServiceValidationLedgerRows(workspaceId))
+  const [serviceLeadId, setServiceLeadId] = useState(() => nextServiceValidationLeadId(readServiceValidationLedgerRows(workspaceId)))
   const [serviceAcceptedPriceKrw, setServiceAcceptedPriceKrw] = useState('')
   const [serviceDataSharingIntent, setServiceDataSharingIntent] = useState<ServiceValidationIntent>('conditional')
   const [serviceReportSharingIntent, setServiceReportSharingIntent] = useState<ServiceValidationIntent>('conditional')
@@ -878,7 +991,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     trustResult,
   ])
   const serviceValidationRow = useMemo(() => evaluateServiceValidationLead({
-    leadId: workspaceId,
+    leadId: serviceLeadId.trim() || nextServiceValidationLeadId(serviceLedgerRows),
     icpGrade: icpTimingAssessment.grade,
     offeredPriceKrw: 700_000,
     acceptedPriceKrw: numericInput(serviceAcceptedPriceKrw),
@@ -890,19 +1003,51 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     trustSafeExportPossible: serviceTrustSafeExportPossible,
   }), [
     icpTimingAssessment.grade,
+    serviceLedgerRows,
     serviceAcceptedPriceKrw,
     serviceDataSharingIntent,
     serviceDominantRequestType,
+    serviceLeadId,
     servicePriceDecisionIntent,
     serviceRepeatReportRequestSignal,
     serviceReportSharingIntent,
     serviceTrustSafeExportPossible,
-    workspaceId,
   ])
   const serviceValidationWeeklySummary = useMemo(
-    () => summarizeWeeklyServiceValidationRows([serviceValidationRow]),
-    [serviceValidationRow],
+    () => summarizeWeeklyServiceValidationRows(serviceLedgerRows),
+    [serviceLedgerRows],
   )
+
+  useEffect(() => {
+    writeServiceValidationLedgerRows(workspaceId, serviceLedgerRows)
+  }, [serviceLedgerRows, workspaceId])
+
+  function resetServiceValidationDraft(nextRows: ServiceValidationLedgerRow[]) {
+    setServiceLeadId(nextServiceValidationLeadId(nextRows))
+    setServiceAcceptedPriceKrw('')
+    setServiceDataSharingIntent('conditional')
+    setServiceReportSharingIntent('conditional')
+    setServicePriceDecisionIntent('conditional')
+    setServiceRepeatReportRequestSignal('no')
+    setServiceDominantRequestType('sample_only')
+    setServiceTrustSafeExportPossible(true)
+  }
+
+  function addServiceValidationLead() {
+    const leadId = serviceValidationRow.leadId.trim() || nextServiceValidationLeadId(serviceLedgerRows)
+    const rowToSave = { ...serviceValidationRow, leadId }
+    const nextRows = [
+      ...serviceLedgerRows.filter(row => row.leadId !== leadId),
+      rowToSave,
+    ]
+    setServiceLedgerRows(nextRows)
+    resetServiceValidationDraft(nextRows)
+  }
+
+  function clearServiceValidationLedger() {
+    setServiceLedgerRows([])
+    resetServiceValidationDraft([])
+  }
 
   function nextImportGeneration() {
     importGenerationRef.current += 1
@@ -1195,7 +1340,9 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             />
             <ServiceValidationLedgerPanel
               row={serviceValidationRow}
+              savedRows={serviceLedgerRows}
               weeklySummary={serviceValidationWeeklySummary}
+              leadId={serviceLeadId}
               acceptedPriceKrw={serviceAcceptedPriceKrw}
               dataSharingIntent={serviceDataSharingIntent}
               reportSharingIntent={serviceReportSharingIntent}
@@ -1203,6 +1350,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
               repeatReportRequestSignal={serviceRepeatReportRequestSignal}
               dominantRequestType={serviceDominantRequestType}
               trustSafeExportPossible={serviceTrustSafeExportPossible}
+              onLeadIdChange={setServiceLeadId}
               onAcceptedPriceKrwChange={setServiceAcceptedPriceKrw}
               onDataSharingIntentChange={setServiceDataSharingIntent}
               onReportSharingIntentChange={setServiceReportSharingIntent}
@@ -1210,6 +1358,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
               onRepeatReportRequestSignalChange={setServiceRepeatReportRequestSignal}
               onDominantRequestTypeChange={setServiceDominantRequestType}
               onTrustSafeExportPossibleChange={setServiceTrustSafeExportPossible}
+              onAddLead={addServiceValidationLead}
+              onClearLedger={clearServiceValidationLedger}
             />
             <UnitEconomicsPdcaPanel
               instrumentation={pdcaInstrumentation}

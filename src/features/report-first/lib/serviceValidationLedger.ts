@@ -29,7 +29,9 @@ export interface WeeklyServiceValidationSummary {
   conditional_pass: number
   fail: number
   invalid: number
+  paidReportRequests: number
   repeatReportRequests: number
+  priceDecisionIntents: number
 }
 
 const repeatPassSignals: RepeatReportRequestSignal[] = ['monthly', 'quarterly']
@@ -87,6 +89,12 @@ export function summarizeWeeklyServiceValidationRows(
       if (repeatRequestSignals.includes(row.repeatReportRequestSignal)) {
         summary.repeatReportRequests += 1
       }
+      if (Number.isFinite(row.acceptedPriceKrw) && row.acceptedPriceKrw > 0) {
+        summary.paidReportRequests += 1
+      }
+      if (row.priceOrLimitDecisionIntent === 'yes' || row.priceOrLimitDecisionIntent === 'conditional') {
+        summary.priceDecisionIntents += 1
+      }
 
       return summary
     },
@@ -95,7 +103,9 @@ export function summarizeWeeklyServiceValidationRows(
       conditional_pass: 0,
       fail: 0,
       invalid: 0,
+      paidReportRequests: 0,
       repeatReportRequests: 0,
+      priceDecisionIntents: 0,
     },
   )
 }

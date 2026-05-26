@@ -159,7 +159,9 @@ describe('summarizeWeeklyServiceValidationRows', () => {
       conditional_pass: 1,
       fail: 1,
       invalid: 1,
+      paidReportRequests: 2,
       repeatReportRequests: 3,
+      priceDecisionIntents: 3,
     })
   })
 })

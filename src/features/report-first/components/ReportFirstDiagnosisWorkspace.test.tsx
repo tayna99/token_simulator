@@ -1,7 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ReportFirstDiagnosisWorkspace } from './ReportFirstDiagnosisWorkspace'
+
+afterEach(() => {
+  window.localStorage.clear()
+})
 
 function csvFor(feature: string, cost: number) {
   return [
@@ -226,11 +230,44 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     fireEvent.change(screen.getByLabelText(/accepted price KRW/i), { target: { value: '500000' } })
     fireEvent.change(screen.getByLabelText(/repeat report request/i), { target: { value: 'monthly' } })
+    fireEvent.click(screen.getByRole('button', { name: /Add lead to ledger/i }))
 
-    expect(panel).toHaveTextContent(/verdict: pass/i)
-    expect(panel).toHaveTextContent(/repeat service report requested monthly/i)
+    expect(panel).toHaveTextContent(/lead-001 \/ pass/i)
+    expect(panel).toHaveTextContent(/repeat monthly/i)
     expect(panel).toHaveTextContent(/weekly pass: 1/i)
     expect(panel).toHaveTextContent(/repeat requests: 1/i)
+  })
+
+  it('persists multiple service validation leads and accumulates weekly summary', () => {
+    const { unmount } = render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
+
+    const panel = screen.getByTestId('service-validation-ledger-panel')
+    fireEvent.change(screen.getByLabelText(/accepted price KRW/i), { target: { value: '500000' } })
+    fireEvent.change(screen.getByLabelText(/repeat report request/i), { target: { value: 'monthly' } })
+    fireEvent.click(screen.getByRole('button', { name: /Add lead to ledger/i }))
+
+    fireEvent.change(screen.getByLabelText(/accepted price KRW/i), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText(/dominant request type/i), { target: { value: 'data_readiness' } })
+    fireEvent.click(screen.getByRole('button', { name: /Add lead to ledger/i }))
+
+    expect(panel).toHaveTextContent(/saved leads: 2/i)
+    expect(panel).toHaveTextContent(/weekly pass: 1/i)
+    expect(panel).toHaveTextContent(/fail: 1/i)
+    expect(panel).toHaveTextContent(/paid reports: 1/i)
+    expect(panel).toHaveTextContent(/repeat requests: 1/i)
+    expect(panel).toHaveTextContent(/price decision intents: 2/i)
+    expect(panel).toHaveTextContent(/lead-001/i)
+    expect(panel).toHaveTextContent(/lead-002/i)
+
+    unmount()
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
+
+    const restoredPanel = screen.getByTestId('service-validation-ledger-panel')
+    expect(restoredPanel).toHaveTextContent(/saved leads: 2/i)
+    expect(restoredPanel).toHaveTextContent(/weekly pass: 1/i)
+    expect(restoredPanel).toHaveTextContent(/paid reports: 1/i)
+    expect(restoredPanel).toHaveTextContent(/lead-001/i)
+    expect(restoredPanel).toHaveTextContent(/lead-002/i)
   })
 
   it('keeps service validation ledger hidden from the customer surface', () => {
