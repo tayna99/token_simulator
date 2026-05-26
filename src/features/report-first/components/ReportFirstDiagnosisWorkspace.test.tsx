@@ -146,6 +146,50 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(preview).toHaveTextContent(/overage/)
   })
 
+  it('calculates the token leak story from pasted CSV values instead of SparkClaw fixture values', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    fireEvent.change(screen.getByLabelText(/사용량 CSV/i), {
+      target: {
+        value: [
+          'timestamp,request_id,customer_id,feature,model,input_tokens,output_tokens,total_cost,latency_ms,status',
+          '2026-05-01T10:00:00Z,req_custom_1,cus_delta,contract_review,claude-sonnet-4.6,200000,100000,90,1800,success',
+          '2026-05-01T10:04:00Z,req_custom_2,cus_delta,invoice_bot,claude-sonnet-4.6,50000,25000,15,1100,success',
+          '2026-05-01T10:08:00Z,req_custom_3,cus_echo,summary,claude-sonnet-4.6,40000,20000,8,900,success',
+        ].join('\n'),
+      },
+    })
+    fireEvent.change(screen.getByLabelText(/token allowance\/revenue CSV/i), {
+      target: {
+        value: [
+          'customer_id,revenue_collected,included_tokens,overage_rate_usd_per_1k_tokens',
+          'cus_delta,40,120000,0.25',
+          'cus_echo,99,100000,0.10',
+        ].join('\n'),
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /분석 시작/ }))
+
+    expect(screen.getByTestId('diagnosis-calculation-basis')).toHaveTextContent(/현재 입력 CSV/)
+    expect(screen.getAllByText(/cus_delta/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/회수된 매출은 \$40/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/AI token 원가는 \$105/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/미회수 AI 원가 \$65/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/contract_review/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/전체 token 사용량의 69%/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/AI 원가 \$90/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/예상 회수 후보: \$65/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/cust_001|\$149|report_generation/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+
+    const preview = screen.getByTestId('local-report-preview')
+    expect(preview).toHaveTextContent(/API Token Leakage Report/)
+    expect(preview).toHaveTextContent(/cus_delta/)
+    expect(preview).toHaveTextContent(/\$65/)
+  })
+
   it('codes buyer interview objections behind expert mode', () => {
     render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
 
@@ -172,6 +216,29 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     expect(panel).toHaveTextContent(/objection_excel_sql_console/i)
     expect(panel).toHaveTextContent(/엑셀\/SQL이 보여주는 숫자/)
+  })
+
+  it('records service validation ledger verdicts in expert mode only', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
+
+    const panel = screen.getByTestId('service-validation-ledger-panel')
+    expect(panel).toHaveTextContent(/Service validation ledger/i)
+    expect(panel).toHaveTextContent(/verdict: fail/i)
+
+    fireEvent.change(screen.getByLabelText(/accepted price KRW/i), { target: { value: '500000' } })
+    fireEvent.change(screen.getByLabelText(/repeat report request/i), { target: { value: 'monthly' } })
+
+    expect(panel).toHaveTextContent(/verdict: pass/i)
+    expect(panel).toHaveTextContent(/repeat service report requested monthly/i)
+    expect(panel).toHaveTextContent(/weekly pass: 1/i)
+    expect(panel).toHaveTextContent(/repeat requests: 1/i)
+  })
+
+  it('keeps service validation ledger hidden from the customer surface', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    expect(screen.queryByTestId('service-validation-ledger-panel')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Service validation ledger/i)).not.toBeInTheDocument()
   })
 
   it('updates the diagnosis preview when CSV state changes', () => {

@@ -37,6 +37,15 @@ import {
   type IcpTimingGateAssessment,
 } from '../lib/icpTimingGate'
 import {
+  evaluateServiceValidationLead,
+  summarizeWeeklyServiceValidationRows,
+  type DominantRequestType,
+  type RepeatReportRequestSignal,
+  type ServiceValidationIntent,
+  type ServiceValidationLedgerRow,
+  type WeeklyServiceValidationSummary,
+} from '../lib/serviceValidationLedger'
+import {
   BUYER_INTERVIEW_SAMPLE_NOTES,
   BUYER_OBJECTION_BUCKETS,
   codeBuyerInterviewNotes,
@@ -599,6 +608,138 @@ function BuyerInterviewCodingPanel({
   )
 }
 
+function ServiceValidationLedgerPanel({
+  row,
+  weeklySummary,
+  acceptedPriceKrw,
+  dataSharingIntent,
+  reportSharingIntent,
+  priceOrLimitDecisionIntent,
+  repeatReportRequestSignal,
+  dominantRequestType,
+  trustSafeExportPossible,
+  onAcceptedPriceKrwChange,
+  onDataSharingIntentChange,
+  onReportSharingIntentChange,
+  onPriceOrLimitDecisionIntentChange,
+  onRepeatReportRequestSignalChange,
+  onDominantRequestTypeChange,
+  onTrustSafeExportPossibleChange,
+}: {
+  row: ServiceValidationLedgerRow
+  weeklySummary: WeeklyServiceValidationSummary
+  acceptedPriceKrw: string
+  dataSharingIntent: ServiceValidationIntent
+  reportSharingIntent: ServiceValidationIntent
+  priceOrLimitDecisionIntent: ServiceValidationIntent
+  repeatReportRequestSignal: RepeatReportRequestSignal
+  dominantRequestType: DominantRequestType
+  trustSafeExportPossible: boolean
+  onAcceptedPriceKrwChange: (value: string) => void
+  onDataSharingIntentChange: (value: ServiceValidationIntent) => void
+  onReportSharingIntentChange: (value: ServiceValidationIntent) => void
+  onPriceOrLimitDecisionIntentChange: (value: ServiceValidationIntent) => void
+  onRepeatReportRequestSignalChange: (value: RepeatReportRequestSignal) => void
+  onDominantRequestTypeChange: (value: DominantRequestType) => void
+  onTrustSafeExportPossibleChange: (value: boolean) => void
+}) {
+  const intentOptions: ServiceValidationIntent[] = ['yes', 'conditional', 'no']
+  const repeatOptions: RepeatReportRequestSignal[] = ['no', 'one_more_after_change', 'monthly', 'quarterly']
+  const requestOptions: DominantRequestType[] = ['service_report', 'data_readiness', 'sample_only', 'broad_saas_feature']
+
+  return (
+    <div data-testid="service-validation-ledger-panel" className="mb-4 rounded-wds border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold" lang="en">Service validation ledger</p>
+          <p className="mt-1 text-xs leading-5 text-label-neutral">
+            리뷰콜 이후 유료 리포트, 반복 리포트, 세 가지 의사결정 의도를 검증 원장 판정으로 고정합니다.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1 text-xs" lang="en">
+          <Badge tone={row.verdict === 'pass' ? 'positive' : row.verdict === 'conditional_pass' ? 'caution' : 'neutral'}>
+            verdict: {row.verdict}
+          </Badge>
+          <Badge tone="neutral">ICP: {row.icpGrade}</Badge>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <Field label="accepted price KRW" htmlFor="service-validation-accepted-price">
+          <input
+            id="service-validation-accepted-price"
+            value={acceptedPriceKrw}
+            onChange={event => onAcceptedPriceKrwChange(event.currentTarget.value)}
+            inputMode="numeric"
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          />
+        </Field>
+        <Field label="repeat report request" htmlFor="service-validation-repeat-report">
+          <select
+            id="service-validation-repeat-report"
+            value={repeatReportRequestSignal}
+            onChange={event => onRepeatReportRequestSignalChange(event.currentTarget.value as RepeatReportRequestSignal)}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          >
+            {repeatOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </Field>
+        <Field label="dominant request type" htmlFor="service-validation-dominant-request">
+          <select
+            id="service-validation-dominant-request"
+            value={dominantRequestType}
+            onChange={event => onDominantRequestTypeChange(event.currentTarget.value as DominantRequestType)}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          >
+            {requestOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <Field label="data sharing intent" htmlFor="service-validation-data-sharing">
+          <select id="service-validation-data-sharing" value={dataSharingIntent} onChange={event => onDataSharingIntentChange(event.currentTarget.value as ServiceValidationIntent)} className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal">
+            {intentOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </Field>
+        <Field label="report sharing intent" htmlFor="service-validation-report-sharing">
+          <select id="service-validation-report-sharing" value={reportSharingIntent} onChange={event => onReportSharingIntentChange(event.currentTarget.value as ServiceValidationIntent)} className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal">
+            {intentOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </Field>
+        <Field label="price or limit decision intent" htmlFor="service-validation-price-intent">
+          <select id="service-validation-price-intent" value={priceOrLimitDecisionIntent} onChange={event => onPriceOrLimitDecisionIntentChange(event.currentTarget.value as ServiceValidationIntent)} className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal">
+            {intentOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-label-neutral">
+        <input
+          type="checkbox"
+          checked={trustSafeExportPossible}
+          onChange={event => onTrustSafeExportPossibleChange(event.currentTarget.checked)}
+        />
+        <span lang="en">trust-safe export possible</span>
+      </label>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-2" lang="en">
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
+          <p className="font-semibold text-label-normal">Reasons</p>
+          <p className="mt-1 text-label-alternative">{row.reasons.join(', ')}</p>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
+          <p className="font-semibold text-label-normal">Weekly summary</p>
+          <p className="mt-1 text-label-alternative">
+            weekly pass: {weeklySummary.pass} / conditional: {weeklySummary.conditional_pass} / fail: {weeklySummary.fail} / invalid: {weeklySummary.invalid} / repeat requests: {weeklySummary.repeatReportRequests}
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-label-alternative" lang="en">{row.recommendedNextAction}</p>
+    </div>
+  )
+}
+
 function LocalReportPreview({
   snapshot,
   selectedDecisionId,
@@ -664,6 +805,13 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [nextReviewDate, setNextReviewDate] = useState('')
   const [decisionUrgency, setDecisionUrgency] = useState<DecisionUrgency>('none')
   const [pdcaAttributionAxes, setPdcaAttributionAxes] = useState<AgentPayrollIcpAxis[]>([])
+  const [serviceAcceptedPriceKrw, setServiceAcceptedPriceKrw] = useState('')
+  const [serviceDataSharingIntent, setServiceDataSharingIntent] = useState<ServiceValidationIntent>('conditional')
+  const [serviceReportSharingIntent, setServiceReportSharingIntent] = useState<ServiceValidationIntent>('conditional')
+  const [servicePriceDecisionIntent, setServicePriceDecisionIntent] = useState<ServiceValidationIntent>('conditional')
+  const [serviceRepeatReportRequestSignal, setServiceRepeatReportRequestSignal] = useState<RepeatReportRequestSignal>('no')
+  const [serviceDominantRequestType, setServiceDominantRequestType] = useState<DominantRequestType>('sample_only')
+  const [serviceTrustSafeExportPossible, setServiceTrustSafeExportPossible] = useState(true)
 
   const request = useMemo(() => safeFetcher(fetcher), [fetcher])
   const visibleDecisionCandidates = useMemo(() => (
@@ -729,6 +877,32 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     snapshotMinutes,
     trustResult,
   ])
+  const serviceValidationRow = useMemo(() => evaluateServiceValidationLead({
+    leadId: workspaceId,
+    icpGrade: icpTimingAssessment.grade,
+    offeredPriceKrw: 700_000,
+    acceptedPriceKrw: numericInput(serviceAcceptedPriceKrw),
+    dataSharingIntent: serviceDataSharingIntent,
+    reportSharingIntent: serviceReportSharingIntent,
+    priceOrLimitDecisionIntent: servicePriceDecisionIntent,
+    repeatReportRequestSignal: serviceRepeatReportRequestSignal,
+    dominantRequestType: serviceDominantRequestType,
+    trustSafeExportPossible: serviceTrustSafeExportPossible,
+  }), [
+    icpTimingAssessment.grade,
+    serviceAcceptedPriceKrw,
+    serviceDataSharingIntent,
+    serviceDominantRequestType,
+    servicePriceDecisionIntent,
+    serviceRepeatReportRequestSignal,
+    serviceReportSharingIntent,
+    serviceTrustSafeExportPossible,
+    workspaceId,
+  ])
+  const serviceValidationWeeklySummary = useMemo(
+    () => summarizeWeeklyServiceValidationRows([serviceValidationRow]),
+    [serviceValidationRow],
+  )
 
   function nextImportGeneration() {
     importGenerationRef.current += 1
@@ -1019,6 +1193,24 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
               onRawNotesChange={setBuyerInterviewNotes}
               onLoadSample={() => setBuyerInterviewNotes(BUYER_INTERVIEW_SAMPLE_NOTES)}
             />
+            <ServiceValidationLedgerPanel
+              row={serviceValidationRow}
+              weeklySummary={serviceValidationWeeklySummary}
+              acceptedPriceKrw={serviceAcceptedPriceKrw}
+              dataSharingIntent={serviceDataSharingIntent}
+              reportSharingIntent={serviceReportSharingIntent}
+              priceOrLimitDecisionIntent={servicePriceDecisionIntent}
+              repeatReportRequestSignal={serviceRepeatReportRequestSignal}
+              dominantRequestType={serviceDominantRequestType}
+              trustSafeExportPossible={serviceTrustSafeExportPossible}
+              onAcceptedPriceKrwChange={setServiceAcceptedPriceKrw}
+              onDataSharingIntentChange={setServiceDataSharingIntent}
+              onReportSharingIntentChange={setServiceReportSharingIntent}
+              onPriceOrLimitDecisionIntentChange={setServicePriceDecisionIntent}
+              onRepeatReportRequestSignalChange={setServiceRepeatReportRequestSignal}
+              onDominantRequestTypeChange={setServiceDominantRequestType}
+              onTrustSafeExportPossibleChange={setServiceTrustSafeExportPossible}
+            />
             <UnitEconomicsPdcaPanel
               instrumentation={pdcaInstrumentation}
               monthlyLlmSpendKrw={monthlyLlmSpendKrw}
@@ -1135,6 +1327,12 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
               <MetricTile key={metric.id} label={metric.label} value={metric.value} help={metric.help} />
             ))}
           </div>
+          <p
+            data-testid="diagnosis-calculation-basis"
+            className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative px-3 py-2 text-xs font-semibold text-label-neutral"
+          >
+            계산 기준: 현재 입력 CSV + allowance/revenue CSV
+          </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {diagnosis && [diagnosis.topLeak, diagnosis.marginBreakingFeature, diagnosis.recommendedDecision].map(item => (

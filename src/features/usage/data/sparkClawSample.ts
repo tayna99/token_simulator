@@ -12,7 +12,7 @@ export const SPARK_CLAW_SAMPLE_CSV = [
 
 export const PLAN_MONTHLY_REVENUE: Record<string, number> = {
   free: 0,
-  pro: 29 * 4,
+  pro: 29 * 3,
   team: 99 * 3,
 }
 
@@ -49,7 +49,7 @@ export const CUSTOMER_TOKEN_ALLOWANCE: Record<string, number> = {
 
 export const PLAN_TOKEN_ALLOWANCE: Record<string, number> = {
   free: 50_000,
-  pro: 185_000 * 4,
+  pro: 185_000 * 3,
   team: 320_000 * 3,
 }
 
