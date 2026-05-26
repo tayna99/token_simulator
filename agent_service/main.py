@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from langgraph.checkpoint.memory import InMemorySaver
 
 from agentic_runtime import run_agentic_runtime
 from interpreter import Interpreter
@@ -28,6 +29,7 @@ from schemas import (
 load_dotenv()
 
 app = FastAPI(title="AI SaaS Cost Agent Service")
+_AGENT_CHECKPOINTER = InMemorySaver()
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,7 +81,7 @@ def run_agent(payload: RunInput) -> RunOutput:
 @app.post("/api/agent/run", response_model=AgentRunResponse)
 def run_agentic(payload: AgentRunInput) -> AgentRunResponse:
     api_key = _api_key(payload.apiKey)
-    return run_agentic_runtime(payload, model=_agent_model(api_key))
+    return run_agentic_runtime(payload, model=_agent_model(api_key), checkpointer=_AGENT_CHECKPOINTER)
 
 
 @app.post("/api/rag/p1-evidence")

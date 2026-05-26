@@ -1,6 +1,12 @@
 import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
 
-export type RuntimeProofStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
+export type RuntimeProofStatus =
+  | 'provider_llm'
+  | 'deterministic_preview'
+  | 'unavailable'
+  | 'connector_not_configured'
+  | 'interrupt_requested'
+  | 'resumed'
 
 export interface RuntimeProofMetadata {
   status: RuntimeProofStatus
@@ -24,6 +30,8 @@ const RUNTIME_PROOF_STATUSES = new Set<RuntimeProofStatus>([
   'deterministic_preview',
   'unavailable',
   'connector_not_configured',
+  'interrupt_requested',
+  'resumed',
 ])
 
 const DECISION_CHOICES = new Set<DecisionChoice>(['adopt', 'reject', 'hold'])
@@ -77,8 +85,8 @@ export function normalizeRuntimeProofMetadata(value: unknown): RuntimeProofMetad
     : undefined
   return {
     status: value.status,
-    ...(value.status === 'provider_llm' && providerRunId ? { providerRunId } : {}),
-    agentInvocationProof: value.status === 'provider_llm' && isStringArray(value.agentInvocationProof)
+    ...((value.status === 'provider_llm' || value.status === 'resumed') && providerRunId ? { providerRunId } : {}),
+    agentInvocationProof: (value.status === 'provider_llm' || value.status === 'resumed' || value.status === 'interrupt_requested') && isStringArray(value.agentInvocationProof)
       ? value.agentInvocationProof
       : [],
     ...(typeof value.fallbackReason === 'string' && value.fallbackReason.trim() ? { fallbackReason: value.fallbackReason } : {}),

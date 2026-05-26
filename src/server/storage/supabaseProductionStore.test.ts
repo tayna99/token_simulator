@@ -185,6 +185,23 @@ describe('Supabase production store', () => {
   })
 
   it('persists and restores checkpoint graph state', async () => {
+    const checkpointGraphState = {
+      step: 'approval',
+      runtimeProof: {
+        status: 'deterministic_preview',
+        agentInvocationProof: ['team_cost_graph:approval_gate'],
+        fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:01.000Z',
+      },
+      humanApproval: {
+        required: true,
+        decisionChoice: 'adopt',
+        approvedBy: 'workspace_user',
+        approvedAt: '2026-05-26T00:00:02.000Z',
+        approvalMode: 'checkpoint_resume',
+      },
+    }
     const calls: Array<{ url: string; init: RequestInit }> = []
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), init: init ?? {} })
@@ -193,7 +210,7 @@ describe('Supabase production store', () => {
           workspace_id: 'workspace-demo',
           thread_id: 'thread-1',
           checkpoint_id: 'checkpoint-1',
-          graph_state: { step: 'approval' },
+          graph_state: checkpointGraphState,
           status: 'interrupt_requested',
         }]), { status: 200 })
       }
@@ -210,7 +227,7 @@ describe('Supabase production store', () => {
       threadId: 'thread-1',
       checkpointId: 'checkpoint-1',
       status: 'interrupt_requested',
-      graphState: { step: 'approval' },
+      graphState: checkpointGraphState,
     })
     const restored = await store.load({ workspaceId: 'workspace-demo', threadId: 'thread-1' })
 
@@ -218,9 +235,22 @@ describe('Supabase production store', () => {
     expect(JSON.parse(String(calls[0].init.body))[0]).toMatchObject({
       workspace_id: 'workspace-demo',
       thread_id: 'thread-1',
-      graph_state: { step: 'approval' },
+      graph_state: expect.objectContaining({
+        step: 'approval',
+        runtimeProof: expect.objectContaining({
+          status: 'deterministic_preview',
+          agentInvocationProof: ['team_cost_graph:approval_gate'],
+          fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+        }),
+        humanApproval: expect.objectContaining({
+          required: true,
+          decisionChoice: 'adopt',
+          approvedBy: 'workspace_user',
+          approvalMode: 'checkpoint_resume',
+        }),
+      }),
     })
-    expect(restored?.graphState).toEqual({ step: 'approval' })
+    expect(restored?.graphState).toEqual(checkpointGraphState)
   })
 
   it('persists report artifacts and lists them by workspace and report run', async () => {

@@ -7,7 +7,7 @@ export type AgentRunStage = 'design' | 'cost' | 'bottleneck' | 'optimize' | 'dec
 export type AgentRunLlmMode = 'deterministic-fallback' | 'provider-llm'
 export type AgentRunRuntimeMode = 'local' | 'server'
 export type AgentRunExecutionMode = 'stage_committee' | 'all_hands' | 'single_agent'
-export type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured'
+export type RuntimeCapabilityStatus = 'provider_llm' | 'deterministic_preview' | 'unavailable' | 'connector_not_configured' | 'interrupt_requested' | 'resumed'
 
 const OPERATING_AGENT_IDS = [
   'provider_api_intelligence',
@@ -70,6 +70,18 @@ export interface AgentRunRuntimeProof {
   fallbackReason?: string
   startedAt: string
   completedAt: string
+  checkpoint?: AgentRunCheckpoint | null
+}
+
+export interface AgentRunCheckpoint {
+  persistence: string
+  threadId: string
+  checkpointNamespace: string
+  checkpointId: string
+  interruptId?: string | null
+  status: string
+  reason: string
+  resumePayload: Record<string, unknown>
 }
 
 export interface AgentRunInput {
@@ -105,6 +117,11 @@ export interface AgentRunInput {
   providerRegistryVersion?: string
   dataLimitations?: string[]
   frontOperatingSystem?: FrontOperatingSystemContext
+  hitlCheckpoint?: boolean
+  checkpointThreadId?: string
+  checkpointNamespace?: string
+  resumeCheckpoint?: boolean
+  resumePayload?: Record<string, unknown>
 }
 
 export interface AgentRunResponse {
@@ -297,6 +314,12 @@ function isRuntimeCapabilityStatus(value: unknown): value is RuntimeCapabilitySt
     || value === 'deterministic_preview'
     || value === 'unavailable'
     || value === 'connector_not_configured'
+    || value === 'interrupt_requested'
+    || value === 'resumed'
+}
+
+function isProviderBackedStatus(value: RuntimeCapabilityStatus): boolean {
+  return value === 'provider_llm' || value === 'interrupt_requested' || value === 'resumed'
 }
 
 function timestampedRuntime(status: RuntimeCapabilityStatus, fallbackReason?: string): AgentRunRuntimeProof {
@@ -306,6 +329,22 @@ function timestampedRuntime(status: RuntimeCapabilityStatus, fallbackReason?: st
     ...(fallbackReason ? { fallbackReason } : {}),
     startedAt: now,
     completedAt: now,
+  }
+}
+
+function fallbackCheckpointFromInput(input: AgentRunInput, reason: string): AgentRunCheckpoint | null {
+  if (!input.hitlCheckpoint && !input.resumeCheckpoint) return null
+  const threadId = input.checkpointThreadId?.trim() || `thread-${new Date().toISOString().slice(0, 10)}`
+  const checkpointNamespace = input.checkpointNamespace?.trim() || 'agent_service'
+  return {
+    persistence: 'not_configured',
+    threadId,
+    checkpointNamespace,
+    checkpointId: `checkpoint:${checkpointNamespace}:${threadId}`,
+    interruptId: null,
+    status: 'not_required',
+    reason,
+    resumePayload: input.resumePayload ?? {},
   }
 }
 
@@ -320,7 +359,19 @@ function normalizeRuntime(value: unknown, fallback: AgentRunRuntimeProof): Agent
     ...(typeof value.fallbackReason === 'string' && value.fallbackReason ? { fallbackReason: value.fallbackReason } : {}),
     startedAt,
     completedAt,
+    ...(isAgentRunCheckpoint(value.checkpoint) ? { checkpoint: value.checkpoint } : {}),
   }
+}
+
+function isAgentRunCheckpoint(value: unknown): value is AgentRunCheckpoint {
+  return isRecord(value)
+    && typeof value.persistence === 'string'
+    && typeof value.threadId === 'string'
+    && typeof value.checkpointNamespace === 'string'
+    && typeof value.checkpointId === 'string'
+    && typeof value.status === 'string'
+    && typeof value.reason === 'string'
+    && isRecord(value.resumePayload)
 }
 
 function isAgenticEvent(value: unknown): value is AgenticEvent {
@@ -397,7 +448,7 @@ function normalizeResponse(value: unknown, fallback: AgentRunResponse): AgentRun
   if (!value || typeof value !== 'object') return fallback
   const candidate = value as Partial<AgentRunResponse>
   const runtime = normalizeRuntime(candidate.runtime, fallback.runtime)
-  const isProviderRuntime = runtime.status === 'provider_llm'
+  const isProviderRuntime = isProviderBackedStatus(runtime.status)
   const routedAgentIds = routeCalledAgentIds(fallback)
   const primaryAgentId = typeof candidate.primaryAgentId === 'string'
     ? candidate.primaryAgentId
@@ -461,7 +512,10 @@ function fallbackResponse(
       }),
     ...frontOperatingAssetRefs(input),
   ])
-  const runtime = timestampedRuntime(status, warning)
+  const runtime = {
+    ...timestampedRuntime(status, warning),
+    checkpoint: fallbackCheckpointFromInput(input, warning),
+  }
   const routedAgentLabel = route.calledAgentIds.join(', ') || 'none'
   const fallbackEventType = status === 'unavailable' ? 'runtime_unavailable' : 'deterministic_preview'
   const fallbackMessage = status === 'unavailable'

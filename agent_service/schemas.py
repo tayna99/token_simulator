@@ -32,7 +32,14 @@ TeamCostEventType = Literal[
 ]
 
 LlmMode = Literal["deterministic-fallback", "provider-llm"]
-RuntimeCapabilityStatus = Literal["provider_llm", "deterministic_preview", "unavailable", "connector_not_configured"]
+RuntimeCapabilityStatus = Literal[
+    "provider_llm",
+    "deterministic_preview",
+    "unavailable",
+    "connector_not_configured",
+    "interrupt_requested",
+    "resumed",
+]
 AgentRunMode = Literal["report", "ask", "decision_support"]
 AgentStage = Literal["design", "cost", "bottleneck", "optimize", "decision-log"]
 AgentExecutionMode = Literal["stage_committee", "all_hands", "single_agent"]
@@ -143,10 +150,26 @@ class AgentRunInput(BaseModel):
     providerRegistryVersion: str = ""
     dataLimitations: list[str] = Field(default_factory=list)
     frontOperatingSystem: dict[str, Any] = Field(default_factory=dict)
+    hitlCheckpoint: bool = False
+    checkpointThreadId: str = ""
+    checkpointNamespace: str = "agent_service"
+    resumeCheckpoint: bool = False
+    resumePayload: dict[str, Any] = Field(default_factory=dict)
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+class AgentRunCheckpoint(BaseModel):
+    persistence: str = "not_configured"
+    threadId: str = ""
+    checkpointNamespace: str = "agent_service"
+    checkpointId: str = ""
+    interruptId: str | None = None
+    status: str = "not_required"
+    reason: str = ""
+    resumePayload: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentRunRuntimeProof(BaseModel):
@@ -156,6 +179,7 @@ class AgentRunRuntimeProof(BaseModel):
     fallbackReason: str | None = None
     startedAt: str = Field(default_factory=_utc_now)
     completedAt: str = Field(default_factory=_utc_now)
+    checkpoint: AgentRunCheckpoint | None = None
 
 
 class AgentRunResponse(BaseModel):

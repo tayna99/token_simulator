@@ -98,12 +98,35 @@ describe('handleTeamCostAgentApi', () => {
     expect(resumed.body.checkpoint.status).toBe('resumed')
     expect(calls.some(call => call.url.includes('/rest/v1/checkpoints') && call.init.method === 'POST')).toBe(true)
     expect(calls.some(call => call.url.includes('/rest/v1/checkpoints?') && call.init.method === 'GET')).toBe(true)
-    const checkpointWrite = calls.find(call => call.url.includes('/rest/v1/checkpoints') && call.init.method === 'POST')
-    expect(JSON.parse(String(checkpointWrite?.init.body))[0]).toMatchObject({
+    const checkpointWrites = calls.filter(call => call.url.includes('/rest/v1/checkpoints') && call.init.method === 'POST')
+    const interruptWrite = JSON.parse(String(checkpointWrites[0]?.init.body))[0]
+    const resumeWrite = JSON.parse(String(checkpointWrites[1]?.init.body))[0]
+    expect(interruptWrite).toMatchObject({
       workspace_id: 'workspace-demo',
       thread_id: 'thread-supa-1',
       status: 'interrupt_requested',
-      graph_state: expect.objectContaining({ workflowMode: 'optimize' }),
+      graph_state: expect.objectContaining({
+        workflowMode: 'optimize',
+        runtimeProof: expect.objectContaining({ status: 'deterministic_preview' }),
+        humanApproval: null,
+      }),
+    })
+    expect(interruptWrite.graph_state.events.some((event: { type?: string }) => event.type === 'approval_required')).toBe(true)
+    expect(resumeWrite).toMatchObject({
+      workspace_id: 'workspace-demo',
+      thread_id: 'thread-supa-1',
+      status: 'resumed',
+      graph_state: expect.objectContaining({
+        workflowMode: 'optimize',
+        resumeApproval: expect.objectContaining({ approved: true }),
+        previousCheckpoint: expect.objectContaining({ status: 'interrupt_requested' }),
+        humanApproval: expect.objectContaining({
+          required: true,
+          decisionChoice: 'adopt',
+          approvalMode: 'checkpoint_resume',
+        }),
+        runtimeProof: expect.objectContaining({ status: 'deterministic_preview' }),
+      }),
     })
   })
 

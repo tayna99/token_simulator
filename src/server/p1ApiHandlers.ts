@@ -13,9 +13,11 @@ import { validateUsageIngress, type TrustGateDecision } from '../features/trust/
 import { buildOnePageReportArtifact, type OnePageReportArtifactInput } from '../features/report/lib/reportArtifacts'
 import type { DecisionChoice } from '../features/decision-loop/lib/decisionHeader'
 import {
+  deterministicPreviewRuntimeProof,
   normalizeHumanApprovalMetadata,
   normalizeRuntimeProofMetadata,
 } from '../features/provenance/lib/runtimeApprovalMetadata'
+import type { RuntimeProofMetadata } from '../features/provenance/lib/runtimeApprovalMetadata'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { estimateAgentWorkload } from '../features/team-cost/lib/estimateAgentWorkload'
 import { normalizeDecisionRecord, type Decision } from '../features/decision-log/lib/decisionLog'
@@ -33,6 +35,7 @@ import {
   SupabaseReportArtifactStore,
   SupabaseWatchtowerStore,
   createSupabaseClientFromEnv,
+  type SupabaseCheckpointRecord,
   type SupabaseAcceptedFactRecord,
   type SupabaseFactReviewEventRecord,
   type SupabaseFactReviewAction,
@@ -589,6 +592,96 @@ function checkpointFor(input: TeamCostRuntimeInput, persistence: CheckpointPersi
   }
 }
 
+function firstRecommendationId(events: TeamCostGraphEvent[]): string | null {
+  return events.find(event => event.type === 'approval_required')?.recommendationIds[0] ?? null
+}
+
+function teamCostRuntimeProof(input: TeamCostRuntimeInput, llmMode: TeamCostLlmMode): RuntimeProofMetadata {
+  if (llmMode !== 'provider-llm') {
+    return deterministicPreviewRuntimeProof('team_cost_llm_runtime_not_enabled')
+  }
+  const now = new Date().toISOString()
+  return {
+    status: 'provider_llm',
+    providerRunId: `team-cost-agent:${input.threadId?.trim() || 'unthreaded'}`,
+    agentInvocationProof: [],
+    startedAt: now,
+    completedAt: now,
+  }
+}
+
+function humanApprovalFromResume(input: TeamCostRuntimeInput): Record<string, unknown> | null {
+  if (!input.resumeApproval) return null
+  return {
+    required: true,
+    decisionChoice: input.resumeApproval.approved ? 'adopt' : 'reject',
+    approvedBy: 'workspace_user',
+    approvedAt: new Date().toISOString(),
+    approvalMode: 'checkpoint_resume',
+    recommendationId: input.resumeApproval.recommendationId,
+    reason: input.resumeApproval.reason ?? '',
+  }
+}
+
+function checkpointApprovalState(input: TeamCostRuntimeInput, events: TeamCostGraphEvent[]) {
+  const recommendationId = input.resumeApproval?.recommendationId ?? firstRecommendationId(events)
+  if (input.resumeApproval) {
+    return {
+      status: input.resumeApproval.approved ? 'approved' as const : 'rejected' as const,
+      recommendationId,
+    }
+  }
+  return {
+    status: input.approvalMode === 'interrupt' && recommendationId ? 'pending' as const : 'not_required' as const,
+    recommendationId,
+  }
+}
+
+function checkpointDecisionDraft(events: TeamCostGraphEvent[]): Record<string, unknown> | null {
+  const event = events.find(item => item.type === 'decision_draft')
+  if (!event) return null
+  return {
+    message: event.message,
+    recommendationIds: event.recommendationIds,
+    riskCardIds: event.riskCardIds,
+    toolResultRefs: event.toolResultRefs,
+  }
+}
+
+function compactPreviousCheckpoint(previousCheckpoint: SupabaseCheckpointRecord | null): Record<string, unknown> | null {
+  if (!previousCheckpoint) return null
+  return {
+    workspaceId: previousCheckpoint.workspaceId,
+    threadId: previousCheckpoint.threadId,
+    checkpointId: previousCheckpoint.checkpointId,
+    status: previousCheckpoint.status,
+    graphState: {
+      workflowMode: previousCheckpoint.graphState.workflowMode ?? null,
+      llmMode: previousCheckpoint.graphState.llmMode ?? null,
+      approval: previousCheckpoint.graphState.approval ?? null,
+    },
+  }
+}
+
+function teamCostCheckpointGraphState(
+  input: TeamCostRuntimeInput,
+  events: TeamCostGraphEvent[],
+  llmMode: TeamCostLlmMode,
+  previousCheckpoint: SupabaseCheckpointRecord | null,
+): Record<string, unknown> {
+  return {
+    workflowMode: input.workflowMode,
+    resumeApproval: input.resumeApproval ?? null,
+    approval: checkpointApprovalState(input, events),
+    decisionDraft: checkpointDecisionDraft(events),
+    humanApproval: humanApprovalFromResume(input),
+    runtimeProof: teamCostRuntimeProof(input, llmMode),
+    previousCheckpoint: compactPreviousCheckpoint(previousCheckpoint),
+    events,
+    llmMode,
+  }
+}
+
 function emptyReportRun(
   period = new Date().toISOString().slice(0, 7),
   decisionIds: string[] = [],
@@ -767,8 +860,9 @@ export async function handleTeamCostAgentApi(
   const checkpointPersistence: CheckpointPersistence = supabaseCheckpointStore
     ? 'supabase'
     : store.persistence
+  let previousCheckpoint: SupabaseCheckpointRecord | null = null
   if (supabaseCheckpointStore && input.workspaceId && input.threadId && input.resumeApproval) {
-    await supabaseCheckpointStore.load({ workspaceId: input.workspaceId, threadId: input.threadId })
+    previousCheckpoint = await supabaseCheckpointStore.load({ workspaceId: input.workspaceId, threadId: input.threadId })
   }
   const { events, llmMode } = await runTeamCostAgentWithLlm(input, {
     env: contextEnv(context),
@@ -782,12 +876,7 @@ export async function handleTeamCostAgentApi(
       threadId: checkpoint.threadId,
       checkpointId: `checkpoint:${checkpoint.threadId}`,
       status: checkpoint.status === 'resumed' ? 'resumed' : 'interrupt_requested',
-      graphState: {
-        workflowMode: input.workflowMode,
-        resumeApproval: input.resumeApproval ?? null,
-        events,
-        llmMode,
-      },
+      graphState: teamCostCheckpointGraphState(input, events, llmMode, previousCheckpoint),
     })
   } else if (store.persistence === 'kv' && input.workspaceId) {
     await store.setJson(workspaceKey(input.workspaceId, `checkpoint:${checkpoint.threadId}`), checkpoint)

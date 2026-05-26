@@ -13,7 +13,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langchain.tools import tool
+from langgraph.types import Command
 
 from interpreter import has_uncited_numeric_claim
 from middleware import (
@@ -23,7 +25,7 @@ from middleware import (
     filter_tools_for_runtime_context,
     inspect_payload_for_secrets,
 )
-from schemas import AgenticEvent, AgentRunInput, AgentRunResponse, AgentRunRuntimeProof
+from schemas import AgentRunCheckpoint, AgenticEvent, AgentRunInput, AgentRunResponse, AgentRunRuntimeProof
 
 AGENT_SYSTEM_PROMPT = (
     "You are the agentic decision assistant for an AI Team Cost Decision Workspace. "
@@ -363,6 +365,7 @@ def _runtime_proof(
     agent_invocation_proof: Sequence[str] = (),
     fallback_reason: str | None = None,
     started_at: str | None = None,
+    checkpoint: AgentRunCheckpoint | None = None,
 ) -> AgentRunRuntimeProof:
     return AgentRunRuntimeProof(
         status=status,  # type: ignore[arg-type]
@@ -371,7 +374,63 @@ def _runtime_proof(
         fallbackReason=fallback_reason,
         startedAt=started_at or _utc_now(),
         completedAt=_utc_now(),
+        checkpoint=checkpoint,
     )
+
+
+def _checkpoint_thread_id(payload: AgentRunInput) -> str:
+    return payload.checkpointThreadId.strip() or f"thread-{datetime.now(UTC).date().isoformat()}"
+
+
+def _checkpoint_namespace(payload: AgentRunInput) -> str:
+    return payload.checkpointNamespace.strip() or "agent_service"
+
+
+def _checkpoint_for(
+    payload: AgentRunInput,
+    *,
+    status: str,
+    persistence: str = "not_configured",
+    interrupt_id: str | None = None,
+    reason: str = "",
+) -> AgentRunCheckpoint | None:
+    if not payload.hitlCheckpoint and not payload.resumeCheckpoint:
+        return None
+    thread_id = _checkpoint_thread_id(payload)
+    namespace = _checkpoint_namespace(payload)
+    return AgentRunCheckpoint(
+        persistence=persistence,
+        threadId=thread_id,
+        checkpointNamespace=namespace,
+        checkpointId=f"checkpoint:{namespace}:{thread_id}",
+        interruptId=interrupt_id,
+        status=status,
+        reason=reason,
+        resumePayload=payload.resumePayload if payload.resumeCheckpoint else {},
+    )
+
+
+def _checkpoint_config(payload: AgentRunInput) -> dict[str, Any] | None:
+    if not payload.hitlCheckpoint and not payload.resumeCheckpoint:
+        return None
+    return {
+        "configurable": {
+            "thread_id": _checkpoint_thread_id(payload),
+            "checkpoint_ns": _checkpoint_namespace(payload),
+        }
+    }
+
+
+def _extract_interrupt_id(result: Any) -> str | None:
+    if not isinstance(result, Mapping):
+        return None
+    interrupts = result.get("__interrupt__") or result.get("interrupts")
+    if not isinstance(interrupts, Sequence) or isinstance(interrupts, (str, bytes)):
+        return None
+    first = interrupts[0] if interrupts else None
+    if isinstance(first, Mapping):
+        return str(first.get("id") or "interrupt:supervisor-tools")
+    return "interrupt:supervisor-tools" if first else None
 
 
 def _known_agent_ids(operating_agents: Sequence[Mapping[str, Any]] | None = None) -> list[str]:
@@ -512,6 +571,12 @@ def _fallback_response(
         runtime=_runtime_proof(
             status="unavailable",
             fallback_reason=fallback_reason,
+            checkpoint=_checkpoint_for(
+                payload,
+                status="not_required",
+                persistence="not_configured",
+                reason=fallback_reason,
+            ),
         ),
         supervisorSummary=(
             f"Agent runtime unavailable; routed agents were {routed_label}, but no call_*_agent tool was invoked."
@@ -1431,12 +1496,67 @@ def _supervisor_system_prompt(payload: AgentRunInput, route: Mapping[str, Any]) 
     )
 
 
+def _interrupt_response(
+    *,
+    payload: AgentRunInput,
+    route: Mapping[str, Any],
+    interrupt_id: str,
+) -> AgentRunResponse:
+    refs = _refs_from_tool_results(payload.toolResults)
+    checkpoint = _checkpoint_for(
+        payload,
+        status="interrupt_requested",
+        persistence="memory",
+        interrupt_id=interrupt_id,
+        reason="approval_required_before_operating_agent_tools",
+    )
+    return AgentRunResponse(
+        events=[
+            AgenticEvent(
+                type="interrupt_requested",
+                message="Human approval is required before delegated operating agents run.",
+                agentId=None,
+                calledAgentTool=None,
+                stance="caution",
+                toolResultRefs=refs,
+                riskCardIds=[str(card.get("id")) for card in payload.riskCards if card.get("id")],
+            )
+        ],
+        answer="Paused for human approval before delegated operating agent tools run.",
+        report="Checkpoint interrupt requested; no delegated operating agent result has been executed yet.",
+        llmMode="provider-llm",
+        runtime=_runtime_proof(
+            status="interrupt_requested",
+            agent_invocation_proof=[],
+            checkpoint=checkpoint,
+        ),
+        supervisorSummary="Supervisor paused before call_*_agent tools.",
+        disagreements=[],
+        decisionReadiness="needs_review",
+        nextQuestions=["Should a human approve, reject, or hold this operating-agent delegation?"],
+        calledAgentIds=[],
+        primaryAgentId=None,
+        reviewerAgentIds=[],
+        agentRoute={**dict(route), "checkpointInterrupted": True, "calledAgentIds": []},
+        snapshotVersion=payload.snapshotVersion,
+        usedTools=[],
+        toolResultRefs=refs,
+        riskCardIds=[str(card.get("id")) for card in payload.riskCards if card.get("id")],
+        decisionIds=[],
+        evidenceRefs=[],
+        evidenceCoverage=_build_evidence_coverage(payload),
+        assetRefs=_payload_asset_refs(payload),
+        warnings=["human approval required before delegated operating agent tools"],
+    )
+
+
 def _run_supervisor_agent_as_tool(
     *,
     payload: AgentRunInput,
     route: Mapping[str, Any],
     model: Any,
     agent_factory: Callable[..., Any],
+    checkpointer: Any | None = None,
 ) -> AgentRunResponse:
     called_responses: dict[str, AgentRunResponse] = {}
 
@@ -1465,15 +1585,28 @@ def _run_supervisor_agent_as_tool(
         build_operating_agent_call_tools(payload, agent_runner=run_called_agent),
         supervisor_context,
     )
+    supervisor_middleware = build_agent_middleware(supervisor_context)
+    supervisor_kwargs: dict[str, Any] = {}
+    if payload.hitlCheckpoint or payload.resumeCheckpoint:
+        supervisor_kwargs["checkpointer"] = checkpointer
+        if payload.hitlCheckpoint and not payload.resumeCheckpoint:
+            supervisor_kwargs["interrupt_before"] = ["tools"]
+            supervisor_middleware = [
+                *supervisor_middleware,
+                HumanInTheLoopMiddleware(
+                    interrupt_on={tool_name: True for tool_name in supervisor_allowed_tools},
+                ),
+            ]
     supervisor = agent_factory(
         model=model,
         tools=supervisor_tools,
         context_schema=LangChainRuntimeContext,
-        middleware=build_agent_middleware(supervisor_context),
+        middleware=supervisor_middleware,
         response_format=AgentRunResponse,
         system_prompt=_supervisor_system_prompt(payload, route),
+        **supervisor_kwargs,
     )
-    supervisor.invoke({
+    invoke_payload: Any = {
         "messages": [
             {
                 "role": "user",
@@ -1489,7 +1622,17 @@ def _run_supervisor_agent_as_tool(
                 }),
             }
         ]
-    }, context=supervisor_context)
+    }
+    if payload.resumeCheckpoint:
+        invoke_payload = Command(resume=payload.resumePayload)
+    invoke_kwargs: dict[str, Any] = {"context": supervisor_context}
+    config = _checkpoint_config(payload)
+    if config:
+        invoke_kwargs["config"] = config
+    supervisor_result = supervisor.invoke(invoke_payload, **invoke_kwargs)
+    interrupt_id = _extract_interrupt_id(supervisor_result)
+    if interrupt_id:
+        return _interrupt_response(payload=payload, route=route, interrupt_id=interrupt_id)
 
     required_agent_ids = (
         list(route["calledAgentIds"])
@@ -1590,15 +1733,22 @@ def _merge_agent_responses(
         if event.calledAgentTool
     ])
     provider_run_id = f"agent-service:{payload.snapshotVersion or 'snapshot'}:{','.join(called_agent_ids) or 'no-agent'}"
+    runtime_status = "resumed" if payload.resumeCheckpoint else "provider_llm"
     return AgentRunResponse(
         events=events,
         answer=primary_response.answer or f"Operating team answer is grounded in {', '.join(refs) or 'deterministic snapshot'}.",
         report="\n".join(response.report for response in responses if response.report) or primary_response.report,
         llmMode="provider-llm",
         runtime=_runtime_proof(
-            status="provider_llm",
+            status=runtime_status,
             provider_run_id=provider_run_id,
             agent_invocation_proof=agent_invocation_proof,
+            checkpoint=_checkpoint_for(
+                payload,
+                status="resumed" if payload.resumeCheckpoint else "not_required",
+                persistence="memory" if payload.hitlCheckpoint or payload.resumeCheckpoint else "not_configured",
+                reason="resume_approved" if payload.resumeCheckpoint else "",
+            ),
         ),
         **supervisor,
         calledAgentIds=called_agent_ids,
@@ -1622,6 +1772,7 @@ def run_agentic_runtime(
     *,
     model=None,
     agent_factory: Callable[..., Any] = create_agent,
+    checkpointer: Any | None = None,
 ) -> AgentRunResponse:
     refs = _refs_from_tool_results(payload.toolResults)
     route = route_operating_agents(
@@ -1637,12 +1788,15 @@ def run_agentic_runtime(
         return _fallback_response(payload, list(guard.warnings), fallback_reason=guard.fallbackReason or "guardrail_rejected")
     if model is None:
         return _fallback_response(payload, fallback_reason="provider_unavailable")
+    if (payload.hitlCheckpoint or payload.resumeCheckpoint) and checkpointer is None:
+        return _fallback_response(payload, fallback_reason="checkpoint_not_configured")
 
     response = _run_supervisor_agent_as_tool(
         payload=payload,
         route=route,
         model=model,
         agent_factory=agent_factory,
+        checkpointer=checkpointer,
     )
     warnings = _validate_grounding(response, refs)
     if warnings:

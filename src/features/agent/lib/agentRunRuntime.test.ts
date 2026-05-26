@@ -136,6 +136,89 @@ describe('runAgentRuntime', () => {
     expect(result.decisionReadiness).toBe('ready')
   })
 
+  it('passes HITL checkpoint request fields and preserves interrupt runtime proof', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      events: [{
+        type: 'interrupt_requested',
+        message: 'Human approval required before delegated agent tools run.',
+        calledAgentTool: null,
+        toolResultRefs: ['tool:monthlyAiCogs'],
+        riskCardIds: [],
+      }],
+      answer: 'Paused for approval.',
+      report: 'Paused before delegated agent tools.',
+      llmMode: 'provider-llm',
+      runtime: {
+        status: 'interrupt_requested',
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:01.000Z',
+        agentInvocationProof: [],
+        checkpoint: {
+          persistence: 'memory',
+          threadId: 'thread-hitl-1',
+          checkpointNamespace: 'agentpayroll',
+          checkpointId: 'checkpoint:agentpayroll:thread-hitl-1',
+          interruptId: 'interrupt:supervisor-tools',
+          status: 'interrupt_requested',
+          reason: 'approval_required',
+          resumePayload: {},
+        },
+      },
+      supervisorSummary: 'Paused before operating agent delegation.',
+      disagreements: [],
+      decisionReadiness: 'needs_review',
+      nextQuestions: ['Approve, reject, or hold?'],
+      calledAgentIds: [],
+      primaryAgentId: null,
+      reviewerAgentIds: [],
+      agentRoute: { executionMode: 'stage_committee', reason: 'checkpoint interrupt' },
+      snapshotVersion: 'snapshot:hitl',
+      usedTools: [],
+      toolResultRefs: ['tool:monthlyAiCogs'],
+      riskCardIds: [],
+      decisionIds: [],
+      evidenceRefs: [],
+      warnings: [],
+    }), { status: 200 }))
+
+    const result = await runAgentRuntime({
+      mode: 'decision_support',
+      activeStage: 'decision-log',
+      question: 'Pause before agent delegation.',
+      executionMode: 'stage_committee',
+      snapshotVersion: 'snapshot:hitl',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+      hitlCheckpoint: true,
+      checkpointThreadId: 'thread-hitl-1',
+      checkpointNamespace: 'agentpayroll',
+    }, { runtime: 'server', fetcher })
+
+    const [, requestInit] = fetcher.mock.calls[0]
+    expect(JSON.parse(String(requestInit?.body))).toMatchObject({
+      hitlCheckpoint: true,
+      checkpointThreadId: 'thread-hitl-1',
+      checkpointNamespace: 'agentpayroll',
+    })
+    expect(result.llmMode).toBe('provider-llm')
+    expect(result.runtime.status).toBe('interrupt_requested')
+    expect(result.runtime.agentInvocationProof).toEqual([])
+    expect(result.runtime.checkpoint).toMatchObject({
+      threadId: 'thread-hitl-1',
+      status: 'interrupt_requested',
+      interruptId: 'interrupt:supervisor-tools',
+    })
+    expect(result.calledAgentIds).toEqual([])
+    expect(result.events[0].calledAgentTool).toBeNull()
+  })
+
   it('merges fallback route metadata into partial provider responses', async () => {
     const result = await runAgentRuntime({
       mode: 'ask',
@@ -320,6 +403,41 @@ describe('runAgentRuntime', () => {
     expect(result.snapshotVersion).toBe('snapshot:fallback')
     expect(result.supervisorSummary).toContain('unavailable')
     expect(result.decisionReadiness).toBe('needs_review')
+  })
+
+  it('does not claim a HITL checkpoint interrupt when the server runtime falls back', async () => {
+    const result = await runAgentRuntime({
+      mode: 'decision_support',
+      activeStage: 'decision-log',
+      question: 'Pause before agent delegation.',
+      executionMode: 'stage_committee',
+      snapshotVersion: 'snapshot:fallback-hitl',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+      hitlCheckpoint: true,
+      checkpointThreadId: 'thread-fallback-hitl',
+      checkpointNamespace: 'agentpayroll',
+    }, {
+      runtime: 'server',
+      fetcher: vi.fn(async () => new Response(JSON.stringify({ error: 'down' }), { status: 503 })),
+    })
+
+    expect(result.llmMode).toBe('deterministic-fallback')
+    expect(result.runtime.status).toBe('unavailable')
+    expect(result.runtime.checkpoint).toMatchObject({
+      persistence: 'not_configured',
+      threadId: 'thread-fallback-hitl',
+      status: 'not_required',
+      reason: expect.stringContaining('503'),
+    })
+    expect(result.runtime.checkpoint?.interruptId).toBeNull()
   })
 
   it('adds Trust/Security reviewer when snapshot has blocking trust warnings', async () => {

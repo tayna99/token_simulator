@@ -126,6 +126,28 @@ class SupervisorToolCallingAgent:
         }
 
 
+class InterruptingSupervisorFactory(SupervisorToolCallingFactory):
+    def __call__(self, **kwargs):
+        tools = kwargs["tools"]
+        self.factory_kwargs.append(kwargs)
+        return InterruptingSupervisorAgent(tools, self)
+
+
+class InterruptingSupervisorAgent:
+    def __init__(self, tools, factory):
+        self.tools = tools
+        self.factory = factory
+
+    def invoke(self, payload, **kwargs):
+        self.factory.invoke_kwargs.append(kwargs)
+        tool_names = [tool.name for tool in self.tools]
+        if any(name.startswith("call_") for name in tool_names):
+            self.factory.supervisor_tool_names = tool_names
+            return {"__interrupt__": [{"id": "interrupt:supervisor-tools", "value": {"reason": "approval_required"}}]}
+        self.factory.agent_tool_names.append(tool_names)
+        return {"structured_response": {"events": [], "toolResultRefs": ["tool:monthlyAiCogs"], "warnings": []}}
+
+
 def test_agent_tool_registry_is_read_only_and_extensible():
     tools = build_agent_tools(
         tool_results={"monthlyAiCogs": 4820},
@@ -589,6 +611,130 @@ def test_supervisor_provider_path_calls_operating_agent_tools():
     assert result.decisionReadiness == "ready"
 
 
+def test_hitl_create_agent_receives_checkpointer_and_interrupt_before_only_for_supervisor():
+    factory = SupervisorToolCallingFactory()
+    checkpointer = object()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            question="Prepare checkpointed review.",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:hitl",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            hitlCheckpoint=True,
+            checkpointThreadId="thread-hitl-1",
+        ),
+        model=object(),
+        agent_factory=factory,
+        checkpointer=checkpointer,
+    )
+
+    assert result.runtime.status == "provider_llm"
+    supervisor_kwargs = factory.factory_kwargs[0]
+    child_kwargs = factory.factory_kwargs[1:]
+    assert supervisor_kwargs["checkpointer"] is checkpointer
+    assert supervisor_kwargs["interrupt_before"] == ["tools"]
+    assert all("interrupt_before" not in kwargs for kwargs in child_kwargs)
+    assert all("checkpointer" not in kwargs for kwargs in child_kwargs)
+    assert factory.invoke_kwargs[0]["config"]["configurable"]["thread_id"] == "thread-hitl-1"
+
+
+def test_hitl_checkpoint_requires_injected_checkpointer_before_provider_invocation():
+    class RaisingFactory:
+        def __call__(self, **kwargs):
+            raise AssertionError("provider should not be invoked without configured HITL checkpointer")
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            question="Prepare checkpointed review.",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:hitl",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            hitlCheckpoint=True,
+            checkpointThreadId="thread-hitl-missing",
+        ),
+        model=object(),
+        agent_factory=RaisingFactory(),
+    )
+
+    assert result.llmMode == "deterministic-fallback"
+    assert result.runtime.status == "unavailable"
+    assert result.runtime.fallbackReason == "checkpoint_not_configured"
+    assert result.runtime.checkpoint is not None
+    assert result.runtime.checkpoint.status == "not_required"
+    assert result.runtime.checkpoint.persistence == "not_configured"
+    assert result.runtime.checkpoint.reason == "checkpoint_not_configured"
+    assert result.calledAgentIds == []
+
+
+def test_provider_hitl_checkpoint_interrupt_does_not_mark_agent_calls_executed():
+    factory = InterruptingSupervisorFactory()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="decision_support",
+            activeStage="decision-log",
+            question="Pause before delegated operating agents.",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:interrupt",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            hitlCheckpoint=True,
+            checkpointThreadId="thread-interrupt-1",
+            checkpointNamespace="agentpayroll",
+        ),
+        model=object(),
+        agent_factory=factory,
+        checkpointer=object(),
+    )
+
+    assert result.llmMode == "provider-llm"
+    assert result.runtime.status == "interrupt_requested"
+    assert result.runtime.agentInvocationProof == []
+    assert result.runtime.checkpoint is not None
+    assert result.runtime.checkpoint.threadId == "thread-interrupt-1"
+    assert result.runtime.checkpoint.status == "interrupt_requested"
+    assert result.calledAgentIds == []
+    assert result.primaryAgentId is None
+    assert result.events[0].type == "interrupt_requested"
+    assert result.events[0].calledAgentTool is None
+
+
+def test_provider_hitl_resume_marks_resumed_after_agent_call():
+    factory = SupervisorToolCallingFactory()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="decision_support",
+            activeStage="cost",
+            question="Resume the checkpointed review.",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:resume",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+            hitlCheckpoint=True,
+            checkpointThreadId="thread-resume-1",
+            resumeCheckpoint=True,
+            resumePayload={"approved": True, "reason": "Approved by operator"},
+        ),
+        model=object(),
+        agent_factory=factory,
+        checkpointer=object(),
+    )
+
+    assert result.runtime.status == "resumed"
+    assert result.runtime.checkpoint is not None
+    assert result.runtime.checkpoint.status == "resumed"
+    assert result.runtime.agentInvocationProof == ["call_cost_modeling_agent"]
+    assert result.calledAgentIds == ["cost_modeling"]
+
+
 def test_runtime_context_does_not_allow_requested_agent_to_escape_permission_matrix():
     fake_agent = FakeAgent()
 
@@ -774,6 +920,35 @@ def test_agentic_runtime_secret_guard_blocks_provider_invocation():
     assert result.llmMode == "deterministic-fallback"
     assert result.runtime.status == "unavailable"
     assert result.runtime.fallbackReason == "guardrail_rejected"
+    assert "secret_like_text" in result.warnings
+
+
+def test_agentic_runtime_secret_guard_does_not_claim_hitl_checkpoint_interrupt():
+    class RaisingFactory:
+        def __call__(self, **kwargs):
+            raise AssertionError("provider should not be invoked for unsafe payload")
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            question="Analyze sk-live-secret-1234567890 before writing the report.",
+            toolResults={"monthlyAiCogs": 4820},
+            hitlCheckpoint=True,
+            checkpointThreadId="thread-unsafe-hitl",
+        ),
+        model=object(),
+        agent_factory=RaisingFactory(),
+        checkpointer=object(),
+    )
+
+    assert result.llmMode == "deterministic-fallback"
+    assert result.runtime.status == "unavailable"
+    assert result.runtime.fallbackReason == "guardrail_rejected"
+    assert result.runtime.checkpoint is not None
+    assert result.runtime.checkpoint.status == "not_required"
+    assert result.runtime.checkpoint.persistence == "not_configured"
+    assert result.runtime.checkpoint.reason == "guardrail_rejected"
     assert "secret_like_text" in result.warnings
 
 
