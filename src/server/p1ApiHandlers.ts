@@ -12,6 +12,10 @@ import { parseUsageCsv, type UsageImportSummary } from '../features/usage/lib/us
 import { validateUsageIngress, type TrustGateDecision } from '../features/trust/lib/securityMiddleware'
 import { buildOnePageReportArtifact, type OnePageReportArtifactInput } from '../features/report/lib/reportArtifacts'
 import type { DecisionChoice } from '../features/decision-loop/lib/decisionHeader'
+import {
+  normalizeHumanApprovalMetadata,
+  normalizeRuntimeProofMetadata,
+} from '../features/provenance/lib/runtimeApprovalMetadata'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { estimateAgentWorkload } from '../features/team-cost/lib/estimateAgentWorkload'
 import { normalizeDecisionRecord, type Decision } from '../features/decision-log/lib/decisionLog'
@@ -350,6 +354,8 @@ function reportFirstInputFromBody(body: unknown): OnePageReportArtifactInput | u
     snapshotVersion: stringValue(reportFirst.snapshotVersion) ?? undefined,
     decisionRefs: stringArray(reportFirst.decisionRefs),
     decisionChoice: decisionChoice(reportFirst.decisionChoice),
+    runtimeProof: normalizeRuntimeProofMetadata(reportFirst.runtimeProof) ?? undefined,
+    humanApproval: normalizeHumanApprovalMetadata(reportFirst.humanApproval) ?? undefined,
   }
 }
 

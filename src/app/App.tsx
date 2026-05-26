@@ -44,6 +44,7 @@ import { buildAgentSnapshot } from '../features/agent/lib/buildAgentSnapshot'
 import { OperatingTeamPanel } from '../features/agent/components/OperatingTeamPanel'
 import { FrontOperatingPanel } from '../features/front-operating/components/FrontOperatingPanel'
 import { createDecision, createOperatingLedgerEntry, deleteDecision, exportDecisionLogFileName, loadDecisionLog, saveDecisionLog, serializeDecisionLog, type Decision, type OperatingDecisionKind, type ReportReviewMetadata, type TrustReviewMetadata } from '../features/decision-log/lib/decisionLog'
+import type { RuntimeProofMetadata } from '../features/provenance/lib/runtimeApprovalMetadata'
 import { createRemoteDecisionStore } from '../features/decision-log/lib/decisionStore'
 import { DEFAULT_AI_TEAM_AGENTS, type AITeamConfiguration } from '../features/team/lib/aiTeamConfiguration'
 import { TeamDesignerPanel } from '../features/team/components/TeamDesignerPanel'
@@ -1104,6 +1105,17 @@ function OnePageReportPanel({
 }) {
   const dataLimitations = trustInspection?.analysisScope.blocked ?? ['raw prompt was not collected']
   const exportGate = canExportOnePageReport(decisions)
+  const reportDecision = exportGate.decisionId
+    ? decisions.find(decision => decision.id === exportGate.decisionId)
+    : undefined
+  const runtimeProof = reportDecision?.runtimeProof ?? {
+    status: agentRun.runtime.status,
+    ...(agentRun.runtime.status === 'provider_llm' && agentRun.runtime.providerRunId ? { providerRunId: agentRun.runtime.providerRunId } : {}),
+    agentInvocationProof: agentRun.runtime.status === 'provider_llm' ? agentRun.runtime.agentInvocationProof ?? [] : [],
+    ...(agentRun.runtime.fallbackReason ? { fallbackReason: agentRun.runtime.fallbackReason } : {}),
+    startedAt: agentRun.runtime.startedAt,
+    completedAt: agentRun.runtime.completedAt,
+  }
   const onePageReport = buildOnePageReportArtifact({
     title: 'SparkClaw AI Cost Snapshot',
     executiveSummary: 'AI COGS is concentrated in the highest-volume AI team work and requires a human operating decision.',
@@ -1127,6 +1139,8 @@ function OnePageReportPanel({
     snapshotVersion,
     decisionRefs: decisions.map(decision => decision.id),
     decisionChoice: exportGate.decisionChoice,
+    runtimeProof,
+    humanApproval: reportDecision?.humanApproval,
     rateCardDraft,
     pricingFreshness,
   })
@@ -3193,6 +3207,7 @@ function App() {
     rateCardDraft: primaryRateCardDraft,
     pricingFreshnessSnapshot,
     aiMode: teamCostLlmMode === 'provider-llm' ? 'llm_assisted' as const : 'deterministic_fallback' as const,
+    runtimeProof: runtimeProofSnapshot(),
   })
 
   const trustReviewSnapshot = (summary: UsageImportSummary | null = importedUsage): TrustReviewMetadata => ({
@@ -3206,6 +3221,15 @@ function App() {
     noUncitedNumbers: true,
     providerSourceVisible: currentFactSources.length > 0,
     formulaVersionVisible: true,
+  })
+
+  const runtimeProofSnapshot = (): RuntimeProofMetadata => ({
+    status: agentRun.runtime.status,
+    ...(agentRun.runtime.status === 'provider_llm' && agentRun.runtime.providerRunId ? { providerRunId: agentRun.runtime.providerRunId } : {}),
+    agentInvocationProof: agentRun.runtime.status === 'provider_llm' ? agentRun.runtime.agentInvocationProof ?? [] : [],
+    ...(agentRun.runtime.fallbackReason ? { fallbackReason: agentRun.runtime.fallbackReason } : {}),
+    startedAt: agentRun.runtime.startedAt,
+    completedAt: agentRun.runtime.completedAt,
   })
 
   const decisionReviewMetadata = (summary: UsageImportSummary | null = importedUsage) => ({
@@ -3744,6 +3768,9 @@ function App() {
     if (typeof document === 'undefined') return
     const exportGate = canExportOnePageReport(decisions)
     if (!exportGate.allowed) return
+    const reportDecision = exportGate.decisionId
+      ? decisions.find(decision => decision.id === exportGate.decisionId)
+      : undefined
     const report = buildOnePageReportArtifact({
       title: 'SparkClaw AI Team Cost Decision Report',
       executiveSummary: agentRun.supervisorSummary || agentRun.report,
@@ -3767,6 +3794,8 @@ function App() {
       snapshotVersion: agentSnapshot.snapshotVersion,
       decisionRefs: decisions.map(decision => decision.id),
       decisionChoice: exportGate.decisionChoice,
+      runtimeProof: reportDecision?.runtimeProof ?? runtimeProofSnapshot(),
+      humanApproval: reportDecision?.humanApproval,
       rateCardDraft: primaryRateCardDraft,
       pricingFreshness: pricingFreshnessSnapshot,
     })

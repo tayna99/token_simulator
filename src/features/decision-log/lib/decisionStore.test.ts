@@ -29,6 +29,8 @@ describe('createRemoteDecisionStore', () => {
         agentReview: null,
         trustReview: null,
         reportReview: null,
+        runtimeProof: null,
+        humanApproval: null,
       },
     ])
 

@@ -127,6 +127,49 @@ describe('buildReportArtifact', () => {
     expect(report.markdown).toContain('Source Changed')
   })
 
+  it('includes runtime proof and human approval metadata without inventing provider backing', () => {
+    const report = buildOnePageReportArtifact({
+      title: 'AgentPayroll AI Cost Snapshot',
+      executiveSummary: 'The deterministic snapshot found a margin leak.',
+      metrics: [{ label: 'AI COGS', value: '$612' }],
+      recommendations: ['Hold routing until quality validation is complete.'],
+      risks: ['Provider runtime was unavailable.'],
+      refs: ['tool:diagnosis.policy_candidate'],
+      trust: {
+        status: 'ready',
+        dataLimitations: [],
+        retentionNote: 'No raw prompt stored.',
+      },
+      formulaVersion: 'cost_formula_v0.3',
+      providerRegistryVersion: 'provider_registry_v0.4',
+      decisionRefs: ['decision:diagnosis:model-routing'],
+      decisionChoice: 'hold',
+      runtimeProof: {
+        status: 'deterministic_preview',
+        agentInvocationProof: [],
+        fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:01.000Z',
+      },
+      humanApproval: {
+        required: true,
+        decisionChoice: 'hold',
+        approvedBy: 'workspace_user',
+        approvedAt: '2026-05-26T00:00:02.000Z',
+        approvalMode: 'explicit_button',
+      },
+    })
+
+    expect(report.markdown).toContain('Runtime proof')
+    expect(report.markdown).toContain('Runtime status: deterministic_preview')
+    expect(report.markdown).toContain('Provider run id: none')
+    expect(report.markdown).toContain('Fallback reason: money_leak_run_deterministic_snapshot_only')
+    expect(report.markdown).toContain('Human approval')
+    expect(report.markdown).toContain('Approval required: true')
+    expect(report.markdown).toContain('Approved by: workspace_user')
+    expect(report.markdown).toContain('Approval mode: explicit_button')
+  })
+
   it('keeps empty selected-decision content in Money Leak Run language', () => {
     const report = buildOnePageReportArtifact({
       title: 'AgentPayroll AI 비용 진단 리포트',

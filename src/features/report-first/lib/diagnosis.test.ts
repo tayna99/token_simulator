@@ -126,6 +126,17 @@ describe('buildDiagnosisSnapshot', () => {
 
     expect(payload.decisionRefs).toEqual(['decision:diagnosis:pricing-policy'])
     expect(payload.decisionChoice).toBe('adopt')
+    expect(payload.humanApproval).toMatchObject({
+      required: true,
+      decisionChoice: 'adopt',
+      approvedBy: 'workspace_user',
+      approvalMode: 'explicit_button',
+    })
+    expect(payload.runtimeProof).toMatchObject({
+      status: 'deterministic_preview',
+      fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+      agentInvocationProof: [],
+    })
     expect(payload.recommendations[0]).toMatch(/gross margin|정책|요금제/)
   })
 

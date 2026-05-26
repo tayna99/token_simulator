@@ -326,6 +326,20 @@ describe('Supabase production store', () => {
       agentReview: null,
       trustReview: null,
       reportReview: null,
+      runtimeProof: {
+        status: 'provider_llm',
+        providerRunId: 'run:decision-history',
+        agentInvocationProof: ['call_pricing_revenue_ops_agent'],
+        startedAt: '2026-05-25T00:00:00.000Z',
+        completedAt: '2026-05-25T00:00:01.000Z',
+      },
+      humanApproval: {
+        required: true,
+        decisionChoice: 'adopt',
+        approvedBy: 'workspace_user',
+        approvedAt: '2026-05-25T00:00:02.000Z',
+        approvalMode: 'explicit_button',
+      },
     }])
     const listed = await store.list('workspace-demo')
 
@@ -334,8 +348,13 @@ describe('Supabase production store', () => {
     expect(JSON.parse(String(decisionUpsert?.init.body))[0]).toMatchObject({
       workspace_id: 'workspace-demo',
       id: 'decision-1',
+      decision_payload: expect.objectContaining({
+        runtimeProof: expect.objectContaining({ providerRunId: 'run:decision-history' }),
+        humanApproval: expect.objectContaining({ decisionChoice: 'adopt' }),
+      }),
     })
-    expect(JSON.parse(String(ragUpsert?.init.body))[0]).toMatchObject({
+    const ragPayload = JSON.parse(String(ragUpsert?.init.body))[0]
+    expect(ragPayload).toMatchObject({
       workspace_id: 'workspace-demo',
       collection: 'decision_history',
       source_id: 'decision-1',
@@ -345,6 +364,9 @@ describe('Supabase production store', () => {
         mayOverrideFacts: false,
       }),
     })
+    expect(ragPayload.text).toContain('Runtime status: provider_llm')
+    expect(ragPayload.text).toContain('Provider run id: run:decision-history')
+    expect(ragPayload.text).toContain('Human approval: adopt by workspace_user')
     expect(listed[0]).toMatchObject({ id: 'decision-1', status: 'adopted' })
   })
 

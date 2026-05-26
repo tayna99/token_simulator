@@ -4,6 +4,13 @@ import type { TrustWarning } from '../../trust/lib/dataIntakePolicy'
 import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
 import type { PricingFreshnessBadge } from '../../facts/lib/pricingFreshness'
 import type { RateCardDraft } from '../../pricing/lib/rateCardDraft'
+import {
+  humanApprovalFromDecisionChoice,
+  normalizeHumanApprovalMetadata,
+  normalizeRuntimeProofMetadata,
+  type HumanApprovalMetadata,
+  type RuntimeProofMetadata,
+} from '../../provenance/lib/runtimeApprovalMetadata'
 
 export type DecisionStatus = 'adopted' | 'rejected' | 'held' | 'superseded'
 export type OperatingDecisionKind = 'approve' | 'automate' | 'authority' | 'policy' | 'attribution' | 'ownership'
@@ -63,6 +70,8 @@ export interface DecisionInput {
   agentReview?: AgentReviewMetadata | null
   trustReview?: TrustReviewMetadata | null
   reportReview?: ReportReviewMetadata | null
+  runtimeProof?: RuntimeProofMetadata | null
+  humanApproval?: HumanApprovalMetadata | null
 }
 
 export interface Decision extends DecisionInput {
@@ -81,6 +90,8 @@ export interface Decision extends DecisionInput {
   agentReview: AgentReviewMetadata | null
   trustReview: TrustReviewMetadata | null
   reportReview: ReportReviewMetadata | null
+  runtimeProof: RuntimeProofMetadata | null
+  humanApproval: HumanApprovalMetadata | null
 }
 
 const STORAGE_KEY = 'token-simulator:decision-log'
@@ -107,6 +118,13 @@ export function createDecision(input: DecisionInput): Decision {
   }
 
   const createdAt = input.createdAt ?? new Date().toISOString()
+  const decisionChoice = input.decisionChoice ?? null
+  const runtimeProof = input.runtimeProof ? normalizeRuntimeProofMetadata(input.runtimeProof) : null
+  const humanApproval = input.humanApproval
+    ? normalizeHumanApprovalMetadata(input.humanApproval)
+    : decisionChoice
+      ? humanApprovalFromDecisionChoice(decisionChoice, createdAt)
+      : null
   return {
     ...input,
     kind: input.kind ?? 'approve',
@@ -116,7 +134,7 @@ export function createDecision(input: DecisionInput): Decision {
     costSnapshot: input.costSnapshot ?? {},
     thresholdSnapshot: input.thresholdSnapshot ?? {},
     factSourceSnapshot: input.factSourceSnapshot ?? [],
-    decisionChoice: input.decisionChoice ?? null,
+    decisionChoice,
     rateCardDraft: input.rateCardDraft ?? null,
     pricingFreshnessSnapshot: input.pricingFreshnessSnapshot ?? [],
     aiMode: input.aiMode ?? 'unknown',
@@ -124,6 +142,8 @@ export function createDecision(input: DecisionInput): Decision {
     agentReview: input.agentReview ?? null,
     trustReview: input.trustReview ?? null,
     reportReview: input.reportReview ?? null,
+    runtimeProof,
+    humanApproval,
   }
 }
 
@@ -232,6 +252,14 @@ function isReportReviewMetadata(value: unknown): value is ReportReviewMetadata {
     && typeof value.formulaVersionVisible === 'boolean'
 }
 
+function isRuntimeProofMetadata(value: unknown): value is RuntimeProofMetadata {
+  return normalizeRuntimeProofMetadata(value) !== null
+}
+
+function isHumanApprovalMetadata(value: unknown): value is HumanApprovalMetadata {
+  return normalizeHumanApprovalMetadata(value) !== null
+}
+
 function isDecision(value: unknown): value is DecisionInput & { id: string; createdAt: string } {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<Decision>
@@ -255,9 +283,14 @@ function isDecision(value: unknown): value is DecisionInput & { id: string; crea
     && (!('agentReview' in candidate) || candidate.agentReview === null || isAgentReviewMetadata(candidate.agentReview))
     && (!('trustReview' in candidate) || candidate.trustReview === null || isTrustReviewMetadata(candidate.trustReview))
     && (!('reportReview' in candidate) || candidate.reportReview === null || isReportReviewMetadata(candidate.reportReview))
+    && (!('runtimeProof' in candidate) || candidate.runtimeProof === null || isRuntimeProofMetadata(candidate.runtimeProof))
+    && (!('humanApproval' in candidate) || candidate.humanApproval === null || isHumanApprovalMetadata(candidate.humanApproval))
 }
 
 function normalizeDecision(decision: DecisionInput & { id: string; createdAt: string }): Decision {
+  const decisionChoice = isDecisionChoice(decision.decisionChoice) ? decision.decisionChoice : null
+  const runtimeProof = normalizeRuntimeProofMetadata(decision.runtimeProof)
+  const humanApproval = normalizeHumanApprovalMetadata(decision.humanApproval)
   return {
     ...decision,
     kind: decision.kind ?? 'approve',
@@ -265,7 +298,7 @@ function normalizeDecision(decision: DecisionInput & { id: string; createdAt: st
     costSnapshot: isRecord(decision.costSnapshot) ? decision.costSnapshot : {},
     thresholdSnapshot: isRecord(decision.thresholdSnapshot) ? decision.thresholdSnapshot as Partial<ThresholdPolicy> : {},
     factSourceSnapshot: Array.isArray(decision.factSourceSnapshot) ? decision.factSourceSnapshot : [],
-    decisionChoice: isDecisionChoice(decision.decisionChoice) ? decision.decisionChoice : null,
+    decisionChoice,
     rateCardDraft: isRateCardDraft(decision.rateCardDraft) ? decision.rateCardDraft : null,
     pricingFreshnessSnapshot: Array.isArray(decision.pricingFreshnessSnapshot)
       ? decision.pricingFreshnessSnapshot.filter(isPricingFreshnessBadge)
@@ -275,6 +308,8 @@ function normalizeDecision(decision: DecisionInput & { id: string; createdAt: st
     agentReview: isAgentReviewMetadata(decision.agentReview) ? decision.agentReview : null,
     trustReview: isTrustReviewMetadata(decision.trustReview) ? decision.trustReview : null,
     reportReview: isReportReviewMetadata(decision.reportReview) ? decision.reportReview : null,
+    runtimeProof,
+    humanApproval: humanApproval ?? (decisionChoice ? humanApprovalFromDecisionChoice(decisionChoice, decision.createdAt) : null),
   }
 }
 

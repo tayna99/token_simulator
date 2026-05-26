@@ -278,6 +278,17 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(JSON.parse(String(reportCall?.[1]?.body)).reportFirst).toMatchObject({
       decisionRefs: ['decision:diagnosis:pricing-policy'],
       decisionChoice: 'adopt',
+      humanApproval: {
+        required: true,
+        decisionChoice: 'adopt',
+        approvedBy: 'workspace_user',
+        approvalMode: 'explicit_button',
+      },
+      runtimeProof: {
+        status: 'deterministic_preview',
+        fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+        agentInvocationProof: [],
+      },
     })
   })
 

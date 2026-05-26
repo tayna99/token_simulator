@@ -137,6 +137,8 @@ describe('P1 API handlers', () => {
             agentReview: null,
             trustReview: null,
             reportReview: null,
+            runtimeProof: null,
+            humanApproval: null,
           },
           created_at: '2026-05-25T00:00:00.000Z',
         }]), { status: 200 })
@@ -528,6 +530,20 @@ describe('P1 API handlers', () => {
         snapshotVersion: 'usage:p1:workspace-demo:2026-05',
         decisionRefs: ['decision:diagnosis:usage-limit'],
         decisionChoice: 'hold',
+        humanApproval: {
+          required: true,
+          decisionChoice: 'hold',
+          approvedBy: 'workspace_user',
+          approvedAt: '2026-05-26T00:00:00.000Z',
+          approvalMode: 'explicit_button',
+        },
+        runtimeProof: {
+          status: 'deterministic_preview',
+          agentInvocationProof: [],
+          fallbackReason: 'money_leak_run_deterministic_snapshot_only',
+          startedAt: '2026-05-26T00:00:00.000Z',
+          completedAt: '2026-05-26T00:00:01.000Z',
+        },
       },
     }, { store })
 
@@ -539,8 +555,12 @@ describe('P1 API handlers', () => {
     expect(pdf?.body).toContain('AgentPayroll AI 비용 진단 리포트')
     expect(markdown?.body).toContain('Selected Decision')
     expect(markdown?.body).toContain('Decision choice: hold')
+    expect(markdown?.body).toContain('Runtime status: deterministic_preview')
+    expect(markdown?.body).toContain('Approval required: true')
     expect(markdown?.body).toContain('Trust and data handling')
     expect(json?.body).toContain('usage:p1:workspace-demo:2026-05')
+    expect(json?.body).toContain('"humanApproval"')
+    expect(json?.body).toContain('"runtimeProof"')
   })
 
   it('runs and persists retention jobs for a workspace', async () => {

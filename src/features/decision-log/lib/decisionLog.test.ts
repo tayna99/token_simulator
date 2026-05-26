@@ -271,10 +271,50 @@ describe('decisionLog', () => {
     })
 
     expect(decision.decisionChoice).toBe('hold')
+    expect(decision.humanApproval).toMatchObject({
+      required: true,
+      decisionChoice: 'hold',
+      approvedBy: 'workspace_user',
+    })
+    expect(decision.humanApproval?.approvedAt).toBe(decision.createdAt)
     expect(decision.rateCardDraft?.status).toBe('draft')
     expect(decision.rateCardDraft?.executionMode).toBe('draft')
     expect(decision.pricingFreshnessSnapshot[0].state).toBe('source_changed')
+    expect(serializeDecisionLog([decision])).toContain('"humanApproval"')
     expect(serializeDecisionLog([decision])).toContain('"decisionChoice": "hold"')
+  })
+
+  it('stores runtime proof with human approval metadata for decision-backed reports', () => {
+    const decision = createDecision({
+      what: 'Adopt provider-backed routing recommendation',
+      why: 'Operating agents reviewed the deterministic snapshot and cited read-only tools.',
+      assumptions: {},
+      toolResultRefs: ['tool:monthlyAiCogs'],
+      riskCards: ['risk-model-routing-quality'],
+      status: 'adopted',
+      decisionChoice: 'adopt',
+      createdAt: '2026-05-26T00:00:00.000Z',
+      runtimeProof: {
+        status: 'provider_llm',
+        providerRunId: 'run:agentpayroll:001',
+        agentInvocationProof: ['call_optimization_routing_agent'],
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:02.000Z',
+      },
+    })
+
+    expect(decision.runtimeProof).toMatchObject({
+      status: 'provider_llm',
+      providerRunId: 'run:agentpayroll:001',
+      agentInvocationProof: ['call_optimization_routing_agent'],
+    })
+    expect(decision.humanApproval).toMatchObject({
+      required: true,
+      decisionChoice: 'adopt',
+      approvalMode: 'explicit_button',
+    })
+    expect(serializeDecisionLog([decision])).toContain('"runtimeProof"')
+    expect(serializeDecisionLog([decision])).toContain('"providerRunId": "run:agentpayroll:001"')
   })
 
   it('normalizes legacy decisions without trust or report review metadata', () => {
@@ -295,5 +335,7 @@ describe('decisionLog', () => {
     expect(decision.trustReview).toBeNull()
     expect(decision.reportReview).toBeNull()
     expect(decision.decisionChoice).toBeNull()
+    expect(decision.runtimeProof).toBeNull()
+    expect(decision.humanApproval).toBeNull()
   })
 })

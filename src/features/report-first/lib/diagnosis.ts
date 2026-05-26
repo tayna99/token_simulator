@@ -6,6 +6,10 @@ import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../../usage/data
 import { customerProfitability, heavyUserDetection, marginByPlan } from '../../unit-economics/lib/margin'
 import { calculatePricingScenario, type PricingPolicy, type ScenarioResult } from '../../pricing/lib/pricingScenario'
 import type { OnePageReportArtifactInput } from '../../report/lib/reportArtifacts'
+import {
+  deterministicPreviewRuntimeProof,
+  humanApprovalFromDecisionChoice,
+} from '../../provenance/lib/runtimeApprovalMetadata'
 
 export type MoneyLeakDecisionChoice = 'adopt' | 'reject' | 'hold'
 export type DiagnosisInsightKind = 'loss_customers' | 'margin_breaking_feature' | 'policy_candidate'
@@ -429,6 +433,8 @@ export function reportFirstPayloadFromDiagnosis(
     snapshotVersion: snapshot.snapshotRef ?? 'diagnosis_preview',
     decisionRefs: [candidate.id],
     decisionChoice,
+    runtimeProof: deterministicPreviewRuntimeProof(),
+    humanApproval: humanApprovalFromDecisionChoice(decisionChoice),
   }
 }
 

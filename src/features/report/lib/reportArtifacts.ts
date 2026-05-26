@@ -4,6 +4,7 @@ import { fmtCurrency, fmtTokens } from '../../../lib/format'
 import type { DecisionChoice } from '../../decision-loop/lib/decisionHeader'
 import type { PricingFreshnessBadge } from '../../facts/lib/pricingFreshness'
 import type { RateCardDraft } from '../../pricing/lib/rateCardDraft'
+import type { HumanApprovalMetadata, RuntimeProofMetadata } from '../../provenance/lib/runtimeApprovalMetadata'
 
 export interface ReportSection {
   title: string
@@ -49,6 +50,8 @@ export interface OnePageReportArtifactInput {
   snapshotVersion?: string
   decisionRefs?: string[]
   decisionChoice?: DecisionChoice
+  runtimeProof?: RuntimeProofMetadata | null
+  humanApproval?: HumanApprovalMetadata | null
   rateCardDraft?: RateCardDraft
   pricingFreshness?: PricingFreshnessBadge[]
 }
@@ -105,6 +108,7 @@ export function buildReportArtifact(input: ReportArtifactInput): ReportArtifact 
 }
 
 export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): OnePageReportArtifact {
+  const agentInvocationProof = input.runtimeProof?.agentInvocationProof ?? []
   const lines = [
     `# ${input.title}`,
     '',
@@ -118,6 +122,23 @@ export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): O
     ...(input.recommendations.length > 0 ? input.recommendations.map(item => `- ${item}`) : ['- No decision candidate selected.']),
     `- Decision choice: ${input.decisionChoice ?? 'not recorded'}`,
     ...(input.decisionRefs?.length ? input.decisionRefs.map(ref => `- Decision ref: ${ref}`) : ['- Decision ref: none']),
+    '',
+    '## Runtime proof',
+    `- Runtime status: ${input.runtimeProof?.status ?? 'not recorded'}`,
+    `- Provider run id: ${input.runtimeProof?.providerRunId ?? 'none'}`,
+    ...(agentInvocationProof.length
+      ? agentInvocationProof.map(ref => `- Agent invocation proof: ${ref}`)
+      : ['- Agent invocation proof: none']),
+    `- Fallback reason: ${input.runtimeProof?.fallbackReason ?? 'none'}`,
+    `- Started at: ${input.runtimeProof?.startedAt ?? 'not recorded'}`,
+    `- Completed at: ${input.runtimeProof?.completedAt ?? 'not recorded'}`,
+    '',
+    '## Human approval',
+    `- Approval required: ${input.humanApproval?.required ?? false}`,
+    `- Approval decision: ${input.humanApproval?.decisionChoice ?? input.decisionChoice ?? 'not recorded'}`,
+    `- Approved by: ${input.humanApproval?.approvedBy ?? 'not recorded'}`,
+    `- Approved at: ${input.humanApproval?.approvedAt ?? 'not recorded'}`,
+    `- Approval mode: ${input.humanApproval?.approvalMode ?? 'not recorded'}`,
     '',
     '## Risks and limitations',
     ...(input.risks.length > 0 ? input.risks.map(item => `- ${item}`) : ['- No risk cards attached.']),
