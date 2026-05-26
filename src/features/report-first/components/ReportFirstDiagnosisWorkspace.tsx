@@ -567,7 +567,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [needsCeoFinanceReport, setNeedsCeoFinanceReport] = useState(false)
   const [decisionOwnerConfirmed, setDecisionOwnerConfirmed] = useState(false)
   const [nextReviewDate, setNextReviewDate] = useState('')
-  const [decisionUrgency, setDecisionUrgency] = useState<DecisionUrgency>('pricing_or_margin_now')
+  const [decisionUrgency, setDecisionUrgency] = useState<DecisionUrgency>('none')
   const [pdcaAttributionAxes, setPdcaAttributionAxes] = useState<AgentPayrollIcpAxis[]>([])
 
   const request = useMemo(() => safeFetcher(fetcher), [fetcher])
