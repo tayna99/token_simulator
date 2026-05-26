@@ -14,7 +14,7 @@ import { parseUsageCsv } from '../../usage/lib/usageImport'
 import { buildDiagnosisSnapshot, buildMarginDiagnosisSummary, reportFirstPayloadFromDiagnosis } from './diagnosis'
 
 describe('buildDiagnosisSnapshot', () => {
-  it('summarizes the margin diagnosis as customer-safe findings and actions', () => {
+  it('summarizes the token leakage diagnosis as customer-safe findings and actions', () => {
     const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
@@ -33,7 +33,7 @@ describe('buildDiagnosisSnapshot', () => {
     expect(diagnosis.status).toBe('complete')
     expect(diagnosis.topLeak.title).toBe('토큰 누수 고객')
     expect(diagnosis.topLeak.plainLanguageSummary).toMatch(/tokens|미회수|고객/)
-    expect(diagnosis.marginBreakingFeature.title).toBe('토큰을 가장 많이 태우는 기능')
+    expect(diagnosis.marginBreakingFeature.title).toBe('token allowance 소진 기능')
     expect(diagnosis.recommendedDecision.title).toBe('Token policy 후보')
     expect(diagnosis.recommendedDecision.plainLanguageSummary).toMatch(/credit|cap|overage|routing|token/)
     expect(diagnosis.evidenceState).toBe('근거 있음')
@@ -67,8 +67,16 @@ describe('buildDiagnosisSnapshot', () => {
       'policy_candidate',
     ])
     expect(snapshot.insights[0].title).toBe('토큰 누수 고객')
-    expect(snapshot.insights[1].title).toBe('토큰을 태우는 기능')
+    expect(snapshot.insights[0].body).toContain('회수된 매출은 $29')
+    expect(snapshot.insights[0].body).toContain('AI token 원가는 $178')
+    expect(snapshot.insights[0].body).toContain('미회수 AI 원가 $149')
+    expect(snapshot.insights[1].title).toBe('token allowance 소진 기능')
+    expect(snapshot.insights[1].body).toContain('report_generation')
+    expect(snapshot.insights[1].body).toContain('전체 token 사용량의 44%')
+    expect(snapshot.insights[1].body).toContain('AI 원가 $225')
+    expect(snapshot.insights[1].body).toContain('포함 token allowance를 가장 빠르게 소진시키는 후보')
     expect(snapshot.insights[2].title).toBe('Token policy 후보')
+    expect(snapshot.insights[2].body).toContain('예상 회수 후보: $149')
     expect(snapshot.metrics.map(metric => metric.value).join(' ')).toContain('$')
     expect(snapshot.refs).toEqual(expect.arrayContaining([
       'tool:usage.import',
@@ -78,16 +86,28 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.decisionCandidates.length).toBeGreaterThanOrEqual(3)
     expect(snapshot.tokenLeakProof.topCustomer).toMatchObject({
       customerId: 'cust_001',
+      usedTokens: 630000,
       includedTokens: 185000,
       overageTokens: 445000,
+      aiCogsUsd: 178,
+      revenueCollectedUsd: 29,
+      unrecoveredCostUsd: 149,
     })
+    expect(snapshot.tokenLeakProof.topFeature).toMatchObject({
+      feature: 'report_generation',
+      usedTokens: 730000,
+      totalCostUsd: 225,
+    })
+    expect(snapshot.tokenLeakProof.topFeature?.shareOfTokens).toBeCloseTo(730000 / 1644000)
+    expect(snapshot.tokenLeakProof.topFeature?.shareOfCost).toBeCloseTo(225 / 444)
+    expect(snapshot.insights[1].body).not.toContain('Pro')
   })
 
-  it('builds buyer-facing ROI proof for monthly leak, heavy-user subsidy, and policy delta', () => {
+  it('builds buyer-facing ROI proof for unrecovered token COGS, heavy-user subsidy, and overage recovery', () => {
     const summary = parseUsageCsv([
-      'timestamp,request_id,customer_id,plan_id,feature,model,input_tokens,output_tokens,total_cost',
-      '2026-05-01,req_1,cus_loss,pro,rag_chat,claude-sonnet-4.6,1000,500,120',
-      '2026-05-01,req_2,cus_healthy,pro,summary,claude-sonnet-4.6,1000,500,10',
+      'timestamp,request_id,customer_id,feature,model,input_tokens,output_tokens,total_cost',
+      '2026-05-01,req_1,cus_loss,rag_chat,claude-sonnet-4.6,1000,500,120',
+      '2026-05-01,req_2,cus_healthy,summary,claude-sonnet-4.6,1000,500,10',
     ].join('\n'), MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
@@ -95,9 +115,6 @@ describe('buildDiagnosisSnapshot', () => {
       customerRevenueUsd: {
         cus_loss: 50,
         cus_healthy: 200,
-      },
-      planRevenueUsd: {
-        pro: 250,
       },
       customerIncludedTokens: {
         cus_loss: 1000,
@@ -241,7 +258,7 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.reportGate.reason).toContain('customer_profitability')
   })
 
-  it('does not let external revenue override missing usage customer or plan mapping', () => {
+  it('does not let external revenue override missing usage customer or allowance mapping', () => {
     const summary = parseUsageCsv([
       'timestamp,feature,model,input_tokens,output_tokens,total_cost,customer_id,plan_id',
       '2026-05-01,rag_chat,claude-sonnet-4.6,1000,500,120,,pro',

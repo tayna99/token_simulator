@@ -25,7 +25,11 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.getByRole('button', { name: /Langfuse usage/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /OpenAI usage/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Stripe allowance/ })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /샘플로 보기/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/포함 token|초과 token|미회수 AI 원가/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/가격\/마진 결정 긴급도|pricing_or_margin_now|Pro 고객|Pro plan|plan margin|플랜 마진/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('unit-economics-pdca-panel')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Monthly Review|monthly_review|snapshot_or_monthly_review/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Summary JSON/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/RAG evidence|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/docs\/service-validation|docs\/templates|asset:/i)).not.toBeInTheDocument()
@@ -66,7 +70,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     fireEvent.change(screen.getByLabelText(/월 LLM\/API 비용/i), { target: { value: '3200000' } })
     fireEvent.click(screen.getByLabelText(/customer_id.*revenue_collected/i))
     fireEvent.click(screen.getByLabelText(/heavy user/i))
-    fireEvent.change(screen.getByLabelText(/가격\/마진 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
+    fireEvent.change(screen.getByLabelText(/token 누수 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
     fireEvent.click(screen.getByLabelText(/CEO\/Finance 보고 필요/i))
 
     expect(gate).toHaveTextContent(/ICP grade: A/i)
@@ -80,7 +84,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     fireEvent.change(screen.getByLabelText(/월 LLM\/API 비용/i), { target: { value: '3200000' } })
     fireEvent.click(screen.getByLabelText(/heavy user/i))
-    fireEvent.change(screen.getByLabelText(/가격\/마진 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
+    fireEvent.change(screen.getByLabelText(/token 누수 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
     fireEvent.click(screen.getByLabelText(/CEO\/Finance 보고 필요/i))
 
     const gate = screen.getByTestId('icp-timing-gate')
@@ -96,7 +100,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     fireEvent.click(screen.getByLabelText(/customer_id.*revenue_collected/i))
     fireEvent.click(screen.getByLabelText(/heavy user/i))
     fireEvent.click(screen.getByLabelText(/CEO\/Finance 보고 필요/i))
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
     fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
     fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
 
@@ -115,6 +119,31 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     expect(screen.getByLabelText(/월 LLM\/API 비용/i)).toHaveValue('3200000')
     expect(screen.getByTestId('icp-timing-gate')).toHaveTextContent(/diagnosis_report/i)
+  })
+
+  it('shows the SparkClaw sample as a token allowance leakage story', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
+
+    expect(screen.getByRole('heading', { name: /Token leak 분석 완료/ })).toBeInTheDocument()
+    expect(screen.getAllByText(/회수된 매출은 \$29/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/AI token 원가는 \$178/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/미회수 AI 원가 \$149/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/전체 token 사용량의 44%/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/AI 원가 \$225/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/포함 token allowance를 가장 빠르게 소진시키는 후보/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/예상 회수 후보: \$149/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Pro 고객|plan margin|플랜 마진/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/model routing|라우팅|cheaper model|A\/B test/i)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+
+    const preview = screen.getByTestId('local-report-preview')
+    expect(preview).toHaveTextContent(/API Token Leakage Report/)
+    expect(preview).toHaveTextContent(/revenue_collected|회수된 매출/)
+    expect(preview).toHaveTextContent(/overage/)
   })
 
   it('codes buyer interview objections behind expert mode', () => {
@@ -155,7 +184,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     expect(screen.getByRole('heading', { name: /Token leak 분석 완료/ })).toBeInTheDocument()
     expect(screen.getAllByText(/토큰 누수 고객/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/토큰을 가장 많이 태우는 기능/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/token allowance 소진 기능/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Token policy 후보/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/rag_chat/).length).toBeGreaterThan(0)
 
@@ -312,7 +341,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
       />,
     )
 
-    fireEvent.click(screen.getAllByRole('button', { name: /샘플로 보기/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
     expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
@@ -329,10 +358,42 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(fetcher).toHaveBeenCalledWith('/api/reports', expect.objectContaining({ method: 'POST' }))
   })
 
+  it('keeps the local report preview visible when report storage is not configured', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/usage/import')) {
+        return new Response(JSON.stringify({ snapshotRef: 'usage:p1:workspace-demo:2026-05' }), { status: 202 })
+      }
+      if (url.includes('/api/reports')) {
+        return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+      }
+      return new Response('{}', { status: 404 })
+    })
+
+    render(
+      <ReportFirstDiagnosisWorkspace
+        workspaceId="workspace-demo"
+        productionStatus="connected"
+        fetcher={fetcher}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
+    fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
+    fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
+
+    expect(screen.getByTestId('local-report-preview')).toHaveTextContent(/API Token Leakage Report/)
+    fireEvent.click(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))!)
+
+    await waitFor(() => expect(screen.getByText(/storage_not_configured/)).toBeInTheDocument())
+    expect(screen.getByTestId('local-report-preview')).toHaveTextContent(/API Token Leakage Report/)
+    expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
+  })
+
   it('keeps customer evidence details free of internal refs after reveal', () => {
     render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
 
     expect(screen.queryByText(/tool:diagnosis/)).not.toBeInTheDocument()
     expect(screen.queryByText(/source:|evidence:|Watchtower|RAG evidence|agent route/i)).not.toBeInTheDocument()
@@ -374,7 +435,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
 
     expect(screen.getByTestId('pdf-disabled-reason')).toHaveTextContent(/결정 후보를 먼저 선택하세요/)
     expect(screen.getByText(/Adopt\/Reject\/Hold 선택이 필요합니다/)).toBeInTheDocument()
@@ -420,7 +481,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" fetcher={fetcher} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
     fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
     fireEvent.click(screen.getByRole('button', { name: /Hold/ }))
 
@@ -435,7 +496,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
   it('connects unit economics PDCA instrumentation to the visible report workflow', () => {
     render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
 
     const pdcaPanel = screen.getByTestId('unit-economics-pdca-panel')
     expect(pdcaPanel).toHaveTextContent(/Unit economics PDCA/i)
@@ -443,7 +504,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(pdcaPanel).toHaveTextContent(/decision_required/i)
 
     fireEvent.change(within(pdcaPanel).getByLabelText(/LLM\/API/i), { target: { value: '240000' } })
-    fireEvent.change(within(pdcaPanel).getByLabelText(/결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
+    fireEvent.change(within(pdcaPanel).getByLabelText(/token 정책 결정 긴급도/i), { target: { value: 'pricing_or_margin_now' } })
     fireEvent.change(screen.getByLabelText(/Free Fit Check minutes/i), { target: { value: '12' } })
     fireEvent.change(screen.getByLabelText(/Data Readiness minutes/i), { target: { value: '50' } })
     fireEvent.change(screen.getByLabelText(/Snapshot minutes/i), { target: { value: '240' } })
@@ -496,7 +557,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
     fireEvent.click(screen.getByLabelText(/Token allowance \+ overage 정책 후보/))
     fireEvent.click(screen.getByRole('button', { name: /Adopt/ }))
     fireEvent.click(screen.getAllByRole('button', { name: /PDF 리포트 생성/ }).find(button => !button.hasAttribute('disabled'))!)
@@ -536,7 +597,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /SparkClaw 샘플로 진단/ }))
+    fireEvent.click(screen.getByRole('button', { name: /SparkClaw token leak 샘플로 보기/ }))
     fireEvent.change(screen.getByLabelText(/사용량 CSV/i), {
       target: { value: csvFor('agent_workflow', 77) },
     })

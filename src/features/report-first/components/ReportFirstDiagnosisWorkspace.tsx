@@ -219,16 +219,16 @@ function UnitEconomicsPdcaPanel({
             className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
           />
         </Field>
-        <Field label="결정 긴급도" htmlFor="pdca-decision-urgency" help="가격/마진 결정을 당장 해야 할수록 A급 ICP에 가깝습니다.">
+        <Field label="token 정책 결정 긴급도" htmlFor="pdca-decision-urgency" help="overage, cap, credit 결정을 당장 해야 할수록 A급 ICP에 가깝습니다.">
           <select
             id="pdca-decision-urgency"
             value={decisionUrgency}
             onChange={event => onDecisionUrgencyChange(event.currentTarget.value as DecisionUrgency)}
             className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
           >
-            <option value="pricing_or_margin_now">pricing_or_margin_now</option>
-            <option value="exploratory">exploratory</option>
-            <option value="none">none</option>
+            <option value="pricing_or_margin_now">지금 overage/cap 결정을 해야 함</option>
+            <option value="exploratory">샘플 진단으로 확인</option>
+            <option value="none">아직 결정 예정 없음</option>
           </select>
         </Field>
         <Field label="다음 리뷰 날짜" htmlFor="pdca-next-review-date" help="Monthly Review는 다음 검산 날짜가 있어야 열립니다.">
@@ -461,16 +461,16 @@ function IcpTimingGatePanel({
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
             />
           </Field>
-          <Field label="가격/마진 결정 긴급도" htmlFor="icp-decision-urgency">
+          <Field label="token 누수 결정 긴급도" htmlFor="icp-decision-urgency">
             <select
               id="icp-decision-urgency"
               value={decisionUrgency}
               onChange={event => onDecisionUrgencyChange(event.currentTarget.value as DecisionUrgency)}
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
             >
-              <option value="pricing_or_margin_now">pricing_or_margin_now</option>
-              <option value="exploratory">exploratory</option>
-              <option value="none">none</option>
+              <option value="pricing_or_margin_now">지금 overage/cap 결정을 해야 함</option>
+              <option value="exploratory">샘플 진단으로 확인</option>
+              <option value="none">아직 결정 예정 없음</option>
             </select>
           </Field>
           <label className="flex items-center gap-2 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs font-semibold text-label-neutral">
@@ -666,6 +666,11 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [pdcaAttributionAxes, setPdcaAttributionAxes] = useState<AgentPayrollIcpAxis[]>([])
 
   const request = useMemo(() => safeFetcher(fetcher), [fetcher])
+  const visibleDecisionCandidates = useMemo(() => (
+    snapshot
+      ? snapshot.decisionCandidates.filter(candidate => audience === 'expert' || candidate.kind !== 'model_routing')
+      : []
+  ), [audience, snapshot])
   const selectedDecision = snapshot?.decisionCandidates.find(item => item.id === selectedDecisionId)
   const roleView = snapshot?.roleViews[activeRole]
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
@@ -968,7 +973,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
         <p className="text-sm font-semibold uppercase text-primary-normal" translate="no">AgentPayroll</p>
         <h1 className="mt-2 text-3xl font-semibold">API Token Leakage Snapshot</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-label-neutral">
-          usage CSV와 token allowance/revenue summary를 넣으면 포함 token을 초과한 고객, token을 태우는 기능, 지금 검토할 overage 정책 후보를 한 번에 찾습니다.
+          usage CSV와 token allowance/revenue summary를 넣으면 포함 token을 초과한 고객, token allowance를 가장 빨리 소진시키는 기능, 지금 검토할 overage 정책 후보를 한 번에 찾습니다.
         </p>
         <p className="mt-4 text-xs font-semibold text-label-alternative" lang="en">
           usage CSV + allowance CSV -&gt; Trust Gate -&gt; Token Leak -&gt; Token Policy -&gt; Adopt/Reject/Hold -&gt; Report Preview
@@ -1086,7 +1091,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             </Field>
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" onClick={handleStartCsv}>분석 시작</Button>
-              <Button variant="secondary" onClick={handleSample}>SparkClaw 샘플로 진단 / 샘플로 보기</Button>
+              <Button variant="secondary" onClick={handleSample}>SparkClaw token leak 샘플로 보기</Button>
             </div>
           </div>
         ) : (
@@ -1145,7 +1150,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             <div className="rounded-wds border border-line-neutral bg-surface-normal p-3">
               <p className="text-sm font-semibold">결정 후보 선택</p>
               <div className="mt-2 grid gap-2">
-                {snapshot.decisionCandidates.map(candidate => (
+                {visibleDecisionCandidates.map(candidate => (
                   <label key={candidate.id} className="flex cursor-pointer gap-2 rounded-wds border border-line-neutral p-3 text-sm">
                     <input
                       type="radio"
