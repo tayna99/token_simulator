@@ -91,4 +91,31 @@ describe('parseRevenueCsv', () => {
     expect(result.customerRevenueUsd).toEqual({ cus_real: 88 })
     expect(result.rows[0]?.customerId).toBe('cus_real')
   })
+
+  it('parses token allowance and overage rate alongside collected revenue', () => {
+    const result = parseRevenueCsv([
+      'customer_id,plan_id,revenue_collected,included_tokens,overage_rate_usd_per_1k_tokens',
+      'cus_heavy,pro,49,10000,0.18',
+      'cus_heavy,pro,10,5000,0.20',
+      'cus_light,team,199,25000,0.12',
+    ].join('\n'))
+
+    expect(result.customerRevenueUsd).toEqual({
+      cus_heavy: 59,
+      cus_light: 199,
+    })
+    expect(result.customerIncludedTokens).toEqual({
+      cus_heavy: 15000,
+      cus_light: 25000,
+    })
+    expect(result.customerOverageRateUsdPer1kTokens).toEqual({
+      cus_heavy: 0.20,
+      cus_light: 0.12,
+    })
+    expect(result.rows[0]).toMatchObject({
+      customerId: 'cus_heavy',
+      includedTokens: 10000,
+      overageRateUsdPer1kTokens: 0.18,
+    })
+  })
 })

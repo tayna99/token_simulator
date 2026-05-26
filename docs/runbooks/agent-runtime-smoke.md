@@ -1,12 +1,43 @@
-# 에이전트 런타임 스모크 런북
+# AgentPayroll agent runtime smoke runbook
 
-## 목적
+## Purpose
 
-AgentCost 운영팀 런타임이 deterministic snapshot(로컬 계산으로 만든 그 시점의 데이터 묶음)에서 `/api/agent/run`까지 이어지는지 확인합니다. 동시에 `tool:*` refs(어떤 도구와 근거를 썼는지 남기는 참조), 라우팅된 operating agents(역할별 운영 에이전트), provider(실제 AI 제공자)가 없을 때의 all-hands fallback(모든 역할이 참여하는 대체 흐름)이 화면과 응답에서 명확히 구분되는지 봅니다.
+Use this runbook to verify the AgentPayroll Money Leak Run runtime path without
+overstating production connectivity. A local smoke can prove the frontend,
+Python `agent_service`, runtime proof metadata, `tool:*` refs, Decision Log
+metadata, and AI Cost Snapshot report path. It does not prove a production demo
+tenant unless Supabase Auth/Postgres/pgvector, accepted facts, report artifacts,
+and connector ledgers are configured and checked separately.
 
-## Provider 스모크
+## Focused automated smoke assertions
 
-실제 provider key(예: OpenAI API key)를 의도적으로 사용할 수 있을 때만 실행합니다.
+```powershell
+cd C:\token_simulator\agent_service
+uv run pytest tests/test_smoke_provider.py
+```
+
+The focused suite validates the provider smoke contract without making a
+network request:
+
+- provider responses must use the stage committee shape;
+- provider runtime proof must distinguish `provider_llm`, `interrupt_requested`,
+  `resumed`, `deterministic_preview`, and `unavailable`;
+- provider responses must preserve `tool:*` refs at the top level and event
+  level;
+- event-level `calledAgentTool` values such as `call_cost_modeling_agent` must
+  appear in `runtime.agentInvocationProof` when a provider-backed agent call is
+  claimed;
+- top-level and event-level `usedTools` / `usedCapabilityTools` must reject
+  forbidden mutation, billing, and external-send tool claims such as
+  `create_decision`, `adopt_recommendation`, `send_email`, and
+  `charge_billing`;
+- fallback all-hands output must route agents in preview form without claiming
+  provider-backed `call_*_agent` execution;
+- AI prose must not include uncited numeric claims.
+
+## Optional live provider smoke
+
+Run this only when a real provider key is intentionally available.
 
 ```powershell
 cd C:\token_simulator\agent_service
@@ -15,54 +46,72 @@ $env:OPENAI_API_KEY = "<provider key>"
 uv run python scripts/smoke_provider.py
 ```
 
-성공 기준:
+Live success criteria:
 
-- Interpretation smoke(해석 경로의 짧은 동작 확인)가 `/api/agent`에 대해 근거 있는 이벤트를 반환합니다.
-- Agentic smoke(에이전트 실행 경로의 짧은 동작 확인)가 `/api/agent/run`의 provider 경로를 검증합니다.
-- Provider 응답에 `providerRunId`와 `agentInvocationProof`가 포함됩니다.
-- Agentic events(에이전트 실행 이벤트)가 `agentId`, `calledAgentTool`, `tool:*` refs를 보존합니다.
-- All-hands fallback은 11개 에이전트 라우팅을 보여주지만 실제 provider 호출을 했다고 주장하지 않습니다.
-- 응답에는 출처 없는 숫자 주장이 없어야 합니다.
+- interpretation smoke returns grounded events for the `/api/agent` path;
+- agentic smoke returns a `/api/agent/run` provider response with
+  `llmMode=provider-llm`, `runtime.status=provider_llm`, `providerRunId`, and
+  non-empty `agentInvocationProof`;
+- every provider event has an `agentId`, a `calledAgentTool`, and retained
+  `tool:*` refs;
+- every claimed `calledAgentTool` is included in `agentInvocationProof`;
+- forbidden mutation, billing, and external-send tool names are absent from
+  provider `usedTools` and `usedCapabilityTools`;
+- the no-provider all-hands fallback remains `deterministic_preview` or
+  `unavailable`, not a completed provider run.
 
-## 로컬 브라우저 스모크
-
-터미널 1:
+## Start the Python agent service
 
 ```powershell
 cd C:\token_simulator\agent_service
 uv run uvicorn main:app --reload --port 8000
 ```
 
-터미널 2:
+## Start the Next frontend against the server runtime
 
 ```powershell
 cd C:\token_simulator
 $env:VITE_AGENT_RUNTIME = "server"
-$env:VITE_AGENT_API_BASE_URL = "http://127.0.0.1:8000"
 npm run dev
 ```
 
-열 주소:
+If the frontend needs an explicit service URL in your shell, set it before
+`npm run dev`:
 
-```text
-http://127.0.0.1:5173/token_simulator/
+```powershell
+$env:VITE_AGENT_API_BASE_URL = "http://127.0.0.1:8000"
 ```
 
-수동 확인 경로:
+## Manual success criteria
 
-1. SparkClaw 샘플을 불러옵니다.
-2. 비용 해석 전에 Trust check(업로드 데이터 안전성 확인)가 보이는지 확인합니다.
-3. Design, Cost, Bottleneck, Optimize, Decision Log 단계로 이동합니다.
-4. Stage committee review(현재 단계에 맞는 역할별 검토)를 실행합니다.
-5. Full operating review(전체 운영 검토)를 실행합니다.
-6. Adopt, Reject, Hold 중 하나를 기록합니다.
-7. 1페이지 리포트를 내보냅니다.
+Use the SparkClaw sample in the app.
 
-성공 기준:
+1. Load the SparkClaw sample.
+2. Run the Money Leak Run stage routing review for the current stage.
+3. Confirm the right panel shows the called agents for the stage committee.
+4. Confirm the right panel preserves `tool:*` refs and does not claim
+   `provider_llm` when provider credentials are absent.
+5. Confirm a Decision Candidate has no default choice and requires explicit
+   Adopt/Reject/Hold before the report path opens.
+6. Record the selected Adopt/Reject/Hold item in the Decision Log.
+7. Open the AI Cost Snapshot report and confirm it includes runtime/review
+   metadata.
 
-- 오른쪽 AI 패널에 실행 모드, 대표 에이전트, 검토자, snapshot version(분석 데이터 묶음 버전), refs(근거 참조)가 표시됩니다.
-- Stage committee 경로에서 현재 단계에 맞게 라우팅된 운영 에이전트가 보입니다.
-- Full operating review는 all-hands routing(모든 역할이 참여하는 라우팅)을 사용합니다.
-- Decision Log 세부 정보가 `agentReview`, `trustReview`, threshold/fact snapshots(임계값과 사실의 시점별 데이터 묶음), report review metadata(리포트 검토 메타데이터)를 보존합니다.
-- 사람의 결정이 기록되기 전에는 리포트 내보내기가 막혀 있어야 합니다.
-- 브라우저 자동 번역 방지 장치가 유지되어야 합니다. 즉 `notranslate` meta와 루트 `translate="no"`가 그대로 있어야 합니다.
+## HITL runtime proof checks
+
+Use these checks when a HITL checkpoint path is part of the smoke.
+
+- If the runtime returns `interrupt_requested`, the UI should show checkpoint
+  status/id/thread metadata and should not render the AI Cost Snapshot report as
+  complete.
+- After the user selects Adopt/Reject/Hold and resumes the checkpoint, Decision
+  Log and report artifacts can show `runtime.status=resumed` and
+  `humanApproval.approvalMode=checkpoint_resume`.
+- A resumed provider-backed path can retain `providerRunId` and
+  `call_*_agent` proof. A preview or unavailable path must not invent
+  `call_*_agent` proof.
+- Reports expose checkpoint status/id and approval mode, not the raw
+  `resumePayload`.
+
+The local no-credential path should render as a deterministic preview or
+unavailable runtime, not as a completed provider LLM execution.

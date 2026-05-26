@@ -1,8 +1,15 @@
-import { fmtCurrency, fmtPercent, fmtTokens } from '../../../lib/format'
+import { fmtCurrency, fmtNumber, fmtPercent, fmtTokens } from '../../../lib/format'
 import { projectSnapshotForRole, type RoleProjectionRole, type RoleViewModel } from '../../role-projection/lib/projectSnapshotForRole'
 import { rollupUsageByAxis } from '../../usage/lib/attribution'
 import type { UsageImportSummary } from '../../usage/lib/usageImport'
-import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../../usage/data/sparkClawSample'
+import {
+  CUSTOMER_MONTHLY_REVENUE,
+  CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS,
+  CUSTOMER_TOKEN_ALLOWANCE,
+  PLAN_MONTHLY_REVENUE,
+  PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
+  PLAN_TOKEN_ALLOWANCE,
+} from '../../usage/data/sparkClawSample'
 import { customerProfitability, heavyUserDetection, marginByPlan } from '../../unit-economics/lib/margin'
 import { calculatePricingScenario, type PricingPolicy, type ScenarioResult } from '../../pricing/lib/pricingScenario'
 import type { OnePageReportArtifactInput } from '../../report/lib/reportArtifacts'
@@ -54,11 +61,48 @@ export interface DiagnosisRoiProof {
   paybackHint: string
 }
 
+export interface TokenLeakCustomer {
+  customerId: string
+  usedTokens: number
+  includedTokens: number
+  overageTokens: number
+  allowanceMultiple: number
+  aiCogsUsd: number
+  revenueCollectedUsd: number
+  unrecoveredCostUsd: number
+  cogsToRevenuePct: number
+  overageRateUsdPer1kTokens: number
+  potentialOverageRevenueUsd: number
+}
+
+export interface TokenLeakFeature {
+  feature: string
+  usedTokens: number
+  totalCostUsd: number
+  shareOfTokens: number
+  shareOfCost: number
+}
+
+export interface TokenPolicyRecommendation {
+  title: string
+  body: string
+  expectedRecoveredUsd: number
+  includedTokens: number
+  overageRateUsdPer1kTokens: number
+}
+
+export interface TokenLeakProof {
+  topCustomer: TokenLeakCustomer | null
+  topFeature: TokenLeakFeature | null
+  recommendedPolicy: TokenPolicyRecommendation | null
+}
+
 export interface DiagnosisSnapshot {
   workspaceId: string
   snapshotRef: string | null
   reportGate: ReportGate
   roiProof: DiagnosisRoiProof
+  tokenLeakProof: TokenLeakProof
   metrics: DiagnosisMetric[]
   insights: DiagnosisInsight[]
   decisionCandidates: DiagnosisDecisionCandidate[]
@@ -71,6 +115,10 @@ export interface DiagnosisSnapshotInput {
   summary: UsageImportSummary
   customerRevenueUsd?: Record<string, number>
   planRevenueUsd?: Record<string, number>
+  customerIncludedTokens?: Record<string, number>
+  planIncludedTokens?: Record<string, number>
+  customerOverageRateUsdPer1kTokens?: Record<string, number>
+  planOverageRateUsdPer1kTokens?: Record<string, number>
   snapshotRef?: string | null
 }
 
@@ -103,7 +151,7 @@ function unique(values: string[]): string[] {
 
 function hasUsageIdentityMappingGap(summary: UsageImportSummary): boolean {
   const missing = summary.importHealthReport?.missingDimensionCounts
-  return Boolean(missing && (missing.customer > 0 || missing.plan > 0))
+  return Boolean(missing && missing.customer > 0)
 }
 
 function mapHasKey(map: Record<string, number> | undefined, key: string): boolean {
@@ -113,20 +161,31 @@ function mapHasKey(map: Record<string, number> | undefined, key: string): boolea
 function externalRevenueCoversUsage(
   summary: UsageImportSummary,
   customerRevenueUsd: Record<string, number> | undefined,
-  planRevenueUsd: Record<string, number> | undefined,
 ): boolean {
   const customerIds = unique(summary.rows.map(row => row.customerId ?? ''))
-  const planIds = unique(summary.rows.map(row => row.planId ?? ''))
 
   return customerIds.length > 0
-    && planIds.length > 0
     && customerIds.every(customerId => mapHasKey(customerRevenueUsd, customerId))
-    && planIds.every(planId => mapHasKey(planRevenueUsd, planId))
+}
+
+function externalTokenAllowanceCoversUsage(
+  summary: UsageImportSummary,
+  customerIncludedTokens: Record<string, number> | undefined,
+): boolean {
+  const customerIds = unique(summary.rows.map(row => row.customerId ?? ''))
+
+  return customerIds.length > 0
+    && customerIds.every(customerId => mapHasKey(customerIncludedTokens, customerId))
 }
 
 function reportGateFrom(
   summary: UsageImportSummary,
-  options: { hasExternalRevenue: boolean; externalRevenueMappingGap: boolean },
+  options: {
+    hasExternalRevenue: boolean
+    externalRevenueMappingGap: boolean
+    hasTokenAllowance: boolean
+    tokenAllowanceMappingGap: boolean
+  },
 ): ReportGate {
   const inspection = summary.trustInspection
   if (!inspection) {
@@ -155,8 +214,9 @@ function reportGateFrom(
     ...(summary.importHealthReport?.status === 'needs_mapping' ? ['mapping_gap'] : []),
     ...(inspection.status === 'needs_mapping' ? inspection.warnings : []),
     ...(options.externalRevenueMappingGap ? ['external_revenue_mapping_gap'] : []),
+    ...(options.tokenAllowanceMappingGap ? ['external_token_allowance_mapping_gap'] : []),
   ]).filter(warning => (
-    options.hasExternalRevenue
+    options.hasExternalRevenue && options.hasTokenAllowance
       ? warning !== 'revenue_missing'
         && warning !== 'loss_customer'
         && warning !== 'customer_profitability'
@@ -180,6 +240,141 @@ function reportGateFrom(
     canCreateArtifact: true,
     reason: 'ready',
     warnings: [],
+  }
+}
+
+const DEFAULT_OVERAGE_RATE_USD_PER_1K_TOKENS = 0.18
+
+function usageTokens(row: UsageImportSummary['rows'][number]): number {
+  return Math.max(0, row.inputTokens) + Math.max(0, row.outputTokens)
+}
+
+function valueForCustomerOrPlan(
+  customerMap: Record<string, number>,
+  planMap: Record<string, number>,
+  customerId: string,
+  planId: string | null,
+): number {
+  if (mapHasKey(customerMap, customerId)) return customerMap[customerId] ?? 0
+  if (planId && mapHasKey(planMap, planId)) return planMap[planId] ?? 0
+  return 0
+}
+
+function rateForCustomerOrPlan(
+  customerMap: Record<string, number>,
+  planMap: Record<string, number>,
+  customerId: string,
+  planId: string | null,
+): number {
+  if (mapHasKey(customerMap, customerId)) return customerMap[customerId] ?? DEFAULT_OVERAGE_RATE_USD_PER_1K_TOKENS
+  if (planId && mapHasKey(planMap, planId)) return planMap[planId] ?? DEFAULT_OVERAGE_RATE_USD_PER_1K_TOKENS
+  return DEFAULT_OVERAGE_RATE_USD_PER_1K_TOKENS
+}
+
+function tokenLeakProofFrom(input: {
+  summary: UsageImportSummary
+  customerRevenueUsd: Record<string, number>
+  planRevenueUsd: Record<string, number>
+  customerIncludedTokens: Record<string, number>
+  planIncludedTokens: Record<string, number>
+  customerOverageRateUsdPer1kTokens: Record<string, number>
+  planOverageRateUsdPer1kTokens: Record<string, number>
+}): TokenLeakProof {
+  const customerRows = input.summary.rows.reduce<Map<string, {
+    customerId: string
+    planId: string | null
+    usedTokens: number
+    aiCogsUsd: number
+  }>>((map, row) => {
+    if (!row.customerId) return map
+    const existing = map.get(row.customerId) ?? {
+      customerId: row.customerId,
+      planId: row.planId,
+      usedTokens: 0,
+      aiCogsUsd: 0,
+    }
+    existing.planId = existing.planId ?? row.planId
+    existing.usedTokens += usageTokens(row)
+    existing.aiCogsUsd += Math.max(0, row.totalCostUsd)
+    map.set(row.customerId, existing)
+    return map
+  }, new Map())
+
+  const tokenCustomers: TokenLeakCustomer[] = [...customerRows.values()].map(customer => {
+    const includedTokens = valueForCustomerOrPlan(
+      input.customerIncludedTokens,
+      input.planIncludedTokens,
+      customer.customerId,
+      customer.planId,
+    )
+    const revenueCollectedUsd = valueForCustomerOrPlan(
+      input.customerRevenueUsd,
+      input.planRevenueUsd,
+      customer.customerId,
+      customer.planId,
+    )
+    const overageRateUsdPer1kTokens = rateForCustomerOrPlan(
+      input.customerOverageRateUsdPer1kTokens,
+      input.planOverageRateUsdPer1kTokens,
+      customer.customerId,
+      customer.planId,
+    )
+    const overageTokens = Math.max(0, customer.usedTokens - includedTokens)
+    const allowanceMultiple = includedTokens > 0 ? customer.usedTokens / includedTokens : 0
+    const potentialOverageRevenueUsd = (overageTokens / 1_000) * overageRateUsdPer1kTokens
+    const unrecoveredCostUsd = Math.max(0, customer.aiCogsUsd - revenueCollectedUsd)
+
+    return {
+      customerId: customer.customerId,
+      usedTokens: customer.usedTokens,
+      includedTokens,
+      overageTokens,
+      allowanceMultiple,
+      aiCogsUsd: customer.aiCogsUsd,
+      revenueCollectedUsd,
+      unrecoveredCostUsd,
+      cogsToRevenuePct: revenueCollectedUsd > 0 ? customer.aiCogsUsd / revenueCollectedUsd : 0,
+      overageRateUsdPer1kTokens,
+      potentialOverageRevenueUsd,
+    }
+  })
+
+  const topCustomer = tokenCustomers.sort((left, right) => (
+    right.unrecoveredCostUsd - left.unrecoveredCostUsd
+      || right.overageTokens - left.overageTokens
+      || right.aiCogsUsd - left.aiCogsUsd
+  ))[0] ?? null
+
+  const totalTokens = input.summary.rows.reduce((sum, row) => sum + usageTokens(row), 0)
+  const topFeatureSummary = [...input.summary.featureSummaries]
+    .sort((left, right) => (
+      (right.inputTokens + right.outputTokens) - (left.inputTokens + left.outputTokens)
+        || right.totalCostUsd - left.totalCostUsd
+    ))[0]
+  const topFeature = topFeatureSummary
+    ? {
+        feature: topFeatureSummary.feature,
+        usedTokens: topFeatureSummary.inputTokens + topFeatureSummary.outputTokens,
+        totalCostUsd: topFeatureSummary.totalCostUsd,
+        shareOfTokens: totalTokens > 0 ? (topFeatureSummary.inputTokens + topFeatureSummary.outputTokens) / totalTokens : 0,
+        shareOfCost: topFeatureSummary.shareOfCost,
+      }
+    : null
+
+  const recommendedPolicy = topCustomer
+    ? {
+        title: 'Token allowance + overage 정책 후보',
+        body: `${topCustomer.customerId} 고객의 초과 ${fmtTokens(topCustomer.overageTokens)} tokens를 기준으로 ${fmtTokens(topCustomer.includedTokens)} tokens 포함 + 초과 1K tokens당 ${fmtCurrency(topCustomer.overageRateUsdPer1kTokens, 2)} overage를 검토하세요.`,
+        expectedRecoveredUsd: Math.max(topCustomer.unrecoveredCostUsd, topCustomer.potentialOverageRevenueUsd),
+        includedTokens: topCustomer.includedTokens,
+        overageRateUsdPer1kTokens: topCustomer.overageRateUsdPer1kTokens,
+      }
+    : null
+
+  return {
+    topCustomer,
+    topFeature,
+    recommendedPolicy,
   }
 }
 
@@ -232,7 +427,7 @@ function roiProofFrom(input: {
     topDecileSubsidyUsd,
     bestPolicyMarginDeltaUsd,
     paybackHint: monthlyLossUsd > 0
-      ? `이번 달 추정 누수 ${fmtCurrency(monthlyLossUsd)}부터 회수할 수 있는지 확인하세요.`
+      ? `이번 달 미회수 AI 원가 ${fmtCurrency(monthlyLossUsd)}부터 회수할 수 있는지 확인하세요.`
       : bestPolicyMarginDeltaUsd > 0
         ? `정책 변경 시 ${fmtCurrency(bestPolicyMarginDeltaUsd)} 개선 여지가 있습니다.`
         : '현재 입력에서는 큰 누수가 보이지 않습니다.',
@@ -265,17 +460,22 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const hasExternalRevenueCoverage = externalRevenueCoversUsage(
     input.summary,
     input.customerRevenueUsd,
-    input.planRevenueUsd,
+  )
+  const hasTokenAllowanceCoverage = externalTokenAllowanceCoversUsage(
+    input.summary,
+    input.customerIncludedTokens,
   )
   const gate = reportGateFrom(input.summary, {
     hasExternalRevenue: hasExternalRevenueCoverage,
     externalRevenueMappingGap: Boolean(input.customerRevenueUsd || input.planRevenueUsd) && !hasExternalRevenueCoverage,
+    hasTokenAllowance: hasTokenAllowanceCoverage,
+    tokenAllowanceMappingGap: Boolean(input.customerIncludedTokens || input.planIncludedTokens) && !hasTokenAllowanceCoverage,
   })
   const refs = unique([
     'tool:usage.import',
-    'tool:diagnosis.loss_customers',
-    'tool:diagnosis.feature_margin',
-    'tool:diagnosis.policy_candidate',
+    'tool:diagnosis.token_leak_customer',
+    'tool:diagnosis.token_burning_feature',
+    'tool:diagnosis.token_policy_candidate',
     input.snapshotRef ?? 'diagnosis_preview',
   ])
 
@@ -289,6 +489,11 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
         topDecileSubsidyUsd: 0,
         bestPolicyMarginDeltaUsd: 0,
         paybackHint: '분석 가능한 snapshot이 필요합니다.',
+      },
+      tokenLeakProof: {
+        topCustomer: null,
+        topFeature: null,
+        recommendedPolicy: null,
       },
       metrics: [],
       insights: [],
@@ -306,6 +511,10 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
 
   const customerRevenueUsd = input.customerRevenueUsd ?? CUSTOMER_MONTHLY_REVENUE
   const planRevenueUsd = input.planRevenueUsd ?? PLAN_MONTHLY_REVENUE
+  const customerIncludedTokens = input.customerIncludedTokens ?? CUSTOMER_TOKEN_ALLOWANCE
+  const planIncludedTokens = input.planIncludedTokens ?? PLAN_TOKEN_ALLOWANCE
+  const customerOverageRateUsdPer1kTokens = input.customerOverageRateUsdPer1kTokens ?? CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS
+  const planOverageRateUsdPer1kTokens = input.planOverageRateUsdPer1kTokens ?? PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS
   const featureRollup = rollupUsageByAxis(input.summary.rows, 'feature')
   const modelRollup = rollupUsageByAxis(input.summary.rows, 'model')
   const topFeature = featureRollup.rows[0]
@@ -319,34 +528,46 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const lossCustomers = customers.filter(row => row.marginRisk === 'loss')
   const grossMarginPct = weakestPlan?.grossMarginPct ?? selectedScenario?.grossMarginPct ?? 0
   const roiProof = roiProofFrom({ lossCustomers, heavyUsers, scenarios })
+  const tokenLeakProof = tokenLeakProofFrom({
+    summary: input.summary,
+    customerRevenueUsd,
+    planRevenueUsd,
+    customerIncludedTokens,
+    planIncludedTokens,
+    customerOverageRateUsdPer1kTokens,
+    planOverageRateUsdPer1kTokens,
+  })
+  const topTokenCustomer = tokenLeakProof.topCustomer
+  const topTokenFeature = tokenLeakProof.topFeature
+  const tokenPolicy = tokenLeakProof.recommendedPolicy
 
   const insights: DiagnosisInsight[] = [
     {
       kind: 'loss_customers',
-      title: '손해 고객',
-      value: fmtTokens(lossCustomers.length),
-      body: lossCustomers.length > 0
-        ? `${lossCustomers[0].customerId} 고객부터 원가가 매출을 넘습니다.`
-        : '현재 입력에서는 손해 고객이 없습니다.',
-      refs: ['tool:diagnosis.loss_customers'],
+      title: '토큰 누수 고객',
+      value: topTokenCustomer ? fmtCurrency(topTokenCustomer.unrecoveredCostUsd) : fmtCurrency(0),
+      body: topTokenCustomer
+        ? `${topTokenCustomer.customerId} 고객은 ${fmtTokens(topTokenCustomer.usedTokens)} tokens를 사용해 포함 ${fmtTokens(topTokenCustomer.includedTokens)}의 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배입니다. 초과분을 과금하지 않아 ${fmtCurrency(topTokenCustomer.unrecoveredCostUsd)} 미회수 원가가 보입니다.`
+        : 'customer_id와 token allowance 매핑이 있으면 누수 고객을 계산할 수 있습니다.',
+      refs: ['tool:diagnosis.token_leak_customer'],
     },
     {
       kind: 'margin_breaking_feature',
-      title: '마진 깨는 기능',
-      value: topFeature ? fmtCurrency(topFeature.totalCostUsd) : fmtCurrency(0),
-      body: topFeature
-        ? `${topFeature.label} 기능이 전체 비용의 ${fmtPercent(topFeature.shareOfCost)}를 차지합니다.`
-        : '기능별 비용을 계산할 수 없습니다.',
-      refs: ['tool:diagnosis.feature_margin'],
+      title: '토큰을 태우는 기능',
+      value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtTokens(0),
+      body: topTokenFeature
+        ? `${topTokenFeature.feature} 기능이 전체 token 사용량의 ${fmtPercent(topTokenFeature.shareOfTokens)}와 AI 원가 ${fmtCurrency(topTokenFeature.totalCostUsd)}를 만듭니다.`
+        : '기능별 token 원가를 계산할 수 없습니다.',
+      refs: ['tool:diagnosis.token_burning_feature'],
     },
     {
       kind: 'policy_candidate',
-      title: '모델/요금제/제한 정책 후보',
-      value: selectedScenario ? fmtPercent(selectedScenario.grossMarginPct) : '—',
-      body: selectedScenario
-        ? `${selectedScenario.policy} 정책 후보가 현재 입력에서 가장 높은 gross margin을 만듭니다.`
-        : '정책 후보를 계산할 사용량이 없습니다.',
-      refs: ['tool:diagnosis.policy_candidate'],
+      title: 'Token policy 후보',
+      value: tokenPolicy ? fmtCurrency(tokenPolicy.expectedRecoveredUsd) : '—',
+      body: tokenPolicy
+        ? tokenPolicy.body
+        : 'token allowance와 revenue 매핑이 있어야 정책 후보를 계산할 수 있습니다.',
+      refs: ['tool:diagnosis.token_policy_candidate'],
     },
   ]
 
@@ -354,37 +575,41 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
     {
       id: 'decision:diagnosis:usage-limit',
       kind: 'usage_limit',
-      title: '손해 고객 사용량 제한 검토',
-      body: `${fmtTokens(lossCustomers.length)} 손해 고객과 top-decile 비용 share ${fmtPercent(heavyUsers.topDecileShare)}를 기준으로 제한 정책을 검토합니다.`,
-      refs: ['tool:diagnosis.loss_customers'],
+      title: '고객별 token cap 검토',
+      body: topTokenCustomer
+        ? `${topTokenCustomer.customerId} 고객이 포함 token을 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배 사용했습니다. cap, credit 전환, enterprise bundle 중 하나를 검토합니다.`
+        : `${fmtTokens(lossCustomers.length)} 손해 고객과 top-decile 비용 share ${fmtPercent(heavyUsers.topDecileShare)}를 기준으로 제한 정책을 검토합니다.`,
+      refs: ['tool:diagnosis.token_leak_customer'],
     },
     {
       id: 'decision:diagnosis:pricing-policy',
       kind: 'pricing_policy',
-      title: '요금제/credit 정책 변경 후보',
-      body: selectedScenario
-        ? `${selectedScenario.policy} 정책 후보의 예상 gross margin은 ${fmtPercent(selectedScenario.grossMarginPct)}입니다.`
-        : '요금제 후보를 계산할 수 없습니다.',
-      refs: ['tool:diagnosis.policy_candidate'],
+      title: 'Token allowance + overage 정책 후보',
+      body: tokenPolicy
+        ? tokenPolicy.body
+        : selectedScenario
+          ? `${selectedScenario.policy} 정책 후보의 예상 gross margin은 ${fmtPercent(selectedScenario.grossMarginPct)}입니다.`
+          : 'token policy 후보를 계산할 수 없습니다.',
+      refs: ['tool:diagnosis.token_policy_candidate'],
     },
     {
       id: 'decision:diagnosis:model-routing',
       kind: 'model_routing',
-      title: '고비용 모델 라우팅 재검토',
+      title: '고비용 token 라우팅 재검토',
       body: topModel
-        ? `${topModel.label} 모델 비용이 ${fmtCurrency(topModel.totalCostUsd)}입니다. 품질 검증 후 라우팅 변경을 검토합니다.`
+        ? `${topModel.label} 모델이 ${fmtCurrency(topModel.totalCostUsd)}의 token 원가를 만들고 있습니다. 품질/latency 검증 후 cheaper model A/B test를 Hold로 검토합니다.`
         : '모델별 비용을 계산할 수 없습니다.',
       refs: ['tool:diagnosis.model_routing'],
     },
   ]
 
   const metrics: DiagnosisMetric[] = [
-    { id: 'monthly_loss', label: '이번 달 추정 누수', value: fmtCurrency(roiProof.monthlyLossUsd), help: '매출 대비 원가 초과분' },
-    { id: 'ai_cogs', label: 'AI 원가', value: fmtCurrency(input.summary.totalCostUsd) },
-    { id: 'loss_customers', label: '손해 고객', value: fmtTokens(lossCustomers.length) },
-    { id: 'policy_margin_delta', label: '정책 변경 개선 여지', value: fmtCurrency(roiProof.bestPolicyMarginDeltaUsd) },
-    { id: 'top_feature_cost', label: '최고 비용 기능', value: topFeature ? fmtCurrency(topFeature.totalCostUsd) : fmtCurrency(0), help: topFeature?.label },
-    { id: 'weakest_margin', label: '최저 플랜 마진', value: fmtPercent(grossMarginPct), help: weakestPlan?.planId },
+    { id: 'monthly_loss', label: '미회수 AI 원가', value: fmtCurrency(topTokenCustomer?.unrecoveredCostUsd ?? roiProof.monthlyLossUsd), help: 'revenue_collected 대비 AI token COGS 초과분' },
+    { id: 'ai_cogs', label: 'AI token 원가', value: fmtCurrency(input.summary.totalCostUsd) },
+    { id: 'loss_customers', label: '토큰 누수 고객', value: topTokenCustomer ? topTokenCustomer.customerId : fmtTokens(lossCustomers.length) },
+    { id: 'policy_margin_delta', label: 'overage 회수 후보', value: fmtCurrency(tokenPolicy?.expectedRecoveredUsd ?? roiProof.bestPolicyMarginDeltaUsd), help: tokenPolicy?.title },
+    { id: 'top_feature_cost', label: '최고 token 기능', value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtCurrency(topFeature?.totalCostUsd ?? 0), help: topTokenFeature?.feature ?? topFeature?.label },
+    { id: 'weakest_margin', label: 'COGS/매출 비율', value: fmtPercent(topTokenCustomer?.cogsToRevenuePct ?? grossMarginPct), help: topTokenCustomer?.customerId ?? weakestPlan?.planId },
   ]
 
   return {
@@ -392,6 +617,7 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       snapshotRef: input.snapshotRef ?? null,
       reportGate: gate,
       roiProof,
+      tokenLeakProof,
       metrics,
       insights,
       decisionCandidates,
@@ -417,7 +643,7 @@ export function reportFirstPayloadFromDiagnosis(
   }
 
   return {
-    title: 'AgentPayroll AI SaaS 마진 진단 리포트',
+    title: 'AgentPayroll API Token Leakage Report',
     executiveSummary: snapshot.insights.map(insight => `${insight.title}: ${insight.body}`).join(' '),
     metrics: snapshot.metrics.map(metric => ({ label: metric.label, value: metric.value })),
     recommendations: [candidate.body, snapshot.roiProof.paybackHint],
@@ -426,9 +652,9 @@ export function reportFirstPayloadFromDiagnosis(
     trust: {
       status: snapshot.reportGate.status,
       dataLimitations: snapshot.reportGate.warnings,
-      retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionNote: 'Raw prompt와 API key는 받지 않고, 업로드 원본은 30일 안에 삭제 또는 재확인해야 합니다.',
     },
-    formulaVersion: 'cost_formula_v0.3',
+    formulaVersion: 'token_leak_formula_v0.1',
     providerRegistryVersion: 'provider_registry_v0.4',
     snapshotVersion: snapshot.snapshotRef ?? 'diagnosis_preview',
     decisionRefs: [candidate.id],
@@ -453,29 +679,29 @@ export function buildMarginDiagnosisSummary(snapshot: DiagnosisSnapshot): Margin
   return {
     status,
     topLeak: {
-      title: '가장 위험한 비용 누수',
+      title: '토큰 누수 고객',
       plainLanguageSummary: lossInsight
-        ? `${lossInsight.body} 고객 단위 손해와 비용 누수를 먼저 확인해야 합니다.`
-        : '손해 고객과 비용 누수를 확인할 데이터가 아직 부족합니다.',
+        ? lossInsight.body
+        : 'customer_id, included_tokens, revenue_collected 매핑이 있어야 누수 고객을 확인할 수 있습니다.',
       metricLabel: lossInsight?.value ?? '—',
       severity: lossInsight && lossInsight.value !== fmtTokens(0) ? 'critical' : 'watch',
       customerSafeEvidenceLabel: evidenceState,
       internalRefs: lossInsight?.refs ?? [],
     },
     marginBreakingFeature: {
-      title: '마진을 깨는 기능',
+      title: '토큰을 가장 많이 태우는 기능',
       plainLanguageSummary: featureInsight
         ? featureInsight.body
-        : '기능별 원가/마진 근거가 아직 준비되지 않았습니다.',
+        : '기능별 token 원가 근거가 아직 준비되지 않았습니다.',
       metricLabel: featureInsight?.value ?? '—',
       severity: featureInsight && featureInsight.value !== fmtCurrency(0) ? 'caution' : 'watch',
       customerSafeEvidenceLabel: evidenceState,
       internalRefs: featureInsight?.refs ?? [],
     },
     recommendedDecision: {
-      title: '추천 결정',
+      title: 'Token policy 후보',
       plainLanguageSummary: selectedDecision
-        ? `${selectedDecision.body} 가격, credit, cap, overage, 라우팅 중 어떤 결정을 바꿀지 검토합니다.`
+        ? `${selectedDecision.body} credit, cap, overage, routing 중 어떤 token policy를 바꿀지 검토합니다.`
         : (policyInsight?.body ?? '결정 후보를 만들 수 없습니다.'),
       metricLabel: policyInsight?.value ?? '검토 필요',
       severity: status === 'complete' ? 'caution' : 'watch',

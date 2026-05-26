@@ -528,6 +528,15 @@ describe('App AI team operations workspace', () => {
     expect(allHandsBody.frontOperatingSystem.dataReadinessGate.rejectedColumns).toContain('raw_prompt')
     expect(offerIds).toContain('ai_cost_snapshot')
     expect(allHandsBody.frontOperatingSystem.learningLoopRecords).toEqual([])
+    expect(allHandsBody.usageLog).toEqual([])
+    expect(allHandsBody.providerModelPriceRefs.length).toBeGreaterThan(0)
+    expect(allHandsBody.providerModelPriceRefs[0]).toHaveProperty('providerRegistryVersion')
+    expect(allHandsBody.costAttribution).toHaveProperty('feature')
+    expect(allHandsBody.marginProfitability).toHaveProperty('plans')
+    expect(allHandsBody.optimizationWhatIfSavings.length).toBeGreaterThan(0)
+    expect(allHandsBody.corpusRegistryVersion).toBe('corpus_registry_v0.1')
+    expect(allHandsBody).toHaveProperty('ragEvidenceCoverage')
+    expect(allHandsBody.benchmarkEvidenceRefs).toContain('evidence:artificial-analysis-models')
   }, 60000)
 
   it('resumes a HITL checkpoint after an explicit Adopt decision', async () => {
@@ -685,30 +694,35 @@ describe('App AI team operations workspace', () => {
     expect(resumeBody.resumePayload.decisionId).toMatch(/^decision-/)
     expect(resumeBody.resumePayload.checkpointId).toMatch(/^checkpoint:agentpayroll:/)
     expect(resumeBody.resumePayload.interruptId).toBe('interrupt:supervisor-tools')
-    await waitFor(() => {
-      const saved = JSON.parse(window.localStorage.getItem('token-simulator:decision-log') ?? '[]')
-      const checkpointedDecision = saved.find((decision: { id?: string }) => decision.id === resumeBody.resumePayload.decisionId)
-      expect(checkpointedDecision?.runtimeProof?.checkpoint).toMatchObject({
-        status: 'interrupt_requested',
-        threadId: expect.stringMatching(/^agentpayroll-/),
-        checkpointNamespace: 'agentpayroll',
-        checkpointId: expect.stringMatching(/^checkpoint:agentpayroll:/),
-      })
-      expect(JSON.stringify(checkpointedDecision?.runtimeProof?.checkpoint)).not.toContain('resumePayload')
-    })
-    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Resumed after explicit Adopt approval/i))
-    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: resumed/i)
-    expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: resumed/i)
-    await user.click(lifecycleButton(/Decision Log/i))
-    await waitFor(() => expect(screen.getAllByText(/Runtime proof/i).length).toBeGreaterThan(0))
-    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/checkpoint: interrupt_requested/i)
-    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval: adopt/i)
-    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval mode: explicit_button/i)
-
     const resumeCallCount = () => fetchMock.mock.calls.filter(([input, init]) => {
       if (!String(input).includes('/api/agent/run') || !init?.body) return false
       return JSON.parse(String(init.body)).resumeCheckpoint === true
     }).length
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Resumed after explicit Adopt approval/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: resumed/i)
+    expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: resumed/i)
+    expect(resumeCallCount()).toBe(1)
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem('token-simulator:decision-log') ?? '[]')
+      const checkpointedDecision = saved.find((decision: { id?: string }) => decision.id === resumeBody.resumePayload.decisionId)
+      expect(checkpointedDecision?.runtimeProof?.checkpoint).toMatchObject({
+        status: 'resumed',
+        threadId: expect.stringMatching(/^agentpayroll-/),
+        checkpointNamespace: 'agentpayroll',
+        checkpointId: expect.stringMatching(/^checkpoint:agentpayroll:/),
+      })
+      expect(checkpointedDecision?.humanApproval).toMatchObject({
+        decisionChoice: 'adopt',
+        approvalMode: 'checkpoint_resume',
+      })
+      expect(JSON.stringify(checkpointedDecision?.runtimeProof?.checkpoint)).not.toContain('resumePayload')
+    })
+    await user.click(lifecycleButton(/Decision Log/i))
+    await waitFor(() => expect(screen.getAllByText(/Runtime proof/i).length).toBeGreaterThan(0))
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/checkpoint: resumed/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/runtime source: provider-backed/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval: adopt/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval mode: checkpoint_resume/i)
     const callsBeforeThresholdChange = fetchMock.mock.calls.length
 
     fireEvent.change(screen.getByLabelText(/Retry rate above/i), { target: { value: '15' } })
@@ -795,6 +809,66 @@ describe('App AI team operations workspace', () => {
     expect(panel).toHaveTextContent(/decision:cache-policy/i)
     expect(panel).toHaveTextContent(/baseline unavailable/i)
     expect(panel).toHaveTextContent(/Which peer baseline should be added/i)
+  }, 60000)
+
+  it('shows a snapshot_missing warning state without provider-fabricated numbers', async () => {
+    vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/agent/run')) {
+        return new Response(JSON.stringify({
+          answer: 'Snapshot missing, but monthly cost is $999,999 and savings are 92% from tool:team.monthlyCostUsd.',
+          report: 'Provider answer referenced snapshot:missing:test without evidence.',
+          supervisorSummary: 'Reliable numbers cannot be produced because snapshot evidence is missing; ignore $999,999.',
+          events: [{
+            type: 'analysis',
+            message: 'Snapshot evidence is missing.',
+            toolResultRefs: ['tool:team.monthlyCostUsd'],
+            riskCardIds: [],
+            agentId: 'cost_modeling',
+            calledAgentTool: 'call_cost_modeling_agent',
+            stance: 'caution',
+            evidenceWarnings: ['snapshot_missing'],
+          }],
+          llmMode: 'provider-llm',
+          runtime: {
+            status: 'provider_llm',
+            providerRunId: 'agent-service:test:snapshot-missing',
+            agentInvocationProof: ['call_cost_modeling_agent'],
+            startedAt: '2026-05-26T00:00:00.000Z',
+            completedAt: '2026-05-26T00:00:01.000Z',
+          },
+          disagreements: [],
+          decisionReadiness: 'needs_review',
+          nextQuestions: ['Attach the decision snapshot before trusting numeric guidance.'],
+          calledAgentIds: ['cost_modeling'],
+          primaryAgentId: 'cost_modeling',
+          reviewerAgentIds: [],
+          agentRoute: { executionMode: 'stage_committee' },
+          snapshotVersion: 'snapshot:missing:test',
+          usedTools: ['lookup_snapshot_value'],
+          toolResultRefs: ['tool:team.monthlyCostUsd'],
+          riskCardIds: [],
+          decisionIds: [],
+          evidenceRefs: [],
+          assetRefs: [],
+          warnings: ['snapshot_missing'],
+        }), { status: 200 })
+      }
+      if (String(input).includes('/api/agent')) {
+        return new Response(JSON.stringify({ events: [] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    }))
+
+    render(<App />)
+
+    const panel = await screen.findByTestId('decision-assistant-panel')
+    await waitFor(() => expect(panel).toHaveTextContent(/snapshot evidence is missing/i))
+    expect(panel).toHaveTextContent(/reliable numbers/i)
+    expect(panel).not.toHaveTextContent(/\$999,999/)
+    expect(panel).not.toHaveTextContent(/\b92%/)
+    expect(panel).not.toHaveTextContent(/tool:/i)
+    expect(panel).not.toHaveTextContent(/snapshot:/i)
   }, 60000)
 
   it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {
@@ -1317,6 +1391,10 @@ describe('App AI team operations workspace', () => {
     expect(document.body.textContent).toContain('automate')
     expect(document.body.textContent).toContain('performanceSnapshot')
     expect(document.body.textContent).toContain('costSnapshot')
+    fireEvent.click(lifecycleButton(/Decision Log/i))
+    await waitFor(() => expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/Runtime proof/i))
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/runtime source: fallback/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/fallback reason: waiting for deterministic snapshot/i)
   }, 60000)
 
   it('loads remote Decision & Approval Log entries before local fallback', async () => {

@@ -44,7 +44,7 @@ import { buildAgentSnapshot } from '../features/agent/lib/buildAgentSnapshot'
 import { OperatingTeamPanel } from '../features/agent/components/OperatingTeamPanel'
 import { FrontOperatingPanel } from '../features/front-operating/components/FrontOperatingPanel'
 import { createDecision, createOperatingLedgerEntry, deleteDecision, exportDecisionLogFileName, loadDecisionLog, saveDecisionLog, serializeDecisionLog, type Decision, type OperatingDecisionKind, type ReportReviewMetadata, type TrustReviewMetadata } from '../features/decision-log/lib/decisionLog'
-import type { RuntimeProofMetadata } from '../features/provenance/lib/runtimeApprovalMetadata'
+import type { HumanApprovalMetadata, RuntimeProofMetadata } from '../features/provenance/lib/runtimeApprovalMetadata'
 import { createRemoteDecisionStore } from '../features/decision-log/lib/decisionStore'
 import { DEFAULT_AI_TEAM_AGENTS, type AITeamConfiguration } from '../features/team/lib/aiTeamConfiguration'
 import { TeamDesignerPanel } from '../features/team/components/TeamDesignerPanel'
@@ -68,7 +68,7 @@ import {
 import type { CorpusChunk } from '../features/rag/lib/corpusTypes'
 import type { AgentSpec, HumanReviewGate } from '../features/team-cost/lib/agentSpec'
 import { detectBottlenecks } from '../features/team-cost/lib/bottleneckAnalysis'
-import { estimateAgentWorkload, summarizeTeamCost, type TeamCostEstimate } from '../features/team-cost/lib/estimateAgentWorkload'
+import { estimateAgentWorkload, summarizeTeamCost, type AgentCostEstimate, type TeamCostEstimate } from '../features/team-cost/lib/estimateAgentWorkload'
 import { proposeOptimizationCandidates, recommendationFromCandidate } from '../features/team-cost/lib/optimizationPolicies'
 import type { OptimizationRecommendation } from '../features/team-cost/lib/optimizationPolicies'
 import { runTeamCostAgentRuntime, type TeamCostLlmMode } from '../features/agent/lib/teamCostAgentRuntime'
@@ -154,6 +154,58 @@ function cloneAgentCatalog(): AgentSpec[] {
     outputs: agent.outputs.map(output => ({ ...output })),
     assignedTasks: [...agent.assignedTasks],
   }))
+}
+
+function finiteNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function safeShare(numerator: number, denominator: number): number {
+  return denominator > 0 ? finiteNonNegative(numerator) / denominator : 0
+}
+
+function buildTeamPlanFeatureAttribution(
+  estimates: AgentCostEstimate[],
+  teamEstimate: TeamCostEstimate,
+): AttributionResult {
+  const totalCostUsd = finiteNonNegative(teamEstimate.monthlyCostUsd)
+  const rows = estimates
+    .map(estimate => {
+      const requestCount = finiteNonNegative(estimate.monthlyRequests)
+      const inputTokens = finiteNonNegative(estimate.monthlyInputTokens)
+      const outputTokens = finiteNonNegative(estimate.monthlyOutputTokens)
+      const totalRowCostUsd = finiteNonNegative(estimate.cost.monthlyCost)
+      return {
+        key: estimate.agentId,
+        label: estimate.role,
+        requestCount,
+        inputTokens,
+        outputTokens,
+        totalCostUsd: totalRowCostUsd,
+        avgInputTokensPerRequest: requestCount > 0 ? Math.round(inputTokens / requestCount) : 0,
+        avgOutputTokensPerRequest: requestCount > 0 ? Math.round(outputTokens / requestCount) : 0,
+        costPerRequest: safeShare(totalRowCostUsd, requestCount),
+        shareOfCost: safeShare(totalRowCostUsd, totalCostUsd),
+      }
+    })
+    .sort((left, right) => right.totalCostUsd - left.totalCostUsd)
+
+  return {
+    axis: 'feature',
+    rows,
+    mappedCount: rows.length,
+    missingCount: 0,
+    unattributedCostUsd: 0,
+    coveragePct: rows.length > 0 ? 1 : 0,
+    costCoveragePct: totalCostUsd > 0 ? 1 : 0,
+    totalCostUsd,
+  }
+}
+
+function runtimeSourceLabel(status: RuntimeProofMetadata['status']): string {
+  return status === 'provider_llm' || status === 'interrupt_requested' || status === 'resumed'
+    ? 'provider-backed'
+    : 'fallback'
 }
 
 type TeamCostCompanyProfile = {
@@ -1327,8 +1379,12 @@ function DecisionLogWorkspace({
                   <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs text-label-neutral">
                     <p className="font-semibold text-primary-normal">Runtime proof</p>
                     <p translate="no">status: {decision.runtimeProof.status}</p>
+                    <p translate="no">runtime source: {runtimeSourceLabel(decision.runtimeProof.status)}</p>
                     <p translate="no">provider run: {decision.runtimeProof.providerRunId ?? 'none'}</p>
                     <p translate="no">agent proof: {decision.runtimeProof.agentInvocationProof.join(', ') || 'none'}</p>
+                    {decision.runtimeProof.fallbackReason && (
+                      <p translate="no">fallback reason: {decision.runtimeProof.fallbackReason}</p>
+                    )}
                     {decision.runtimeProof.checkpoint && (
                       <>
                         <p translate="no">checkpoint: {decision.runtimeProof.checkpoint.status}</p>
@@ -2148,13 +2204,22 @@ function DecisionAssistantPanel({
   const executionModeLabel = typeof agentRun.agentRoute.executionMode === 'string'
     ? agentRun.agentRoute.executionMode
     : ''
-  const supervisorText = showInternal
-    ? (agentRun.supervisorSummary || agentRun.answer)
-    : customerSafeAgentText(agentRun.supervisorSummary || agentRun.answer)
-  const stageAnswerText = showInternal
-    ? agentRun.answer
-    : customerSafeAgentText(agentRun.answer)
-  const warningText = showInternal
+  const hasSnapshotMissingWarning = agentRun.warnings.includes('snapshot_missing')
+    || agentRun.events.some(event => event.evidenceWarnings?.includes('snapshot_missing'))
+  const snapshotMissingMessage = 'Snapshot evidence is missing. The agent did not produce reliable numbers.'
+  const supervisorText = hasSnapshotMissingWarning && !showInternal
+    ? snapshotMissingMessage
+    : showInternal
+      ? (agentRun.supervisorSummary || agentRun.answer)
+      : customerSafeAgentText(agentRun.supervisorSummary || agentRun.answer)
+  const stageAnswerText = hasSnapshotMissingWarning && !showInternal
+    ? 'Attach the decision snapshot before trusting numeric guidance from this agent run.'
+    : showInternal
+      ? agentRun.answer
+      : customerSafeAgentText(agentRun.answer)
+  const warningText = hasSnapshotMissingWarning
+    ? 'Snapshot evidence is missing; reliable agent numbers are unavailable.'
+    : showInternal
     ? agentRun.warnings[0]
     : 'AI 해석은 저장된 비용 근거를 기준으로 표시됩니다.'
 
@@ -2220,6 +2285,22 @@ function DecisionAssistantPanel({
               </ul>
             </div>
           )}
+          {hasSnapshotMissingWarning && (
+            <div
+              data-testid="assistant-snapshot-missing-warning"
+              className="mt-2 rounded-wds border border-status-cautionary/30 bg-status-cautionary/10 p-2"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="caution">Snapshot missing</Badge>
+                <p className="text-xs font-semibold text-status-cautionary">
+                  Reliable numbers unavailable
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-label-neutral" lang="en">
+                Snapshot evidence is missing, so the agent response is treated as guidance only and numeric claims are withheld.
+              </p>
+            </div>
+          )}
         </div>
         <div className="mt-3 rounded-wds border border-primary-normal/20 bg-primary-normal/10 p-3">
           <p className="text-xs font-semibold uppercase text-primary-normal">Stage answer</p>
@@ -2247,13 +2328,27 @@ function DecisionAssistantPanel({
           )}
         </div>
         <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-          <p className="text-xs font-semibold text-label-alternative">Current monthly cost</p>
-          <p data-testid="assistant-monthly-cost" className="mt-1 text-xl font-semibold text-label-normal" translate="no">
-            {fmtCurrency(teamEstimate.monthlyCostUsd)}
-          </p>
-          <p className="mt-1 text-xs text-label-alternative" translate="no">
-            top agent share {fmtPercent(teamEstimate.topAgentShare)}
-          </p>
+          {hasSnapshotMissingWarning ? (
+            <>
+              <p className="text-xs font-semibold text-label-alternative">Agent numbers unavailable</p>
+              <p data-testid="assistant-monthly-cost" className="mt-1 text-xl font-semibold text-label-normal" translate="no">
+                —
+              </p>
+              <p className="mt-1 text-xs text-label-alternative">
+                Snapshot evidence is required before trusting agent numeric guidance.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-label-alternative">Current monthly cost</p>
+              <p data-testid="assistant-monthly-cost" className="mt-1 text-xl font-semibold text-label-normal" translate="no">
+                {fmtCurrency(teamEstimate.monthlyCostUsd)}
+              </p>
+              <p className="mt-1 text-xs text-label-alternative" translate="no">
+                top agent share {fmtPercent(teamEstimate.topAgentShare)}
+              </p>
+            </>
+          )}
         </div>
         {showInternal ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -2630,6 +2725,9 @@ function App() {
   const [agentExecutionMode, setAgentExecutionMode] = useState<AgentRunExecutionMode>('stage_committee')
   const [agentCheckpointResume, setAgentCheckpointResume] = useState<AgentCheckpointResumeRequest | null>(null)
   const skipNextAgentRunRef = useRef(false)
+  const resumeInFlightRef = useRef(false)
+  const submittedResumeRequestIdRef = useRef<number | null>(null)
+  const agentRunRequestSeqRef = useRef(0)
   const [thresholdPolicy, setThresholdPolicy] = useState<ThresholdPolicy>(DEFAULT_THRESHOLD_POLICY)
   const [teamCostWorkItems, setTeamCostWorkItems] = useState<WorkCatalogItem[]>(() => (
     DEFAULT_TEAM_COST_WORK_ITEMS.map(item => ({ ...item }))
@@ -2818,6 +2916,13 @@ function App() {
     return model ? [estimateAgentWorkload({ spec: agent, model })] : []
   }), [teamCostAgents])
   const teamCostEstimate = useMemo(() => summarizeTeamCost(teamCostEstimates), [teamCostEstimates])
+  const snapshotCostAttribution = useMemo<Partial<Record<AttributionAxis, AttributionResult>>>(() => {
+    if (attribution.feature) return attribution
+    return {
+      ...attribution,
+      feature: buildTeamPlanFeatureAttribution(teamCostEstimates, teamCostEstimate),
+    }
+  }, [attribution, teamCostEstimate, teamCostEstimates])
   const attributedDeliverables = useMemo(
     () => attributeDeliverableCosts(teamCostDeliverables, teamCostEstimates),
     [teamCostDeliverables, teamCostEstimates],
@@ -2986,6 +3091,13 @@ function App() {
     })), [decisions])
   const agentSnapshot = useMemo(() => {
     const primaryRecommendation = teamCostRecommendations[0]
+    const usageLog = importedUsage?.rows ?? []
+    const providerModelIds = new Set([
+      ...usageLog.map(row => row.modelId),
+      ...teamCostAgents.map(agent => agent.modelId),
+      state.currentModel.id,
+      state.candidateModel.id,
+    ])
     return buildAgentSnapshot({
       activeStage: activeDecisionStage,
       toolResults: {
@@ -3000,6 +3112,54 @@ function App() {
       riskCards: [...riskCards, ...teamCostRiskCards].map(card => ({ ...card, source: `risk:${card.evidenceId}` })),
       benchmarkCards: TEAM_COST_BENCHMARKS.map(card => ({ ...card, source: `benchmark:${card.evidenceId}` })),
       decisionHistory: decisions.map(decision => ({ ...decision })),
+      usageLog: usageLog.map(row => ({ ...row })),
+      providerModelPriceRefs: [...providerModelIds].map(modelId => {
+        const model = getModelById(modelId)
+        if (!model) {
+          return {
+            modelId,
+            pricingStatus: 'missing_model',
+            providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
+          }
+        }
+        return {
+          modelId: model.id,
+          name: model.name,
+          provider: model.provider,
+          servingProvider: model.servingProvider ?? null,
+          inputPrice: model.inputPrice,
+          outputPrice: model.outputPrice,
+          priceSourceUrl: model.priceSourceUrl ?? model.sourceUrl,
+          pricingStatus: model.pricingStatus ?? 'verified',
+          currency: model.currency ?? 'USD',
+          providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
+        }
+      }),
+      costAttribution: snapshotCostAttribution,
+      marginProfitability: {
+        plans: planMargins,
+        customers: customerMargins,
+        heavyUsers: {
+          topDecileShare: heavyUsers.topDecileShare,
+          topDecileCostUsd: heavyUsers.topDecileCostUsd,
+          medianCustomerCostUsd: heavyUsers.medianCustomerCostUsd,
+          lossCustomerCount: heavyUsers.lossCustomers.length,
+        },
+      },
+      optimizationWhatIfSavings: teamCostRecommendations.map(recommendation => ({
+        id: recommendation.id,
+        policy: recommendation.policy,
+        agentId: recommendation.agentId,
+        monthlySavingsUsd: recommendation.monthlySavingsUsd,
+        costAfterUsd: recommendation.costAfterUsd,
+        before: recommendation.before,
+        after: recommendation.after,
+        delta: recommendation.delta,
+        decisionMode: recommendation.decisionMode,
+        isDefinitiveWaste: recommendation.isDefinitiveWaste,
+        requiredValidation: recommendation.requiredValidation,
+        toolResultRefs: recommendation.toolResultRefs,
+      })),
       factSources: currentFactSources,
       operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
       operatingAssets: OPERATING_ASSETS.map(asset => ({ ...asset })),
@@ -3022,12 +3182,23 @@ function App() {
   }, [
     activeDecisionStage,
     currentFactSources,
+    customerMargins,
     decisions,
+    heavyUsers.lossCustomers.length,
+    heavyUsers.medianCustomerCostUsd,
+    heavyUsers.topDecileCostUsd,
+    heavyUsers.topDecileShare,
+    importedUsage?.rows,
     importedUsage?.totalCostUsd,
     importedUsage?.trustInspection,
     operatingLedgerRows,
     p1RagEvidencePanel.evidence?.results,
+    planMargins,
     riskCards,
+    snapshotCostAttribution,
+    state.candidateModel.id,
+    state.currentModel.id,
+    teamCostAgents,
     teamCostBottlenecks,
     teamCostEstimate.monthlyCostUsd,
     teamCostEstimate.topAgentShare,
@@ -3065,6 +3236,8 @@ function App() {
   ])
 
   const handleDecisionStageChange = (stage: DecisionStageId) => {
+    resumeInFlightRef.current = false
+    submittedResumeRequestIdRef.current = null
     setActiveDecisionStage(stage)
     setRequestedOperatingAgentId(null)
     setAgentExecutionMode('stage_committee')
@@ -3072,12 +3245,16 @@ function App() {
   }
 
   const handleOperatingAgentSelect = (agentId: OperatingAgentId) => {
+    resumeInFlightRef.current = false
+    submittedResumeRequestIdRef.current = null
     setRequestedOperatingAgentId(agentId)
     setAgentExecutionMode('single_agent')
     setAgentCheckpointResume(null)
   }
 
   const handleRunFullOperatingReview = () => {
+    resumeInFlightRef.current = false
+    submittedResumeRequestIdRef.current = null
     setRequestedOperatingAgentId(null)
     setAgentExecutionMode('all_hands')
     setAgentCheckpointResume(null)
@@ -3110,6 +3287,7 @@ function App() {
   ) => {
     const checkpoint = agentRun.runtime.checkpoint
     if (agentRun.runtime.status !== 'interrupt_requested' || !checkpoint?.threadId) return
+    resumeInFlightRef.current = true
     setAgentCheckpointResume({
       requestId: Date.now(),
       checkpointThreadId: checkpoint.threadId,
@@ -3301,34 +3479,78 @@ function App() {
     formulaVersionVisible: true,
   })
 
-  const runtimeProofSnapshot = (): RuntimeProofMetadata => ({
-    status: agentRun.runtime.status,
-    ...((agentRun.runtime.status === 'provider_llm' || agentRun.runtime.status === 'resumed') && agentRun.runtime.providerRunId ? { providerRunId: agentRun.runtime.providerRunId } : {}),
+  const runtimeProofFromAgentRun = (runtime: AgentRunResponse['runtime']): RuntimeProofMetadata => ({
+    status: runtime.status,
+    ...((runtime.status === 'provider_llm' || runtime.status === 'resumed') && runtime.providerRunId ? { providerRunId: runtime.providerRunId } : {}),
     agentInvocationProof: (
-      agentRun.runtime.status === 'provider_llm'
-      || agentRun.runtime.status === 'resumed'
-      || agentRun.runtime.status === 'interrupt_requested'
-    ) ? agentRun.runtime.agentInvocationProof ?? [] : [],
-    ...(agentRun.runtime.fallbackReason ? { fallbackReason: agentRun.runtime.fallbackReason } : {}),
-    startedAt: agentRun.runtime.startedAt,
-    completedAt: agentRun.runtime.completedAt,
-    ...(agentRun.runtime.checkpoint ? {
+      runtime.status === 'provider_llm'
+      || runtime.status === 'resumed'
+      || runtime.status === 'interrupt_requested'
+    ) ? runtime.agentInvocationProof ?? [] : [],
+    ...(runtime.fallbackReason ? { fallbackReason: runtime.fallbackReason } : {}),
+    startedAt: runtime.startedAt,
+    completedAt: runtime.completedAt,
+    ...(runtime.checkpoint ? {
       checkpoint: {
-        status: agentRun.runtime.checkpoint.status,
-        persistence: agentRun.runtime.checkpoint.persistence,
-        threadId: agentRun.runtime.checkpoint.threadId,
-        checkpointNamespace: agentRun.runtime.checkpoint.checkpointNamespace,
-        checkpointId: agentRun.runtime.checkpoint.checkpointId,
-        ...(agentRun.runtime.checkpoint.interruptId !== undefined ? { interruptId: agentRun.runtime.checkpoint.interruptId } : {}),
-        ...(agentRun.runtime.checkpoint.reason ? { reason: agentRun.runtime.checkpoint.reason } : {}),
+        status: runtime.checkpoint.status,
+        persistence: runtime.checkpoint.persistence,
+        threadId: runtime.checkpoint.threadId,
+        checkpointNamespace: runtime.checkpoint.checkpointNamespace,
+        checkpointId: runtime.checkpoint.checkpointId,
+        ...(runtime.checkpoint.interruptId !== undefined ? { interruptId: runtime.checkpoint.interruptId } : {}),
+        ...(runtime.checkpoint.reason ? { reason: runtime.checkpoint.reason } : {}),
       },
     } : {}),
   })
+
+  const runtimeProofSnapshot = (): RuntimeProofMetadata => runtimeProofFromAgentRun(agentRun.runtime)
 
   const decisionReviewMetadata = (summary: UsageImportSummary | null = importedUsage) => ({
     trustReview: trustReviewSnapshot(summary),
     reportReview: reportReviewSnapshot(summary),
   })
+
+  const persistCheckpointResumeProof = (
+    runtime: AgentRunResponse['runtime'],
+    resumePayload: Record<string, unknown>,
+  ) => {
+    const decisionId = typeof resumePayload.decisionId === 'string' ? resumePayload.decisionId : ''
+    if (!decisionId) return
+    const rawChoice = typeof resumePayload.decisionChoice === 'string' ? resumePayload.decisionChoice : ''
+    const decisionChoice = (['adopt', 'reject', 'hold'].includes(rawChoice) ? rawChoice : 'hold') as HumanApprovalMetadata['decisionChoice']
+    const runtimeProof = runtimeProofFromAgentRun(runtime)
+    const humanApproval: HumanApprovalMetadata = {
+      required: true,
+      decisionChoice,
+      approvedBy: 'workspace_user',
+      approvedAt: runtime.completedAt,
+      approvalMode: 'checkpoint_resume',
+    }
+    setDecisions(current => {
+      let changed = false
+      const next = current.map(decision => {
+        if (decision.id !== decisionId) return decision
+        changed = true
+        return {
+          ...decision,
+          runtimeProof,
+          humanApproval,
+        }
+      })
+      if (!changed) return current
+      saveDecisionLog(next)
+      void remoteDecisionStore.save(next)
+        .then(() => {
+          setRemoteBackendStatus('connected')
+          setRemoteBackendMessage('Remote backend connected')
+        })
+        .catch(() => {
+          setRemoteBackendStatus('fallback')
+          setRemoteBackendMessage('Remote backend unavailable; using local fallback')
+        })
+      return next
+    })
+  }
 
   const agentReviewSnapshot = (stage: DecisionStageId = activeDecisionStage) => {
     const usedCapabilityTools = [...new Set([
@@ -3438,9 +3660,23 @@ function App() {
   useEffect(() => {
     if (skipNextAgentRunRef.current) {
       skipNextAgentRunRef.current = false
+      resumeInFlightRef.current = false
+      return
+    }
+    if (resumeInFlightRef.current && !agentCheckpointResume) {
+      return
+    }
+    if (agentCheckpointResume && submittedResumeRequestIdRef.current === agentCheckpointResume.requestId) {
       return
     }
     let cancelled = false
+    const requestSeq = agentRunRequestSeqRef.current + 1
+    agentRunRequestSeqRef.current = requestSeq
+    const isResumeRequest = Boolean(agentCheckpointResume)
+    const resumeRequestId = agentCheckpointResume?.requestId ?? null
+    if (isResumeRequest) {
+      submittedResumeRequestIdRef.current = resumeRequestId
+    }
     const checkpointNamespace = 'agentpayroll'
     const checkpointThreadId = agentCheckpointResume?.checkpointThreadId
       ?? `agentpayroll-${workspaceId}-${agentSnapshot.snapshotVersion}-${agentExecutionMode}`.replace(/[^0-9A-Za-z_-]/g, '-')
@@ -3460,6 +3696,11 @@ function App() {
       riskCards: agentSnapshot.riskCards,
       benchmarkCards: agentSnapshot.benchmarkCards,
       decisionHistory: agentSnapshot.decisionHistory,
+      usageLog: agentSnapshot.usageLog,
+      providerModelPriceRefs: agentSnapshot.providerModelPriceRefs,
+      costAttribution: agentSnapshot.costAttribution,
+      marginProfitability: agentSnapshot.marginProfitability,
+      optimizationWhatIfSavings: agentSnapshot.optimizationWhatIfSavings,
       factSources: agentSnapshot.factSources,
       operatingAgents: agentSnapshot.operatingAgents,
       operatingAssets: agentSnapshot.operatingAssets,
@@ -3471,6 +3712,9 @@ function App() {
       modelReleaseCandidates: agentSnapshot.modelReleaseCandidates,
       pricingFactCandidates: agentSnapshot.pricingFactCandidates,
       fxRateSnapshots: agentSnapshot.fxRateSnapshots,
+      corpusRegistryVersion: agentSnapshot.corpusRegistryVersion,
+      ragEvidenceCoverage: agentSnapshot.ragEvidenceCoverage,
+      benchmarkEvidenceRefs: agentSnapshot.benchmarkEvidenceRefs,
       ragCollections: {
         official_docs: agentSnapshot.officialSourceSnippets ?? [],
         benchmark_evidence: agentSnapshot.benchmarkCards,
@@ -3488,16 +3732,35 @@ function App() {
       resumeCheckpoint: Boolean(agentCheckpointResume),
       resumePayload: agentCheckpointResume?.resumePayload ?? {},
     }).then(result => {
-      if (!cancelled) {
-        setAgentRun(result)
-        if (agentCheckpointResume && result.runtime.status === 'resumed') {
-          skipNextAgentRunRef.current = true
+      const currentRequestActive = isResumeRequest
+        ? submittedResumeRequestIdRef.current === resumeRequestId
+        : requestSeq === agentRunRequestSeqRef.current
+      if (!cancelled && currentRequestActive) {
+        if (resumeInFlightRef.current && !agentCheckpointResume && result.runtime.status === 'interrupt_requested') {
+          return
+        }
+        setAgentRun(current => (
+          current.runtime.status === 'resumed' && result.runtime.status === 'interrupt_requested'
+            ? current
+            : result
+        ))
+        if (agentCheckpointResume) {
+          if (result.runtime.status === 'resumed') {
+            persistCheckpointResumeProof(result.runtime, agentCheckpointResume.resumePayload)
+            submittedResumeRequestIdRef.current = null
+            skipNextAgentRunRef.current = true
+          } else {
+            resumeInFlightRef.current = false
+            submittedResumeRequestIdRef.current = null
+          }
           setAgentCheckpointResume(null)
         }
       }
     })
     return () => {
-      cancelled = true
+      if (!isResumeRequest) {
+        cancelled = true
+      }
     }
   }, [
     activeDecisionStage,
@@ -3762,8 +4025,8 @@ function App() {
       ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
-    await persistDecisions(next)
     queueAgentCheckpointResume('adopt', recommendation.id, recommendation.rationale, decision.id)
+    void persistDecisions(next)
   }
 
   const handleRejectTeamCostOptimization = async () => {
@@ -3792,8 +4055,8 @@ function App() {
       ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
-    await persistDecisions(next)
     queueAgentCheckpointResume('reject', recommendation.id, `Rejected for now: ${recommendation.rationale}`, decision.id)
+    void persistDecisions(next)
   }
 
   const handleHoldTeamCostOptimization = async () => {
@@ -3822,8 +4085,8 @@ function App() {
       ...decisionReviewMetadata(),
     })
     const next = [decision, ...decisions]
-    await persistDecisions(next)
     queueAgentCheckpointResume('hold', recommendation.id, `Held for human review: ${recommendation.rationale}`, decision.id)
+    void persistDecisions(next)
   }
 
   const handleRecordOperatingDecision = async () => {

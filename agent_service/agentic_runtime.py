@@ -73,6 +73,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
     "cost_modeling": {
         "lookup_snapshot_value",
         "list_available_tool_refs",
+        "retrieve_snapshot_domain",
         "retrieve_threshold_policy",
         "retrieve_metric_flags",
     },
@@ -83,10 +84,12 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
         "retrieve_front_operating_gate",
         "retrieve_front_operating_assets",
         "lookup_snapshot_value",
+        "retrieve_snapshot_domain",
     },
     "cost_engine_qa": {
         "list_available_tool_refs",
         "lookup_snapshot_value",
+        "retrieve_snapshot_domain",
         "retrieve_metric_flags",
         "retrieve_operating_asset",
         "retrieve_pricing_fact_candidates",
@@ -102,6 +105,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
     },
     "customer_diagnostic_pricing": {
         "lookup_snapshot_value",
+        "retrieve_snapshot_domain",
         "retrieve_threshold_policy",
         "retrieve_decision_history",
         "retrieve_operating_asset",
@@ -125,6 +129,7 @@ AGENT_TOOL_PERMISSION_MATRIX: dict[str, set[str]] = {
     },
     "finance_ops": {
         "lookup_snapshot_value",
+        "retrieve_snapshot_domain",
         "retrieve_decision_history",
         "retrieve_operating_ledger",
         "retrieve_operating_asset",
@@ -615,7 +620,12 @@ def build_agent_tools(
     risk_cards: Sequence[Mapping[str, Any]],
     benchmark_cards: Sequence[Mapping[str, Any]],
     decision_history: Sequence[Mapping[str, Any]],
-    fact_sources: Sequence[Mapping[str, Any]],
+    usage_log: Sequence[Mapping[str, Any]] = (),
+    provider_model_price_refs: Sequence[Mapping[str, Any]] = (),
+    cost_attribution: Mapping[str, Any] | None = None,
+    margin_profitability: Mapping[str, Any] | None = None,
+    optimization_what_if_savings: Sequence[Mapping[str, Any]] = (),
+    fact_sources: Sequence[Mapping[str, Any]] = (),
     operating_agents: Sequence[Mapping[str, Any]] = (),
     operating_assets: Sequence[Mapping[str, Any]] = (),
     provider_registry: Sequence[Mapping[str, Any]] = (),
@@ -709,6 +719,40 @@ def build_agent_tools(
             found=bool(refs),
             data={"toolRefs": refs},
             warnings=[] if refs else ["snapshot_missing"],
+        )
+
+    @tool
+    def retrieve_snapshot_domain(domain: str) -> str:
+        """Retrieve a typed deterministic snapshot domain. This never computes values."""
+        normalized = domain.strip().lower().replace("-", "_")
+        domains: dict[str, tuple[str, str, Any, list[str]]] = {
+            "usage": ("usage_log", "usageLog", list(usage_log), ["snapshot:usage_log"]),
+            "usage_log": ("usage_log", "usageLog", list(usage_log), ["snapshot:usage_log"]),
+            "provider_prices": ("provider_model_price_refs", "providerModelPriceRefs", list(provider_model_price_refs), ["snapshot:provider_model_price_refs"]),
+            "provider_model_price_refs": ("provider_model_price_refs", "providerModelPriceRefs", list(provider_model_price_refs), ["snapshot:provider_model_price_refs"]),
+            "cost_attribution": ("cost_attribution", "costAttribution", dict(cost_attribution or {}), ["snapshot:cost_attribution"]),
+            "margin": ("margin_profitability", "marginProfitability", dict(margin_profitability or {}), ["snapshot:margin_profitability"]),
+            "margin_profitability": ("margin_profitability", "marginProfitability", dict(margin_profitability or {}), ["snapshot:margin_profitability"]),
+            "optimization": ("optimization_what_if_savings", "optimizationWhatIfSavings", list(optimization_what_if_savings), ["snapshot:optimization_what_if_savings"]),
+            "optimization_what_if_savings": ("optimization_what_if_savings", "optimizationWhatIfSavings", list(optimization_what_if_savings), ["snapshot:optimization_what_if_savings"]),
+            "decision_history": ("decision_history", "decisionHistory", list(decision_history), ["snapshot:decision_history"]),
+        }
+        domain_entry = domains.get(normalized)
+        if domain_entry is None:
+            return _envelope(
+                tool_name="retrieve_snapshot_domain",
+                found=False,
+                data={"domain": normalized},
+                warnings=["snapshot_domain_unavailable"],
+            )
+        canonical_domain, payload_key, payload_slice, refs = domain_entry
+        found = bool(payload_slice)
+        return _envelope(
+            tool_name="retrieve_snapshot_domain",
+            refs=refs,
+            found=found,
+            data={"domain": canonical_domain, payload_key: payload_slice},
+            warnings=[] if found else ["snapshot_domain_unavailable"],
         )
 
     @tool
@@ -1244,6 +1288,7 @@ def build_agent_tools(
     tools = [
         lookup_snapshot_value,
         list_available_tool_refs,
+        retrieve_snapshot_domain,
         retrieve_threshold_policy,
         retrieve_metric_flags,
         retrieve_risk_cards,
@@ -1432,6 +1477,11 @@ def _run_single_operating_agent(
         risk_cards=payload.riskCards,
         benchmark_cards=payload.benchmarkCards,
         decision_history=payload.decisionHistory,
+        usage_log=payload.usageLog,
+        provider_model_price_refs=payload.providerModelPriceRefs,
+        cost_attribution=payload.costAttribution,
+        margin_profitability=payload.marginProfitability,
+        optimization_what_if_savings=payload.optimizationWhatIfSavings,
         fact_sources=payload.factSources,
         operating_agents=payload.operatingAgents,
         operating_assets=payload.operatingAssets,
@@ -1666,12 +1716,40 @@ def _synthesize_supervisor_fields(
     primary = called_agent_ids[0] if called_agent_ids else str(route["primaryAgentId"])
     reviewers = [agent_id for agent_id in called_agent_ids if agent_id != primary]
     evidence_coverage = _build_evidence_coverage(payload)
-    warning_list = _unique([*warnings, *[warning for response in responses for warning in response.warnings]])
+    event_warnings = [
+        warning
+        for response in responses
+        for event in response.events
+        for warning in event.evidenceWarnings
+    ]
+    warning_list = _unique([*warnings, *[warning for response in responses for warning in response.warnings], *event_warnings])
     warning_list = _unique([*warning_list, *_coverage_warnings(evidence_coverage)])
     missing_or_blocking = [
         warning for warning in warning_list
         if "missing" in warning or "unavailable" in warning or "uncited" in warning
     ]
+    missing_refs = [
+        warning for warning in warning_list
+        if "missing" in warning or "unavailable" in warning or "uncited" in warning or "snapshot" in warning
+    ]
+    primary_response = next((response for response in responses if response.primaryAgentId == primary), responses[0] if responses else None)
+    primary_event = next((event for event in (primary_response.events if primary_response else []) if event.message), None)
+    primary_recommendation = (
+        primary_event.message
+        if primary_event
+        else (primary_response.answer if primary_response else "No primary recommendation returned.")
+    )
+    reviewer_risks = _unique([
+        event.message
+        for response in responses
+        if response.primaryAgentId != primary
+        for event in response.events
+        if event.message and (
+            event.stance in {"caution", "block"}
+            or bool(event.riskCardIds)
+            or bool(event.evidenceWarnings)
+        )
+    ])
     trust_blocked = bool(payload.trustInspection) and payload.trustInspection.get("status") == "blocked"
     blocking_stance = any(
         event.stance == "block"
@@ -1679,25 +1757,31 @@ def _synthesize_supervisor_fields(
         for event in response.events
     )
     readiness = "blocked" if trust_blocked or blocking_stance or any("uncited" in warning for warning in warning_list) else (
-        "needs_review" if missing_or_blocking else "ready"
+        "needs_review" if missing_or_blocking or reviewer_risks else "ready"
     )
     disagreements = [
         f"{reviewer} should review {primary}'s recommendation before adoption."
         for reviewer in reviewers
     ]
     next_questions = [
-        "Which recommendation should a human approve, hold, or reject?",
+        "Which recommendation should a human Adopt, Reject, or Hold?",
         "Are the cited tool refs and risk cards sufficient for the Decision Log?",
     ]
     if missing_or_blocking:
         next_questions.insert(0, "Which missing snapshot, benchmark, or evidence ref should be added before adoption?")
     if "baseline_unavailable" in warning_list:
         next_questions.insert(0, "Which peer baseline should be added before adoption?")
+    summary_parts = [
+        f"{primary} led {len(called_agent_ids)} operating agent(s), grounded in {', '.join(refs) or 'the deterministic snapshot'}.",
+        f"Primary recommendation: {primary_recommendation}",
+    ]
+    if reviewer_risks:
+        summary_parts.append(f"Reviewer risk: {' | '.join(reviewer_risks)}")
+    if missing_refs:
+        summary_parts.append(f"Missing refs: {', '.join(missing_refs)}")
+    summary_parts.append("Human decision needed: Adopt/Reject/Hold")
     return {
-        "supervisorSummary": (
-            f"{primary} led {len(called_agent_ids)} operating agent(s), "
-            f"grounded in {', '.join(refs) or 'the deterministic snapshot'}."
-        ),
+        "supervisorSummary": " ".join(summary_parts),
         "disagreements": disagreements,
         "decisionReadiness": readiness,
         "nextQuestions": next_questions,

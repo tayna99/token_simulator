@@ -1,9 +1,9 @@
 # PRD: AgentPayroll — 현 상태 기준 (Implementation Truth Record, 구현 사실 기록)
 
-문서 버전: current-state · 2026-05-25
-상태: 사실 기록 + 2026-05-25 확정 전환 방향 (내부 정렬용)
+문서 버전: current-state · 2026-05-26
+상태: 사실 기록 + 2026-05-26 확정 전환 방향 (내부 정렬용)
 성격: §1~§8은 *"지금 코드에 무엇이 실제로 존재하고, 무엇이 검증됐고, 무엇이 아직 검증 안 됐는가"* 를 정직하게 기록한다. §9~§11은 이미 확정된 **Next.js primary frontend(주 프론트엔드) + Production Demo First(운영 경로 기준 데모 우선)** 방향을 UI/UX 기획으로 내려쓰기 위한 실행 기준이다.
-관계: `docs/PRD-v3.md`(v3.2, 합의된 방향+다음 MVP)와 병존한다. v3.2가 "가야 할 곳"이라면 이 문서는 "지금 있는 곳 + 지금부터 Next.js로 옮길 때 지켜야 할 UX 기준"이다. 충돌 시 구현 사실은 §1~§8, Next 전환/UX 기준은 §9~§11을 우선한다.
+관계: `docs/PRD-v3.md`(v3.4, 합의된 방향+다음 MVP)와 병존한다. v3.4가 "가야 할 곳"이라면 이 문서는 "지금 있는 곳 + 지금부터 Next.js로 옮길 때 지켜야 할 UX 기준"이다. 충돌 시 구현 사실은 §1~§8, Next 전환/UX 기준은 §9~§11을 우선한다.
 
 ---
 
@@ -15,7 +15,7 @@
 - 🟡 **진행중** — 코드 존재하나 부분적이거나 일부만 배선
 - ⚠️ **미검증** — 코드/테스트는 존재하나 이 기록 시점에 그린(통과)을 확인하지 못함
 
-검증 갭은 §8에 따로 모은다. 이 기록은 2026-05-25 현재 로컬 검증(`npm run test:run -- --testTimeout 60000`, `uv run pytest agent_service/tests`, `npm run build`)을 통과한 상태를 기준으로 한다.
+검증 갭은 §8에 따로 모은다. 이 기록은 2026-05-26 현재 로컬 파일과 최근 커밋을 기준으로 하며, 최신 실행 검증 결과는 §8에 따로 적는다.
 
 ---
 
@@ -26,11 +26,14 @@ AgentPayroll은 AI SaaS의 사용 로그를 **고객·기능·모델·플랜·�
 현 코드 기준 이 제품은 더 이상 "토큰 계산기"가 아니다. 실제로는 다음을 갖춘 **AI SaaS Cost · Margin · Decision Operating System(AI SaaS 비용·마진·결정 운영체계)**이다:
 
 - 결정론적 비용·마진 엔진
+- Money Leak Run: CSV/summary → Trust Gate → 손해 고객/마진 깨는 기능 → Decision Candidate → Adopt/Reject/Hold → PDF artifact 흐름
 - usage import → attribution → margin risk → pricing scenario → decision ledger → one-page report 흐름
 - 11개 운영 에이전트 + 10개 운영 자산
+- LangChain 1.0 `agent_service` runtime + HITL checkpoint/resume + runtime proof
 - C1~C9 RAG(검색으로 근거 문서를 붙여 답하는 방식) corpus(문서 묶음: 공식·벤치마크·서빙·usage-schema·decision-history 등)
 - 역할별(dev/pm/ceo) projection + 내부/고객 audience 분리
 - TypeScript 프런트 + Python `agent_service`(agentic runtime, 에이전트 실행 환경) 2-런타임
+- `AI Cost Snapshot report` 유료 리포트 서비스 검증 자산(ICP, data readiness, offer, review call, ledger)
 
 README의 1차 표현("토큰 시뮬레이터")은 현 실체보다 좁다. 정체성 표현은 본 문서 기준으로 통일한다.
 
@@ -62,6 +65,9 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 7. **역할별 화면은 달라도 숫자는 같다.** dev/pm/ceo는 같은 deterministic snapshot을 읽는다. ✅ (`projectSnapshotForRole.ts`)
 8. **자동번역 보호.** `<meta name="google" content="notranslate">` + root `translate="no"` + 영어 블록 `lang="en"` 유지. ✅ (헌법 회귀 경로)
 9. **Prompt-free 기본값.** raw prompt/messages/API key/PII 기본 미수집. 🟡 (trust intake 부분 구현)
+10. **Runtime proof 없이는 실행 완료로 보지 않는다.** provider/fallback/unavailable/interrupt/resume 상태와 `providerRunId`, `agentInvocationProof`, checkpoint metadata를 분리한다. ✅ (`runtimeApprovalMetadata.ts`, `agentRunRuntime.ts`, `reportArtifacts.ts`)
+11. **HITL resume은 human approval과 함께 남긴다.** checkpoint resume 이후 Decision Log/report artifact는 `runtime.status=resumed`와 `humanApproval.approvalMode=checkpoint_resume`을 보여줄 수 있다. ✅
+12. **Forbidden tool claim은 거부한다.** Python runtime과 middleware가 외부 mutation/forbidden agent tool claim을 차단한다. ✅
 
 ---
 
@@ -80,6 +86,9 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 - 가격 시뮬레이터: flat/credit/cap/hybrid + risk card 게이트 (`PricingSimulatorWorkspace`)
 
 ### 4.3 의사결정 흐름 UI ✅ / 🟡
+- Next `/w/[workspaceId]` 첫 화면: `ReportFirstDiagnosisWorkspace`가 Money Leak Run을 primary workspace로 렌더한다. ✅
+- Money Leak step rail: Trust Gate → Diagnosis → Margin Story → Policy Candidate → Decision Choice → PDF Artifact. ✅ (`moneyLeakRun.ts`, `ReportFirstDiagnosisWorkspace.test.tsx`)
+- explicit decision gate: Adopt/Reject/Hold 선택 전에는 PDF payload/report artifact를 완료 상태로 열지 않는다. ✅
 - decision-flow 5단계: Design → Cost → Bottleneck → Optimize+Risk → Decision Log (`App.tsx` `DECISION_STAGES`) ✅
 - 역할 projection: dev/pm/ceo, `projectSnapshotForRole(snapshot, role, audience)` → KPI/panelOrder/assistant ✅
 - audience: internal/customer (`showInternal`, `?mode=admin`/`?debug=1`) ✅
@@ -90,6 +99,8 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 - 11개 운영 에이전트, 10개 운영 자산, 11개 P1 자동화 모듈: `src/features/operating-assets/lib/operatingAssets.ts`
 - 에이전트 런타임(TS): `src/features/agent/lib/`(agentRuntime, agentRunRuntime, teamCostAgentRuntime, toolContract, riskCards)
 - 에이전트 런타임(Python): `agent_service/agentic_runtime.py`(+ `main.py`, `rag/chroma_store.py`, tests)
+- HITL checkpoint/resume: TS runtime input/output, Python LangGraph checkpointer, UI resume queue, decision/report proof까지 연결. ✅
+- provider/mutation guard: Python middleware와 runtime이 forbidden mutation claim을 거부하고 fallback warning을 남긴다. ✅
 
 ### 4.5 RAG 코퍼스 ✅ / 🟡 / ⚠️
 - C1 공식 소스: `officialSourceRegistry.json`에 OpenAI/Anthropic/Google Big3 공식 가격 source가 등록되어 있다. coverage audit은 non-blocking warning과 freshness/parser review를 노출한다. ✅
@@ -98,6 +109,7 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 - C4 usage 스키마: `rag/data/usageSchemaRegistry.ts` + Supabase `usage_schema` collection path. 🟡
 - C9 decision-history: `rag/lib/decisionHistoryCorpus.ts` + Supabase `decision_history` collection path. 🟡
 - 공통 계약: `rag/lib/corpusTypes.ts`, `research/lib/corpusRegistry.ts` (`corpusId`/`corpusTrust`/`consumerAgentIds`/`evidenceRefPrefix`)
+- agent runtime 입력: `ragCollections.official_docs`, `ragCollections.benchmark_evidence`, `ragCollections.decision_history`를 분리해서 넘긴다. ✅ (`agentRunRuntime.ts`, `agentic_runtime.py`)
 - 설계 정본: `docs/architecture/2026-05-25-agent-rag-corpus-design.md`
 - 참고: C2-only로 계획됐으나 실제로는 C3/C4/C9까지 함께 들어와 **계획보다 범위가 넓다.**
 
@@ -107,8 +119,16 @@ AI SaaS 팀은 OpenAI/Anthropic/Gemini 콘솔, Helicone, Langfuse로 *총* 토�
 ### 4.7 산출물 ✅ / 🟡
 - 의사결정 원장: `src/features/decision-log/`(decisionLog, decisionStore) ✅
 - one-page report + export gate(adopt/reject/hold 기록 필요) + decision header: `decision-loop/lib/`(exportGate, decisionHeader) ✅
+- runtime proof + human approval metadata: decision log와 report artifact가 provider/preview/resume 상태, checkpoint id, approval mode를 보존한다. ✅
 - rate card state machine + billing readiness: `pricing/lib/rateCardDraft.ts` (`draft → approved → pushed_to_billing | failed`, connector_not_configured/blocked/ready 표시) ✅
 - evidence drawer(benchmark_evidence 섹션, baseline unavailable 표시): `App.tsx` ✅
+
+### 4.8 Service MVP Validation ✅
+- `docs/service-validation/icp-scorecard.md`: 유료 리포트 적합 고객과 broad SaaS feature 관심 고객 분리.
+- `docs/service-validation/data-readiness-checklist.md`: 받을 데이터/받지 않을 데이터/분석 가능 범위/막히는 범위.
+- `docs/service-validation/ai-cost-snapshot-offer-one-pager.md`: `AI Cost Snapshot report 30만~100만 원` 제안.
+- `docs/service-validation/review-call-script.md`: 데이터 공유·리포트 공유·가격/limit 결정 quote 검증.
+- `docs/service-validation/learning-loop-template.md`, `service-mvp-validation-ledger.md`: 반복 리포트 요청 중심 pass/fail 판정.
 
 ---
 
@@ -122,7 +142,7 @@ role    : developer | pm | ceo                                       (무엇을 
 audience: internal | customer                                        (얼마나 노출)
 ```
 
-같은 deterministic snapshot(결정론 계산으로 만든 그 시점 분석 데이터 묶음) 위에서 stage가 큰 단계를, role이 그 안의 강조/순서를, audience가 내부 ref(참조 ID) 노출 여부를 정한다. 흐름의 종착점은 항상 **결정 기록(adopt/reject/hold)**이며, 이 결정이 있어야 one-page report export(1장 보고서 내보내기)가 열린다(`exportGate`).
+같은 deterministic snapshot(결정론 계산으로 만든 그 시점 분석 데이터 묶음) 위에서 stage가 큰 단계를, role이 그 안의 강조/순서를, audience가 내부 ref(참조 ID) 노출 여부를 정한다. 흐름의 종착점은 항상 **결정 기록(Adopt/Reject/Hold)**이며, 이 결정이 있어야 one-page report export(1장 보고서 내보내기)가 열린다(`exportGate`). 2026-05-26 기준 첫 화면은 이 흐름을 Money Leak Run으로 압축해 Trust Gate, 손해 고객/기능 진단, Decision Candidate, 명시 decision, PDF artifact를 한 줄로 연결한다. agent runtime이 개입하면 runtime proof와 human approval이 함께 남아야 한다.
 
 ---
 
@@ -134,6 +154,9 @@ audience: internal | customer                                        (얼마나 
 - raw prompt/API key/PII를 기본 수집하지 않는다.
 - Vector DB(벡터 검색 저장소)/저장소는 Supabase pgvector(Postgres 안의 벡터 검색 확장) production path(실제 운영 경로)를 기준으로 둔다. KV/memory/request-body chunk는 preview/test adapter이며 production demo 성공으로 렌더하지 않는다. RAG는 여전히 스니펫/근거만 제공하고 숫자 권위는 Fact Ledger/결정론 레지스트리에 둔다.
 - 개인용 ChatGPT 구독 비교 도구가 아니다 — API 기반 AI 기능 운영 팀 대상.
+- provider output이 실제 실행하지 않은 billing/customer send/decision mutation을 했다고 주장해도 그대로 믿지 않는다.
+- raw checkpoint resume payload를 고객 리포트에 노출하지 않는다.
+- Service MVP 검증에서 broad SaaS 기능 요청을 pass로 계산하지 않는다.
 
 ---
 
@@ -141,8 +164,10 @@ audience: internal | customer                                        (얼마나 
 
 - **숫자 일관성:** 동일 snapshot에서 dev/pm/ceo 공통 KPI(총비용·마진율)가 동일.
 - **근거성:** 모든 AI 문장에 `tool:`/`snapshot:`/`risk:`/`decision:`/`evidence:` ref가 붙고, 없으면 렌더/판단 차단.
+- **Runtime proof:** provider/preview/unavailable/interrupt/resume 상태를 섞지 않고, checkpoint resume은 human approval과 함께 남김.
 - **결정론 회귀:** `src/lib` 순수 함수 100% 커버리지, state 변화 시 갱신 테스트(`rerender`).
 - **신선도:** 코퍼스별 cadence(가격 daily, 모델/벤치마크 weekly, 내부 ledger on-write) 유지.
+- **서비스 검증:** 유료 리포트 요청, 반복 리포트 요청, 데이터 공유 의도, 가격/limit 결정 의도를 원장에 기록.
 - **검증 게이트(헌법):** 각 작업 후 `npm run test:run` 전체 통과 + `npm run build` 성공 + `agent_service` pytest 통과.
 
 ---
@@ -151,13 +176,16 @@ audience: internal | customer                                        (얼마나 
 
 이 문서의 가장 중요한 섹션. "구현됐다"와 "검증됐다"를 분리한다.
 
-1. **검증 그린 확인됨.** `npm run test:run -- --testTimeout 60000` → 98 files / 445 tests passed, `uv run pytest agent_service/tests` → 42 passed, `npm run build` → 성공. 단 Vitest 전체 실행은 약 7분 20초로 느리며 `maxWorkers: 4` 상한이 필요하다.
-2. **브랜치 divergence 존재.** 로컬 브랜치가 원격과 ahead/behind 상태라 push 전 rebase/merge 정책 결정이 필요하다.
+1. **Full verification snapshot(2026-05-27).** 현재 slice 기준 `npm run test:run` 115 files / 605 tests passed, `cd agent_service; uv run pytest` 69 passed, `npm run build` 성공. 추가로 `npm run test:run -- src/features/report-first/components/ReportFirstDiagnosisWorkspace.test.tsx` 13 passed로 직접 지정 테스트도 확인했다.
+2. **브랜치 divergence 존재.** 로컬 브랜치가 원격보다 앞선 상태라 push 전 정책 결정이 필요하다.
 3. **역할 projection은 workspace layout policy로 승격됨.** Design/Cost/Bottleneck/Optimize/Decision Log stage 카드가 role affinity에 따라 primary/auxiliary/hidden으로 재배치되고, Next workspace도 같은 shared policy를 읽는다. ✅
 4. **C1 공식 가격 커버리지는 빅3까지 확장됐고 readiness로 노출됨.** OpenAI/Anthropic/Google 가격 source는 등록됐으며, coverage audit과 `CorpusReadinessReport`가 운영 UI/API에서 연결 상태·manual review·stale 여부를 드러낸다.
 5. **Trust intake 강제 경로 보강됨.** CSV import, SDK-lite, 서버 summary passthrough가 단일 Trust Gate를 통과해야 하며, file type/size, raw prompt, API key, PII, mapping gap을 검사한다. blocked import는 snapshot/report/decision-history로 넘어가지 않는다. ✅
 6. **2-런타임(TS/Python) 동기화 리스크.** 같은 개념(benchmark evidence, baseline_unavailable, RAG context block)이 양쪽에 구현됨 — 계약 드리프트 방지 테스트가 지속적으로 필요.
-7. **Production persistence는 schema 준비 단계.** Supabase pgvector migration은 존재하지만 앱 런타임은 아직 Supabase DB adapter로 완전히 배선되지 않았다.
+7. **HITL runtime proof는 구현됨.** provider/preview/interrupt/resume 상태, checkpoint metadata, human approval이 decision/report artifact에 보존된다. raw resume payload는 report에 노출하지 않는다. ✅
+8. **RAG collection split은 구현됨.** `official_docs`, `benchmark_evidence`, `decision_history`를 runtime 입력과 Python tool에서 분리한다. ✅
+9. **Service validation assets는 구현됨.** `docs/service-validation/*`가 `AI Cost Snapshot report` 유료 리포트 검증 루프를 정의한다. ✅
+10. **Production persistence는 schema+adapter 준비 단계.** Supabase pgvector/checkpoint/report/decision 경로는 테스트와 adapter가 있으나, 실제 production demo tenant 전체 연결은 아직 완료 기준이 아니다.
 
 ---
 
@@ -165,18 +193,20 @@ audience: internal | customer                                        (얼마나 
 
 후보(우선순위):
 
-1. **Next.js primary frontend 전환 착수 (§10 참조)** — A/B 질문은 폐기한다. Next.js App Router가 주 프론트이고, Vite는 전환 중 legacy baseline이다.
-2. **Next.js UI/UX 상세 기획 (§11 참조)** — Production Demo First를 전제로 IA, 화면 상태, 컴포넌트, 사용자 흐름을 확정한다.
-3. Production demo tenant 완성 — Supabase Auth, workspace membership, pgvector RAG, accepted fact ledger, report artifact, sandbox connector path가 모두 연결되어야 데모 성공으로 본다.
-4. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
-5. RAG 코퍼스 운영화 — C1/C2/C3/C4/C9 readiness와 Supabase pgvector collection path를 production UI/API에 연결
-6. Rate card readiness UX — connector_not_configured/blocked/ready/pushed/failed 상태를 billing 실행 조건과 함께 표시
+1. **Money Leak Run을 production demo의 첫 화면으로 고정** — `/w/[workspaceId]`에서 Trust Gate → 진단 → decision → PDF artifact가 끊기지 않아야 한다.
+2. **Production demo tenant 완성** — Supabase Auth, workspace membership, pgvector RAG, accepted fact ledger, report artifact, sandbox connector path가 모두 연결되어야 데모 성공으로 본다.
+3. **HITL runtime proof smoke** — interrupt/resume, human approval, decision/report artifact proof를 한 시나리오로 검증한다.
+4. **Service MVP validation 운영** — `AI Cost Snapshot report` 유료 리포트 제안, 리뷰콜, 반복 리포트 요청 원장을 실제 리드에 사용한다.
+5. 역할 projection 고도화 — stage 카드 affinity 기반 재배치/접기 (`role-projection-plan.md` Phase 3)
+6. RAG 코퍼스 운영화 — C1/C2/C3/C4/C9 readiness와 Supabase pgvector collection path를 production UI/API에 연결
+7. Rate card readiness UX — connector_not_configured/blocked/ready/pushed/failed 상태를 billing 실행 조건과 함께 표시
 
 미결정:
-- v3.2 방향 문서와 이 사실 문서의 정본 관계를 어디까지 합칠 것인가
-- decision-flow 5단계 vs v3.2가 그리는 더 넓은 stage 집합의 통합 시점
+- v3.4 방향 문서와 이 사실 문서의 정본 관계를 어디까지 합칠 것인가
+- decision-flow 5단계 vs v3.4가 그리는 더 넓은 stage 집합의 통합 시점
 - Supabase 실제 project ref/token 적용 시점과 production demo smoke 일정
 - Watchtower accepted fact review workflow와 실제 Supabase project 적용 시점
+- `AI Cost Snapshot report` 반복 요청 몇 건을 SaaS dashboard build trigger로 볼 것인가
 
 ---
 
@@ -202,10 +232,12 @@ audience: internal | customer                                        (얼마나 
 ### 10.3 단계 시퀀스
 
 - **Phase 0: Next primary shell** — `app/layout.tsx`, `(marketing)`, `/login`, `/w/[workspaceId]`, `/w/[workspaceId]/admin`, `/reports/[id]`, `notranslate` 보호 이전.
-- **Phase 1: Production demo tenant** — `workspace_memberships`, `usage_snapshots`, membership RLS, idempotent seed script.
-- **Phase 2: BFF route handlers** — `/api/runtime/status`, `/api/agent/run`, `/api/rag/*`, `/api/watchtower/*`, `/api/reports/*`, `/api/retention/run`, `/api/p1/external-actions`.
-- **Phase 3: Dashboard parity** — 기존 Vite workspace의 핵심 계산/리포트/RAG/Watchtower 화면을 Next server/client component로 이전.
-- **Phase 4: Vite legacy 제거** — Next production smoke가 통과한 뒤 Vite entry와 Vercel `api/*.ts` wrappers를 제거한다.
+- **Phase 1: Money Leak Run first screen** — `/w/[workspaceId]`에서 report-first diagnosis, Trust Gate, explicit decision, PDF gate를 primary experience로 유지.
+- **Phase 2: Production demo tenant** — `workspace_memberships`, `usage_snapshots`, membership RLS, idempotent seed script.
+- **Phase 3: BFF route handlers** — `/api/runtime/status`, `/api/agent/run`, `/api/rag/*`, `/api/watchtower/*`, `/api/reports/*`, `/api/retention/run`, `/api/p1/external-actions`, `/api/decisions`.
+- **Phase 4: Runtime proof smoke** — provider/preview/interrupt/resume, human approval, report artifact proof를 한 smoke로 묶는다.
+- **Phase 5: Dashboard parity** — 기존 Vite workspace의 핵심 계산/리포트/RAG/Watchtower 화면을 Next server/client component로 이전.
+- **Phase 6: Vite legacy 제거** — Next production smoke가 통과한 뒤 Vite entry와 Vercel `api/*.ts` wrappers를 제거한다.
 
 ### 10.4 헌법 영향
 
@@ -263,7 +295,8 @@ audience: internal | customer                                        (얼마나 
 4. **Agent run flow**
    - 사용자가 질문/작업 선택 → `/api/agent/run` BFF → Python `agent_service`.
    - provider path만 `provider_llm`, `providerRunId`, `agentInvocationProof`를 표시한다.
-   - 서버/모델/env가 없으면 `runtime_unavailable`이며 `call_*_agent`처럼 보이는 이벤트를 만들지 않는다.
+   - 서버/모델/env가 없으면 `unavailable` 또는 `deterministic_preview`이며 `call_*_agent`처럼 보이는 이벤트를 만들지 않는다.
+   - all-hands/HITL 경로가 `interrupt_requested`를 반환하면 사용자 Adopt/Reject/Hold 후 `resumeCheckpoint`로 이어지고, Decision Log/report artifact는 `runtime.status=resumed` + `humanApproval.approvalMode=checkpoint_resume`으로 남을 수 있다.
 
 5. **External action/rate card flow**
    - pricing recommendation → rate card draft → human approval → connector config validation → sandbox/test HTTP execution → ledger row.
@@ -321,6 +354,7 @@ audience: internal | customer                                        (얼마나 
 - `WorkspaceStagePanel`: stage별 content outlet. Vite legacy App을 감싸는 대신 Next-native 블록으로 재구성한다.
 - `EvidenceDrawer`: source, trust tier, accepted/review/stale 상태.
 - `AgentRunPanel`: providerRunId, invocation proof, fallback reason, runtime status.
+- `RuntimeProofPanel`: runtime status, checkpoint id/thread id, approval mode, fallback reason을 expert surface에 표시한다.
 - `DecisionLedgerPanel`: adopt/reject/hold, actor, timestamp, export gate.
 - `ConnectorApprovalPanel`: approval/idempotency/rollback/ledger checklist.
 - `TrustAssurancePanel`: 업로드 직후 raw prompt/API key/PII/사용 범위를 먼저 안심시키는 primary panel.
@@ -347,6 +381,7 @@ audience: internal | customer                                        (얼마나 
 - Design/Import stage는 비용 분석 전에 Trust reassurance를 먼저 보여준다.
 - Role projection header는 `same snapshot` 증거를 보여준다.
 - PDF CTA는 report actions 중 첫 번째 가치 산출물로 보인다.
+- HITL checkpoint resume 후 report에는 checkpoint status/id와 approval mode가 보이고 raw resume payload는 보이지 않는다.
 - Optimize/Decision flow의 primary outcome은 Rate Card Draft이며 billing push는 secondary/admin readiness로만 보인다.
 - report page는 저장된 artifact가 없으면 `production_report_unavailable`을 보여준다.
 - connector 실행 UI는 approval/idempotency/rollback/ledger 조건이 모두 충족되기 전까지 blocked state다.
@@ -366,10 +401,13 @@ audience: internal | customer                                        (얼마나 
 ## 12. 참조 인덱스
 
 - 헌법: `CLAUDE.md`
-- 방향 PRD: `docs/PRD-v3.md`(v3.2), `docs/PRD-v2.md`(v2.5 복구 정본)
+- 방향 PRD: `docs/PRD-v3.md`(v3.4), `docs/PRD-v2.md`(v2.5 복구 정본)
 - 폴더 구조: `docs/architecture/folder-structure.md`
 - 역할 projection 계획: `docs/architecture/2026-05-24-role-projection-plan.md`
 - RAG 코퍼스 설계: `docs/architecture/2026-05-25-agent-rag-corpus-design.md`
+- Money Leak Run 계획: `docs/superpowers/plans/2026-05-26-agentpayroll-money-leak-run.md`
+- LangChain runtime 설계: `docs/superpowers/specs/2026-05-26-agentpayroll-langchain-1-agent-runtime-design.md`
+- Service validation 계획/자산: `docs/superpowers/plans/2026-05-26-agentpayroll-service-mvp-validation.md`, `docs/service-validation/`
 - 운영 조직: `src/features/operating-assets/lib/operatingAssets.ts`
 - 결정론 코어: `src/lib/calculator.ts`, `src/lib/format.ts`
 - 에이전트 런타임: `src/features/agent/lib/`, `agent_service/agentic_runtime.py`

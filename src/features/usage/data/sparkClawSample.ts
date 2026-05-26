@@ -25,3 +25,46 @@ export const CUSTOMER_MONTHLY_REVENUE: Record<string, number> = {
   cust_006: 29,
   cust_007: 99,
 }
+
+export const SPARK_CLAW_TOKEN_ALLOWANCE_CSV = [
+  'customer_id,plan_id,revenue_collected,included_tokens,overage_rate_usd_per_1k_tokens',
+  'cust_001,pro,29,185000,0.18',
+  'cust_002,pro,29,185000,0.18',
+  'cust_003,team,99,320000,0.12',
+  'cust_004,team,99,320000,0.12',
+  'cust_005,free,0,50000,0.25',
+  'cust_006,pro,29,185000,0.18',
+  'cust_007,team,99,320000,0.12',
+].join('\n')
+
+export const CUSTOMER_TOKEN_ALLOWANCE: Record<string, number> = {
+  cust_001: 185_000,
+  cust_002: 185_000,
+  cust_003: 320_000,
+  cust_004: 320_000,
+  cust_005: 50_000,
+  cust_006: 185_000,
+  cust_007: 320_000,
+}
+
+export const PLAN_TOKEN_ALLOWANCE: Record<string, number> = {
+  free: 50_000,
+  pro: 185_000 * 4,
+  team: 320_000 * 3,
+}
+
+export const CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS: Record<string, number> = {
+  cust_001: 0.18,
+  cust_002: 0.18,
+  cust_003: 0.12,
+  cust_004: 0.12,
+  cust_005: 0.25,
+  cust_006: 0.18,
+  cust_007: 0.12,
+}
+
+export const PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS: Record<string, number> = {
+  free: 0.25,
+  pro: 0.18,
+  team: 0.12,
+}

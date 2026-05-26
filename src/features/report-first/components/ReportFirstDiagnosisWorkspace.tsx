@@ -8,7 +8,12 @@ import { Badge, Button, Field, MetricTile, Surface } from '../../../shared/ui/pr
 import { AI_COST_SNAPSHOT_OFFER } from '../../front-operating/lib/customerServiceOffer'
 import {
   CUSTOMER_MONTHLY_REVENUE,
+  CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS,
+  CUSTOMER_TOKEN_ALLOWANCE,
   PLAN_MONTHLY_REVENUE,
+  PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
+  PLAN_TOKEN_ALLOWANCE,
+  SPARK_CLAW_TOKEN_ALLOWANCE_CSV,
   SPARK_CLAW_SAMPLE_CSV,
 } from '../../usage/data/sparkClawSample'
 import { TrustAssurancePanel } from '../../trust/components/TrustAssurancePanel'
@@ -97,8 +102,8 @@ function customerReportGateReason(reason: string): string {
   if (reason === 'ready') return '공유 가능한 PDF 리포트를 만들 수 있습니다.'
   if (/raw_prompt|api_key|blocked/i.test(reason)) return '차단된 필드를 제거한 뒤 다시 업로드하세요.'
   if (/pii/i.test(reason)) return 'PII 후보 매핑을 확인해야 PDF 리포트를 만들 수 있습니다.'
-  if (/mapping|customer|plan|revenue|profitability|loss/i.test(reason)) {
-    return 'customer_id, plan_id, revenue 매핑을 확인해야 PDF 리포트를 만들 수 있습니다.'
+  if (/token_allowance|mapping|customer|plan|revenue|profitability|loss/i.test(reason)) {
+    return 'customer_id, included_tokens, revenue_collected 매핑을 확인해야 PDF 리포트를 만들 수 있습니다.'
   }
   if (/summary|json|inspection/i.test(reason)) return 'Trust Gate를 통과한 safe summary가 필요합니다.'
   return '데이터 준비 상태를 확인해야 PDF 리포트를 만들 수 있습니다.'
@@ -291,9 +296,9 @@ function ServiceMvpOfferPanel() {
     <div data-testid="customer-service-offer" className="mb-4 rounded-wds border border-line-neutral bg-fill-alternative p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-sm font-semibold text-label-normal" translate="no">AI Cost Snapshot</p>
+          <p className="text-sm font-semibold text-label-normal" translate="no">API Token Leakage Snapshot</p>
           <p className="mt-1 text-xs leading-5 text-label-neutral">
-            데이터가 아직 완전하지 않으면 prompt-free, PII-safe summary/CSV로 먼저 1회 진단 리포트를 만듭니다.
+            prompt-free, PII-safe CSV로 포함 token, 초과 token, 미회수 AI 원가를 먼저 보여주는 1회 진단 리포트를 만듭니다.
           </p>
         </div>
         <Badge tone="primary" translate="no">
@@ -321,8 +326,8 @@ function CustomerEvidenceSummary({
       <p className="text-sm font-semibold">고객용 근거 요약</p>
       <ul className="mt-2 grid gap-2 text-xs text-label-neutral">
         <li>
-          <strong className="text-label-normal">고객별 사용량과 매출 매핑</strong>
-          <p className="mt-1">업로드된 safe field 범위에서만 원가와 마진을 연결했습니다.</p>
+          <strong className="text-label-normal">고객별 token allowance와 매출 매핑</strong>
+          <p className="mt-1">업로드된 safe field 범위에서만 사용 token, 포함 token, revenue_collected를 연결했습니다.</p>
         </li>
         <li>
           <strong className="text-label-normal">결정 후보 계산</strong>
@@ -359,6 +364,42 @@ function MoneyLeakStepRail({ states }: { states: Record<MoneyLeakStepId, MoneyLe
         </li>
       ))}
     </ol>
+  )
+}
+
+function LocalReportPreview({
+  snapshot,
+  selectedDecisionId,
+  decisionChoice,
+}: {
+  snapshot: DiagnosisSnapshot
+  selectedDecisionId: string
+  decisionChoice: MoneyLeakDecisionChoice
+}) {
+  const payload = reportFirstPayloadFromDiagnosis(snapshot, selectedDecisionId, decisionChoice)
+
+  return (
+    <div data-testid="local-report-preview" className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold" translate="no">{payload.title}</p>
+          <p className="mt-1 text-xs leading-5 text-label-neutral">{payload.executiveSummary}</p>
+        </div>
+        <Badge tone="primary">preview</Badge>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        {payload.metrics.slice(0, 6).map(metric => (
+          <div key={metric.label} className="rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
+            <p className="font-semibold text-label-normal">{metric.label}</p>
+            <p className="mt-1 text-label-neutral" translate="no">{metric.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
+        <p className="font-semibold text-label-normal">선택된 결정</p>
+        <p className="mt-1 text-label-neutral">{DECISION_CHOICE_LABELS[decisionChoice]} / {payload.recommendations[0]}</p>
+      </div>
+    </div>
   )
 }
 
@@ -494,6 +535,10 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       useSampleRevenue?: boolean
       customerRevenueUsd?: Record<string, number>
       planRevenueUsd?: Record<string, number>
+      customerIncludedTokens?: Record<string, number>
+      planIncludedTokens?: Record<string, number>
+      customerOverageRateUsdPer1kTokens?: Record<string, number>
+      planOverageRateUsdPer1kTokens?: Record<string, number>
     } = {},
   ) {
     const importGeneration = nextImportGeneration()
@@ -503,12 +548,16 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       snapshotRef,
       customerRevenueUsd: options.customerRevenueUsd ?? (options.useSampleRevenue ? CUSTOMER_MONTHLY_REVENUE : undefined),
       planRevenueUsd: options.planRevenueUsd ?? (options.useSampleRevenue ? PLAN_MONTHLY_REVENUE : undefined),
+      customerIncludedTokens: options.customerIncludedTokens ?? (options.useSampleRevenue ? CUSTOMER_TOKEN_ALLOWANCE : undefined),
+      planIncludedTokens: options.planIncludedTokens ?? (options.useSampleRevenue ? PLAN_TOKEN_ALLOWANCE : undefined),
+      customerOverageRateUsdPer1kTokens: options.customerOverageRateUsdPer1kTokens ?? (options.useSampleRevenue ? CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS : undefined),
+      planOverageRateUsdPer1kTokens: options.planOverageRateUsdPer1kTokens ?? (options.useSampleRevenue ? PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS : undefined),
     })
     setSnapshot(next)
     setSelectedDecisionId('')
     setDecisionChoice('')
     setTrustResult(summary.trustInspection ?? null)
-    setPdcaAttributionAxes(inferPdcaAxes(summary, Boolean(options.useSampleRevenue || (options.customerRevenueUsd && options.planRevenueUsd))))
+    setPdcaAttributionAxes(inferPdcaAxes(summary, Boolean(options.useSampleRevenue || options.customerRevenueUsd)))
     setPdfArtifact(null)
     setReportError('')
     setShowEvidence(false)
@@ -532,13 +581,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
         && !warning.includes('invalid_revenue')
       ))
       && Object.keys(revenueMapping.customerRevenueUsd).length > 0
-      && Object.keys(revenueMapping.planRevenueUsd).length > 0
+    const tokenPolicyReady = revenueReady
+      && Object.keys(revenueMapping.customerIncludedTokens).length > 0
     const summary = parseUsageCsv(rawCsv, MODELS, {
-      revenueBasis: revenueReady ? 'manual_map' : undefined,
+      revenueBasis: revenueReady && tokenPolicyReady ? 'manual_map' : undefined,
     })
     const importGeneration = applySnapshot(summary, null, {
       customerRevenueUsd: revenueReady ? revenueMapping.customerRevenueUsd : undefined,
       planRevenueUsd: revenueReady ? revenueMapping.planRevenueUsd : undefined,
+      customerIncludedTokens: tokenPolicyReady ? revenueMapping.customerIncludedTokens : undefined,
+      planIncludedTokens: tokenPolicyReady ? revenueMapping.planIncludedTokens : undefined,
+      customerOverageRateUsdPer1kTokens: tokenPolicyReady ? revenueMapping.customerOverageRateUsdPer1kTokens : undefined,
+      planOverageRateUsdPer1kTokens: tokenPolicyReady ? revenueMapping.planOverageRateUsdPer1kTokens : undefined,
     })
     if (revenueMapping && revenueMapping.errors.length > 0) {
       setMessage(revenueMapping.errors.join(', '))
@@ -552,9 +606,17 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
   function handleSample() {
     setRawCsv(SPARK_CLAW_SAMPLE_CSV)
-    setRevenueCsv('')
+    setRevenueCsv(SPARK_CLAW_TOKEN_ALLOWANCE_CSV)
     const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
-    const importGeneration = applySnapshot(summary, null, { useSampleRevenue: true })
+    const revenueMapping = parseRevenueCsv(SPARK_CLAW_TOKEN_ALLOWANCE_CSV)
+    const importGeneration = applySnapshot(summary, null, {
+      customerRevenueUsd: revenueMapping.customerRevenueUsd,
+      planRevenueUsd: revenueMapping.planRevenueUsd,
+      customerIncludedTokens: revenueMapping.customerIncludedTokens,
+      planIncludedTokens: revenueMapping.planIncludedTokens,
+      customerOverageRateUsdPer1kTokens: revenueMapping.customerOverageRateUsdPer1kTokens,
+      planOverageRateUsdPer1kTokens: revenueMapping.planOverageRateUsdPer1kTokens,
+    })
     attachRemoteSnapshotRef(SPARK_CLAW_SAMPLE_CSV, importGeneration)
   }
 
@@ -640,12 +702,12 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     <section className="grid gap-6" data-testid="report-first-diagnosis">
       <div className="rounded-wds border border-line-neutral bg-surface-alternative p-5">
         <p className="text-sm font-semibold uppercase text-primary-normal" translate="no">AgentPayroll</p>
-        <h1 className="mt-2 text-3xl font-semibold">AI 비용 리포트 만들기</h1>
+        <h1 className="mt-2 text-3xl font-semibold">API Token Leakage Snapshot</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-label-neutral">
-          CSV/summary를 넣으면 손해 고객, 마진 깨는 기능, 지금 검토할 정책 후보를 한 번에 찾고 내부 공유용 PDF로 묶습니다.
+          usage CSV와 token allowance/revenue summary를 넣으면 포함 token을 초과한 고객, token을 태우는 기능, 지금 검토할 overage 정책 후보를 한 번에 찾습니다.
         </p>
         <p className="mt-4 text-xs font-semibold text-label-alternative" lang="en">
-          CSV/summary -&gt; Trust Gate -&gt; Money Leak -&gt; Decision Candidate -&gt; Adopt/Reject/Hold -&gt; PDF Report
+          usage CSV + allowance CSV -&gt; Trust Gate -&gt; Token Leak -&gt; Token Policy -&gt; Adopt/Reject/Hold -&gt; Report Preview
         </p>
         <div className="mt-4">
           <MoneyLeakStepRail states={stepStates} />
@@ -654,15 +716,15 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           <Badge tone={productionStatus === 'connected' ? 'positive' : 'caution'} translate={audience === 'expert' ? 'no' : undefined}>
             {audience === 'expert' ? productionStatus : customerProductionStatusLabel(productionStatus)}
           </Badge>
-          <Badge tone="primary">진단 준비</Badge>
-          <Badge tone="neutral">PDF는 저장 성공 후 표시</Badge>
+          <Badge tone="primary">token leak 진단</Badge>
+          <Badge tone="neutral">preview는 즉시, PDF는 저장 후 표시</Badge>
         </div>
       </div>
 
       <Surface
         eyebrow="데이터 준비"
-        title="사용량 CSV 업로드"
-        description="사용량과 매출을 연결하면 비용 손실 후보와 실행 항목을 먼저 보여줍니다."
+        title="usage CSV + token allowance CSV"
+        description="사용량, 포함 token, 회수된 매출을 연결해 초과 사용분과 미회수 원가를 먼저 보여줍니다."
         action={!snapshot ? <Button variant="primary" disabled>PDF 리포트 생성</Button> : undefined}
       >
         <TrustAssurancePanel result={trustResult} audience={audience} />
@@ -696,7 +758,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             사용량 CSV 업로드
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setInputMode('csv')}>
-            Stripe/매출 CSV 업로드
+            allowance/revenue CSV 업로드
           </Button>
           {audience === 'expert' && (
             <Button variant={inputMode === 'summary' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('summary')}>
@@ -707,7 +769,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
         {inputMode === 'csv' || audience === 'customer' ? (
           <div className="grid gap-3">
-            <Field label="사용량 CSV" htmlFor="report-first-csv" help="필수 컬럼: feature, model, input_tokens, output_tokens. 권장: customer_id, plan_id, session_id, agent_run_id, total_cost.">
+            <Field label="사용량 CSV" htmlFor="report-first-csv" help="필수 컬럼: customer_id, feature, model, input_tokens, output_tokens. 권장: total_cost, latency_ms, status. plan_id는 보조 분류값입니다.">
               <textarea
                 id="report-first-csv"
                 value={rawCsv}
@@ -716,7 +778,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
                 className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
               />
             </Field>
-            <Field label="매출 CSV" htmlFor="report-first-revenue-csv" help="선택 컬럼: customer_id, plan_id, mrr/revenue/amount. 사용량과 고객/요금제를 조인해 손해 고객을 실제 매출 기준으로 계산합니다.">
+            <Field label="token allowance/revenue CSV" htmlFor="report-first-revenue-csv" help="필수 컬럼: customer_id, revenue_collected, included_tokens. 권장: overage_rate_usd_per_1k_tokens. plan_id는 선택입니다.">
               <textarea
                 id="report-first-revenue-csv"
                 value={revenueCsv}
@@ -754,8 +816,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       {snapshot && (
         <Surface
           eyebrow="Diagnosis preview"
-          title="분석 완료"
-          description="마진 진단 결과와 공유 전 확인해야 할 실행 항목을 한 화면에서 확인합니다."
+          title="Token leak 분석 완료"
+          description="포함 token을 초과한 고객, token을 가장 많이 태우는 기능, token policy 후보를 한 화면에서 확인합니다."
           action={(
             <Button
               variant="primary"
@@ -855,11 +917,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           </div>
 
           <div className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-            <p className="text-sm font-semibold">{audience === 'expert' ? 'PDF artifact gate' : 'PDF 리포트 준비'}</p>
+            <p className="text-sm font-semibold">{audience === 'expert' ? 'PDF artifact gate' : '리포트 preview / PDF 준비'}</p>
             <p className="mt-1 text-xs text-label-neutral">
               {diagnosis ? `근거 상태: ${diagnosis.evidenceState}` : '근거 상태: 검토 필요'}
               {selectedDecision ? ` / ${selectedDecision.title}` : ''}
             </p>
+            {snapshot && selectedDecisionId && decisionChoice && (
+              <LocalReportPreview
+                snapshot={snapshot}
+                selectedDecisionId={selectedDecisionId}
+                decisionChoice={decisionChoice}
+              />
+            )}
             {pdfArtifact ? (
               <a className="mt-3 inline-flex rounded-wds bg-primary-normal px-4 py-2 text-sm font-semibold text-white" href={pdfArtifact.downloadPath}>
                 PDF 리포트 다운로드

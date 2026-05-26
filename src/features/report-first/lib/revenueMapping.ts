@@ -3,11 +3,17 @@ export interface RevenueMappingRow {
   customerId?: string
   planId?: string
   revenueUsd: number
+  includedTokens?: number
+  overageRateUsdPer1kTokens?: number
 }
 
 export interface RevenueMappingResult {
   customerRevenueUsd: Record<string, number>
   planRevenueUsd: Record<string, number>
+  customerIncludedTokens: Record<string, number>
+  planIncludedTokens: Record<string, number>
+  customerOverageRateUsdPer1kTokens: Record<string, number>
+  planOverageRateUsdPer1kTokens: Record<string, number>
   rows: RevenueMappingRow[]
   errors: string[]
   mappingWarnings: string[]
@@ -17,16 +23,36 @@ const CUSTOMER_HEADERS = ['customerid', 'customer', 'id']
 const PLAN_HEADERS = ['planid', 'plan']
 const REVENUE_HEADERS = [
   'revenue',
+  'revenuecollected',
+  'collectedrevenue',
   'mrr',
   'amount',
+  'amountpaid',
   'monthlyrevenue',
   'subscriptionplanprice',
+]
+const INCLUDED_TOKEN_HEADERS = [
+  'includedtokens',
+  'includedcredits',
+  'tokenallowance',
+  'allowancetokens',
+  'monthlytokenallowance',
+]
+const OVERAGE_RATE_HEADERS = [
+  'overagerate',
+  'overagerateusdper1ktokens',
+  'overagepriceper1ktokens',
+  'usdper1koverage',
 ]
 
 export function parseRevenueCsv(rawCsv: string): RevenueMappingResult {
   const result: RevenueMappingResult = {
     customerRevenueUsd: {},
     planRevenueUsd: {},
+    customerIncludedTokens: {},
+    planIncludedTokens: {},
+    customerOverageRateUsdPer1kTokens: {},
+    planOverageRateUsdPer1kTokens: {},
     rows: [],
     errors: [],
     mappingWarnings: [],
@@ -44,6 +70,8 @@ export function parseRevenueCsv(rawCsv: string): RevenueMappingResult {
   const customerIndex = findHeaderIndex(headers, CUSTOMER_HEADERS)
   const planIndex = findHeaderIndex(headers, PLAN_HEADERS)
   const revenueIndex = findHeaderIndex(headers, REVENUE_HEADERS)
+  const includedTokensIndex = findHeaderIndex(headers, INCLUDED_TOKEN_HEADERS)
+  const overageRateIndex = findHeaderIndex(headers, OVERAGE_RATE_HEADERS)
 
   if (customerIndex === -1) {
     result.mappingWarnings.push('customer_id_header_missing')
@@ -67,22 +95,48 @@ export function parseRevenueCsv(rawCsv: string): RevenueMappingResult {
     const customerId = readCell(row, customerIndex)
     const planId = readCell(row, planIndex)
     const revenueUsd = normalizeRevenue(readCell(row, revenueIndex), rowNumber, result.mappingWarnings)
+    const includedTokens = normalizeOptionalNumber(
+      readCell(row, includedTokensIndex),
+      'included_tokens',
+      rowNumber,
+      result.mappingWarnings,
+    )
+    const overageRateUsdPer1kTokens = normalizeOptionalNumber(
+      readCell(row, overageRateIndex),
+      'overage_rate',
+      rowNumber,
+      result.mappingWarnings,
+    )
 
     result.rows.push({
       rowNumber,
       ...(customerId ? { customerId } : {}),
       ...(planId ? { planId } : {}),
       revenueUsd,
+      ...(includedTokens !== undefined ? { includedTokens } : {}),
+      ...(overageRateUsdPer1kTokens !== undefined ? { overageRateUsdPer1kTokens } : {}),
     })
 
     if (customerId) {
       result.customerRevenueUsd[customerId] = (result.customerRevenueUsd[customerId] ?? 0) + revenueUsd
+      if (includedTokens !== undefined) {
+        result.customerIncludedTokens[customerId] = (result.customerIncludedTokens[customerId] ?? 0) + includedTokens
+      }
+      if (overageRateUsdPer1kTokens !== undefined) {
+        result.customerOverageRateUsdPer1kTokens[customerId] = overageRateUsdPer1kTokens
+      }
     } else {
       result.mappingWarnings.push(`row_${rowNumber}_missing_customer_id`)
     }
 
     if (planId) {
       result.planRevenueUsd[planId] = (result.planRevenueUsd[planId] ?? 0) + revenueUsd
+      if (includedTokens !== undefined) {
+        result.planIncludedTokens[planId] = (result.planIncludedTokens[planId] ?? 0) + includedTokens
+      }
+      if (overageRateUsdPer1kTokens !== undefined) {
+        result.planOverageRateUsdPer1kTokens[planId] = overageRateUsdPer1kTokens
+      }
     } else {
       result.mappingWarnings.push(`row_${rowNumber}_missing_plan_id`)
     }
@@ -125,6 +179,26 @@ function normalizeRevenue(rawValue: string, rowNumber: number, mappingWarnings: 
   }
 
   return revenue
+}
+
+function normalizeOptionalNumber(
+  rawValue: string,
+  fieldName: string,
+  rowNumber: number,
+  mappingWarnings: string[],
+): number | undefined {
+  if (rawValue.trim() === '') {
+    return undefined
+  }
+
+  const parsed = Number(rawValue.replace(/[$,\s]/g, ''))
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    mappingWarnings.push(`row_${rowNumber}_invalid_${fieldName}_ignored`)
+    return undefined
+  }
+
+  return parsed
 }
 
 function parseCsvRecords(rawCsv: string): string[][] {

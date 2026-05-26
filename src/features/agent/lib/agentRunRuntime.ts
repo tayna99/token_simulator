@@ -99,6 +99,11 @@ export interface AgentRunInput {
   riskCards: unknown[]
   benchmarkCards: unknown[]
   decisionHistory: unknown[]
+  usageLog?: unknown[]
+  providerModelPriceRefs?: unknown[]
+  costAttribution?: Record<string, unknown>
+  marginProfitability?: Record<string, unknown>
+  optimizationWhatIfSavings?: unknown[]
   factSources: unknown[]
   operatingAgents?: unknown[]
   operatingAssets?: unknown[]
@@ -110,6 +115,9 @@ export interface AgentRunInput {
   modelReleaseCandidates?: unknown[]
   pricingFactCandidates?: unknown[]
   fxRateSnapshots?: unknown[]
+  corpusRegistryVersion?: string
+  ragEvidenceCoverage?: unknown
+  benchmarkEvidenceRefs?: string[]
   ragCollections?: Partial<Record<'official_docs' | 'benchmark_evidence' | 'decision_history', unknown[]>>
   ragContextBlocks?: RagContextBlock[]
   trustInspection?: TrustInspectionResult | null

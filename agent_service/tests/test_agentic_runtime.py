@@ -148,6 +148,90 @@ class InterruptingSupervisorAgent:
         return {"structured_response": {"events": [], "toolResultRefs": ["tool:monthlyAiCogs"], "warnings": []}}
 
 
+class SupervisorSynthesisFactory:
+    def __init__(self):
+        self.supervisor_tool_names = []
+
+    def __call__(self, **kwargs):
+        tools = kwargs["tools"]
+        system_prompt = kwargs.get("system_prompt", "")
+        if any(tool.name.startswith("call_") for tool in tools):
+            return SupervisorSynthesisSupervisor(tools, self)
+        if "(optimization_routing)" in system_prompt:
+            return SupervisorSynthesisChild("optimization_routing")
+        if "(trust_security_compliance)" in system_prompt:
+            return SupervisorSynthesisChild("trust_security_compliance")
+        return SupervisorSynthesisChild("model_inference_research")
+
+
+class SupervisorSynthesisSupervisor:
+    def __init__(self, tools, factory):
+        self.tools = tools
+        self.factory = factory
+
+    def invoke(self, payload, **kwargs):
+        self.factory.supervisor_tool_names = [tool.name for tool in self.tools]
+        for tool_name in ("call_optimization_routing_agent", "call_trust_security_compliance_agent"):
+            tool = next(item for item in self.tools if item.name == tool_name)
+            tool.invoke({"question": "Synthesize recommendation and reviewer risk."})
+        return {
+            "structured_response": {
+                "answer": "Supervisor delegated to primary and trust reviewer.",
+                "report": "Delegated synthesis.",
+                "warnings": [],
+            }
+        }
+
+
+class SupervisorSynthesisChild:
+    def __init__(self, agent_id):
+        self.agent_id = agent_id
+
+    def invoke(self, payload, **kwargs):
+        if self.agent_id == "optimization_routing":
+            return {
+                "structured_response": {
+                    "events": [
+                        {
+                            "type": "analysis",
+                            "message": "Primary recommendation: hold routing until task eval passes with tool:optimization.primary.monthlySavingsUsd.",
+                            "toolResultRefs": ["tool:optimization.primary.monthlySavingsUsd"],
+                            "riskCardIds": ["risk-model-routing-quality"],
+                            "usedTools": ["retrieve_metric_flags"],
+                            "stance": "support",
+                        }
+                    ],
+                    "answer": "Hold routing until eval passes.",
+                    "report": "Primary recommends hold before production routing.",
+                    "usedTools": ["retrieve_metric_flags"],
+                    "toolResultRefs": ["tool:optimization.primary.monthlySavingsUsd"],
+                    "riskCardIds": ["risk-model-routing-quality"],
+                    "warnings": [],
+                }
+            }
+        return {
+            "structured_response": {
+                "events": [
+                    {
+                        "type": "risk_audit",
+                        "message": "Reviewer risk: snapshot_missing blocks confident adoption until Trust Gate evidence is refreshed.",
+                        "toolResultRefs": ["tool:optimization.primary.monthlySavingsUsd"],
+                        "riskCardIds": ["risk-model-routing-quality"],
+                        "usedTools": ["retrieve_risk_cards"],
+                        "stance": "caution",
+                        "evidenceWarnings": ["snapshot_missing"],
+                    }
+                ],
+                "answer": "Reviewer risk requires human review.",
+                "report": "Trust reviewer found snapshot_missing.",
+                "usedTools": ["retrieve_risk_cards"],
+                "toolResultRefs": ["tool:optimization.primary.monthlySavingsUsd"],
+                "riskCardIds": ["risk-model-routing-quality"],
+                "warnings": ["snapshot_missing"],
+            }
+        }
+
+
 def test_agent_tool_registry_is_read_only_and_extensible():
     tools = build_agent_tools(
         tool_results={"monthlyAiCogs": 4820},
@@ -173,6 +257,7 @@ def test_agent_tool_registry_is_read_only_and_extensible():
     names = {tool.name for tool in tools}
 
     assert "lookup_snapshot_value" in names
+    assert "retrieve_snapshot_domain" in names
     assert "retrieve_risk_cards" in names
     assert "retrieve_decision_history" in names
     assert "retrieve_operating_assets" in names
@@ -204,6 +289,11 @@ def test_capability_tools_return_grounded_envelopes():
             risk_cards=[{"id": "risk-model-routing-quality", "tags": ["routing"], "source": "risk:test"}],
             benchmark_cards=[],
             decision_history=[{"id": "decision-1", "what": "Adopt credit pricing"}],
+            usage_log=[{"requestId": "req-1", "modelId": "gpt-5-mini", "totalCostUsd": 1.24}],
+            provider_model_price_refs=[{"modelId": "gpt-5-mini", "providerRegistryVersion": "provider_registry_v0.4"}],
+            cost_attribution={"feature": {"totalCostUsd": 1.24}},
+            margin_profitability={"customers": [{"customerId": "cust-1", "grossMarginPct": 0.7}]},
+            optimization_what_if_savings=[{"id": "rec-1", "monthlySavingsUsd": 540}],
             fact_sources=[{"id": "fact-openai", "sourceUrl": "https://openai.com/api/pricing/"}],
             operating_agents=OPERATING_AGENTS,
             operating_assets=[{"id": "provider_registry", "ref": "asset:provider_registry"}],
@@ -227,6 +317,8 @@ def test_capability_tools_return_grounded_envelopes():
     }
 
     snapshot = json.loads(tools["lookup_snapshot_value"].invoke({"tool_ref": "monthlyAiCogs"}))
+    usage_domain = json.loads(tools["retrieve_snapshot_domain"].invoke({"domain": "usage_log"}))
+    unknown_domain = json.loads(tools["retrieve_snapshot_domain"].invoke({"domain": "unknown_domain"}))
     risk = json.loads(tools["retrieve_risk_cards"].invoke({"query": "routing", "tags": ["routing"]}))
     benchmark = json.loads(tools["retrieve_benchmark_evidence"].invoke({"query": "missing", "tags": ["peer"]}))
     official_sources = json.loads(tools["retrieve_official_source_registry"].invoke({"provider_region": "global"}))
@@ -241,6 +333,18 @@ def test_capability_tools_return_grounded_envelopes():
         "found": True,
         "data": {"toolRef": "tool:monthlyAiCogs", "value": "4820"},
         "warnings": [],
+    }
+    assert usage_domain["toolName"] == "retrieve_snapshot_domain"
+    assert usage_domain["refs"] == ["snapshot:usage_log"]
+    assert usage_domain["found"] is True
+    assert usage_domain["data"]["usageLog"] == [{"requestId": "req-1", "modelId": "gpt-5-mini", "totalCostUsd": 1.24}]
+    assert usage_domain["warnings"] == []
+    assert unknown_domain == {
+        "toolName": "retrieve_snapshot_domain",
+        "refs": [],
+        "found": False,
+        "data": {"domain": "unknown_domain"},
+        "warnings": ["snapshot_domain_unavailable"],
     }
     assert risk["toolName"] == "retrieve_risk_cards"
     assert risk["refs"] == ["risk:risk-model-routing-quality"]
@@ -375,10 +479,21 @@ def test_p1_vector_rag_tool_keeps_collections_separated():
     assert vector_rag["warnings"] == []
 
 
-def test_agent_tool_permission_matrix_keeps_calculation_tools_out():
+def test_agent_tool_permission_matrix_keeps_snapshot_domain_and_calculation_tools_out():
     assert set(AGENT_TOOL_PERMISSION_MATRIX) == {agent["id"] for agent in OPERATING_AGENTS}
     for allowed_tools in AGENT_TOOL_PERMISSION_MATRIX.values():
         assert set(allowed_tools).isdisjoint(FORBIDDEN_AGENT_TOOL_NAMES)
+    assert {
+        agent_id
+        for agent_id, allowed_tools in AGENT_TOOL_PERMISSION_MATRIX.items()
+        if "retrieve_snapshot_domain" in allowed_tools
+    } == {
+        "cost_modeling",
+        "usage_data_ingestion",
+        "cost_engine_qa",
+        "customer_diagnostic_pricing",
+        "finance_ops",
+    }
     assert "retrieve_front_operating_system" in AGENT_TOOL_PERMISSION_MATRIX["usage_data_ingestion"]
     assert "retrieve_front_operating_gate" in AGENT_TOOL_PERMISSION_MATRIX["trust_security_compliance"]
     assert "retrieve_learning_loop_records" in AGENT_TOOL_PERMISSION_MATRIX["knowledge_release_ops"]
@@ -609,6 +724,60 @@ def test_supervisor_provider_path_calls_operating_agent_tools():
     assert result.evidenceCoverage["benchmarkEvidence"]["found"] is True
     assert result.evidenceCoverage["decisionHistory"]["found"] is True
     assert result.decisionReadiness == "ready"
+
+
+def test_supervisor_synthesis_names_primary_recommendation_reviewer_risk_and_human_decision():
+    factory = SupervisorSynthesisFactory()
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="decision_support",
+            activeStage="optimize",
+            question="Should we adopt the routing change?",
+            executionMode="stage_committee",
+            snapshotVersion="snapshot:supervisor-synthesis",
+            toolResults={"optimization.primary.monthlySavingsUsd": 1240},
+            operatingAgents=OPERATING_AGENTS,
+            riskCards=[{"id": "risk-model-routing-quality", "tags": ["routing"]}],
+        ),
+        model=object(),
+        agent_factory=factory,
+    )
+
+    assert set(factory.supervisor_tool_names) == {
+        "call_optimization_routing_agent",
+        "call_model_inference_research_agent",
+        "call_trust_security_compliance_agent",
+    }
+    assert result.calledAgentIds == ["optimization_routing", "trust_security_compliance"]
+    assert result.decisionReadiness == "needs_review"
+    assert "Primary recommendation:" in result.supervisorSummary
+    assert "Reviewer risk:" in result.supervisorSummary
+    assert "Missing refs: snapshot_missing" in result.supervisorSummary
+    assert "Human decision needed: Adopt/Reject/Hold" in result.supervisorSummary
+    assert any("snapshot" in question.lower() for question in result.nextQuestions)
+    assert any("approve" in question.lower() or "adopt" in question.lower() for question in result.nextQuestions)
+
+
+def test_agent_run_input_preserves_p0_snapshot_domain_payloads():
+    payload = AgentRunInput(
+        mode="ask",
+        activeStage="cost",
+        question="Inspect full snapshot domains.",
+        snapshotVersion="snapshot:p0-domains",
+        toolResults={"monthlyAiCogs": 4820},
+        usageLog=[{"requestId": "req-1", "modelId": "gpt-5-mini", "totalCostUsd": 1.24}],
+        providerModelPriceRefs=[{"modelId": "gpt-5-mini", "providerRegistryVersion": "provider_registry_v0.4"}],
+        costAttribution={"feature": {"totalCostUsd": 1.24}},
+        marginProfitability={"customers": [{"customerId": "cust-1", "grossMarginPct": 0.7}]},
+        optimizationWhatIfSavings=[{"id": "rec-1", "monthlySavingsUsd": 540}],
+    )
+
+    assert payload.usageLog[0]["requestId"] == "req-1"
+    assert payload.providerModelPriceRefs[0]["modelId"] == "gpt-5-mini"
+    assert payload.costAttribution["feature"]["totalCostUsd"] == 1.24
+    assert payload.marginProfitability["customers"][0]["customerId"] == "cust-1"
+    assert payload.optimizationWhatIfSavings[0]["id"] == "rec-1"
 
 
 def test_hitl_create_agent_receives_checkpointer_and_interrupt_before_only_for_supervisor():

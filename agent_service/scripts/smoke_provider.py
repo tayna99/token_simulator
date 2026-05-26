@@ -35,6 +35,8 @@ EXPECTED_EVENT_TYPES = [
     "report_draft",
 ]
 AI_PROSE_EVENT_TYPES = {"analysis", "pricing_strategy", "report_draft"}
+PROVIDER_RUNTIME_STATUSES = {"provider_llm", "resumed", "interrupt_requested"}
+PROVIDER_AGENT_CALL_STATUSES = {"provider_llm", "resumed"}
 SAMPLE_TOOL_RESULTS = {
     "monthlyAiCogs": 4820,
     "grossMarginPct": 0.41,
@@ -83,31 +85,56 @@ def _validate_grounded_texts(response: AgentRunResponse, refs: list[str]) -> Non
             raise SmokeValidationError("agentic response has an uncited numeric claim")
 
 
+def _validate_tool_ref_preservation(response: AgentRunResponse) -> None:
+    top_level_refs = set(response.toolResultRefs)
+    event_refs = {ref for event in response.events for ref in event.toolResultRefs}
+    all_refs = top_level_refs | event_refs
+    non_tool_refs = sorted(ref for ref in all_refs if not ref.startswith("tool:"))
+    if non_tool_refs:
+        raise SmokeValidationError(f"agentic response includes non tool:* refs: {non_tool_refs}")
+
+    dropped_refs = sorted(event_refs.difference(top_level_refs))
+    if dropped_refs:
+        raise SmokeValidationError(f"agentic response must preserve tool refs at top level: {dropped_refs}")
+
+
+def _tool_names(values: object) -> set[str]:
+    if values is None:
+        return set()
+    if isinstance(values, str):
+        return {values}
+    try:
+        return {str(value) for value in values}  # type: ignore[operator]
+    except TypeError:
+        return {str(values)}
+
+
 def _validate_no_forbidden_agent_tools(response: AgentRunResponse) -> None:
-    used = set(response.usedTools)
+    used = _tool_names(response.usedTools)
+    used.update(_tool_names(getattr(response, "usedCapabilityTools", [])))
     for event in response.events:
-        used.update(event.usedTools)
-        used.update(event.usedCapabilityTools)
+        used.update(_tool_names(event.usedTools))
+        used.update(_tool_names(event.usedCapabilityTools))
     forbidden = sorted(used.intersection(FORBIDDEN_AGENT_TOOL_NAMES))
     if forbidden:
         raise SmokeValidationError(f"provider response used forbidden tools: {forbidden}")
 
 
-def validate_agentic_provider_smoke_response(response: AgentRunResponse) -> None:
-    """Validate the provider path used by /api/agent/run."""
-    if response.llmMode != "provider-llm":
-        raise SmokeValidationError(f"Expected provider-llm, got {response.llmMode}")
-    if response.runtime.status != "provider_llm":
-        raise SmokeValidationError(f"Expected provider_llm runtime, got {response.runtime.status}")
+def _validate_agent_call_runtime_proof(response: AgentRunResponse) -> None:
     if not response.runtime.providerRunId:
         raise SmokeValidationError("provider response is missing providerRunId")
     if not response.runtime.agentInvocationProof:
         raise SmokeValidationError("provider response is missing agent invocation proof")
     if not response.calledAgentIds or not response.primaryAgentId:
         raise SmokeValidationError("provider response is missing called operating agents")
-    if not response.toolResultRefs:
-        raise SmokeValidationError("provider response is missing top-level tool refs")
-    _validate_no_forbidden_agent_tools(response)
+    if response.runtime.status == "resumed":
+        checkpoint = response.runtime.checkpoint
+        if checkpoint is None or checkpoint.status != "resumed":
+            raise SmokeValidationError("resumed provider response is missing resumed checkpoint proof")
+
+    routed_agent_ids = response.agentRoute.get("calledAgentIds", response.agentRoute.get("routedAgentIds", []))
+    if sorted(routed_agent_ids) != sorted(response.calledAgentIds):
+        raise SmokeValidationError("provider smoke route does not match called operating agents")
 
     for event in response.events:
         if not event.agentId:
@@ -118,6 +145,44 @@ def validate_agentic_provider_smoke_response(response: AgentRunResponse) -> None
             raise SmokeValidationError("agentic provider event is missing tool refs")
         if event.calledAgentTool not in response.runtime.agentInvocationProof:
             raise SmokeValidationError(f"{event.calledAgentTool} is missing from invocation proof")
+
+
+def _validate_interrupt_runtime_proof(response: AgentRunResponse) -> None:
+    if response.runtime.agentInvocationProof:
+        raise SmokeValidationError("interrupt response must not claim agent invocation proof before approval")
+    if response.calledAgentIds or response.primaryAgentId:
+        raise SmokeValidationError("interrupt response must not claim called operating agents")
+    checkpoint = response.runtime.checkpoint
+    if checkpoint is None or checkpoint.status != "interrupt_requested":
+        raise SmokeValidationError("interrupt response is missing interrupt checkpoint proof")
+    if response.agentRoute.get("calledAgentIds", []) != []:
+        raise SmokeValidationError("interrupt route must not claim called operating agents")
+    if not any(event.type == "interrupt_requested" for event in response.events):
+        raise SmokeValidationError("interrupt response is missing interrupt_requested event")
+    for event in response.events:
+        if event.calledAgentTool:
+            raise SmokeValidationError("interrupt event must not claim calledAgentTool before approval")
+        if not event.toolResultRefs:
+            raise SmokeValidationError("interrupt event is missing tool refs")
+
+
+def validate_agentic_provider_smoke_response(response: AgentRunResponse) -> None:
+    """Validate the provider path used by /api/agent/run."""
+    if response.llmMode != "provider-llm":
+        raise SmokeValidationError(f"Expected provider-llm, got {response.llmMode}")
+    if response.runtime.status not in PROVIDER_RUNTIME_STATUSES:
+        raise SmokeValidationError(f"Expected provider_llm runtime proof status, got {response.runtime.status}")
+    if not response.toolResultRefs:
+        raise SmokeValidationError("provider response is missing top-level tool refs")
+    if response.agentRoute.get("executionMode") != "stage_committee":
+        raise SmokeValidationError("provider smoke must preserve stage_committee route")
+    _validate_no_forbidden_agent_tools(response)
+    _validate_tool_ref_preservation(response)
+
+    if response.runtime.status in PROVIDER_AGENT_CALL_STATUSES:
+        _validate_agent_call_runtime_proof(response)
+    else:
+        _validate_interrupt_runtime_proof(response)
 
     refs = sorted({*response.toolResultRefs, *(ref for event in response.events for ref in event.toolResultRefs)})
     _validate_grounded_texts(response, refs)
@@ -140,6 +205,7 @@ def validate_agentic_all_hands_fallback_response(response: AgentRunResponse) -> 
         raise SmokeValidationError("fallback smoke must mark the route as previewOnly")
     if not response.toolResultRefs:
         raise SmokeValidationError("fallback response is missing top-level tool refs")
+    _validate_tool_ref_preservation(response)
     for event in response.events:
         if not event.toolResultRefs:
             raise SmokeValidationError("fallback event is missing tool refs")

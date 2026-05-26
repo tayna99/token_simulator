@@ -11,6 +11,11 @@ export interface BuildAgentSnapshotInput {
   riskCards: unknown[]
   benchmarkCards: unknown[]
   decisionHistory: unknown[]
+  usageLog?: unknown[]
+  providerModelPriceRefs?: unknown[]
+  costAttribution?: Record<string, unknown>
+  marginProfitability?: Record<string, unknown>
+  optimizationWhatIfSavings?: unknown[]
   factSources: unknown[]
   operatingAgents: unknown[]
   operatingAssets: unknown[]
@@ -34,6 +39,12 @@ export interface BuildAgentSnapshotInput {
 
 export interface AgentSnapshotPayload extends BuildAgentSnapshotInput {
   snapshotVersion: string
+  usageLog: unknown[]
+  providerModelPriceRefs: unknown[]
+  costAttribution: Record<string, unknown>
+  marginProfitability: Record<string, unknown>
+  optimizationWhatIfSavings: unknown[]
+  decisionHistory: unknown[]
 }
 
 function normalizeForHash(value: unknown): unknown {
@@ -58,6 +69,11 @@ export function buildAgentSnapshot(input: BuildAgentSnapshotInput): AgentSnapsho
   const dataLimitations = input.dataLimitations ?? input.trustInspection?.analysisScope.blocked ?? []
   const snapshotInput = {
     ...input,
+    usageLog: input.usageLog ?? [],
+    providerModelPriceRefs: input.providerModelPriceRefs ?? [],
+    costAttribution: input.costAttribution ?? {},
+    marginProfitability: input.marginProfitability ?? {},
+    optimizationWhatIfSavings: input.optimizationWhatIfSavings ?? [],
     dataLimitations,
   }
   const normalized = normalizeForHash(snapshotInput)

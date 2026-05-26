@@ -1,21 +1,21 @@
-# PRD: AgentPayroll v3.3
+# PRD: AgentPayroll v3.4
 
 부제: **AI SaaS Cost · Margin · Decision Operating System(AI SaaS 비용·마진·결정 운영체계)**
-문서 버전: 3.3 · 2026-05-25
-상태: Draft · Next.js 웹앱 전환 기준 PRD
-관계: `docs/PRD-v2.md`는 구현 사실 복구 정본으로 보존한다. `docs/PRD-current-state-2026-05-25.md`는 현재 코드 사실 기록이다. 이 문서는 v1/v2/v3의 제품 방향, 2026-05-25 현재 구현 내용, 그리고 Next.js 프론트 웹앱으로 이관하며 구현할 범위를 한데 묶은 **현재 방향 PRD**다.
+문서 버전: 3.4 · 2026-05-26
+상태: Draft · Next.js 웹앱 + Money Leak Run + HITL runtime proof 기준 PRD
+관계: `docs/PRD-v2.md`는 구현 사실 복구 정본으로 보존한다. `docs/PRD-current-state-2026-05-25.md`는 현재 코드 사실 기록이다. 이 문서는 v1/v2/v3의 제품 방향, 2026-05-26 현재 구현 내용, 그리고 Next.js 프론트 웹앱으로 이관하며 구현할 범위를 한데 묶은 **현재 방향 PRD**다.
 
 ---
 
 ## 0. 이번 버전이 포괄하는 범위
 
-v3.3은 단순히 "PRD 문구 업데이트"가 아니라 다음 세 종류의 진실을 합친다.
+v3.4는 단순히 "PRD 문구 업데이트"가 아니라 다음 세 종류의 진실을 합친다.
 
 | 출처 | 이 문서에 반영한 내용 |
 | --- | --- |
 | 기존 PRD(v1, v2, v3.2) | AgentPayroll의 문제, 페르소나, 5단계 결정 흐름, deterministic cost/margin 원칙, SDK-lite와 Margin Guard 방향 |
-| 현재 구현 사실(2026-05-25) | 11개 운영 에이전트, C1-C9 RAG 코퍼스 계약, backend Chroma RAG, P1 RAG evidence API, report download, retention runner, runtime status, Supabase production store 준비 |
-| 지금 구현 계획 | Next.js App Router 기반 프론트 웹앱, workspace/customer/admin route 분리, Route Handler/Server Action 경계, Supabase pgvector(Postgres 안의 벡터 검색 확장) official-doc retrieval(공식 문서 검색), Python agent service 연동, Trust pipeline(신뢰 확인 흐름)과 decision ledger(결정 기록 장부) 운영화 |
+| 현재 구현 사실(2026-05-26) | Next App Router shell, Money Leak Run(비용 누수 진단 실행), 11개 운영 에이전트, LangChain 1.0 agent runtime, HITL checkpoint/resume, runtime proof(실행 증거)와 human approval metadata(사람 승인 메타데이터), C1-C9 RAG 코퍼스 계약, 분리된 RAG collection, report artifact, retention/runtime/status route |
+| 지금 구현 계획 | Money Leak Run을 첫 5분 고객 경험으로 고정하고, Supabase pgvector(Postgres 안의 벡터 검색 확장) official-doc retrieval(공식 문서 검색), production demo tenant, persisted decision/report ledger, AI Cost Snapshot report(유료 1회 리포트) 서비스 검증 루프를 운영화 |
 
 이 문서는 "지금 있는 것"과 "Next.js로 옮기며 만들 것"을 분리한다. 구현 사실은 `docs/PRD-current-state-2026-05-25.md`가 더 엄격한 기준이고, 이 문서는 제품과 구현 계획을 함께 잡는 실행용 PRD다.
 
@@ -65,6 +65,9 @@ AgentPayroll은 총액 dashboard(대시보드)가 아니라 **usage export(사�
 7. **역할별 화면은 달라도 숫자는 같다.** Developer/PM/CEO view는 같은 deterministic snapshot과 같은 usage rows를 읽는다.
 8. **Billing(과금) 실행은 금지.** Rate Card(요금표 초안)와 pricing policy(가격 정책)는 draft/export/decision record(초안/내보내기/결정 기록)까지다. Stripe/Metronome 변경은 별도 human-approved mutation path(사람이 승인한 변경 실행 경로)가 생기기 전까지 실행하지 않는다.
 9. **Next.js 서버 모듈은 lazy init.** Supabase, OpenAI, Resend, Slack 같은 runtime client는 module scope에서 만들지 않고 getter/handler 내부에서 초기화한다.
+10. **Runtime proof 없이는 실행 완료가 아니다.** `provider_llm`, `resumed`, `interrupt_requested`, `deterministic_preview`, `unavailable` 상태와 `providerRunId`, `agentInvocationProof`, checkpoint metadata가 구분되어야 한다.
+11. **HITL checkpoint는 사람 승인 이후에만 resume된다.** Adopt/Reject/Hold와 approval metadata가 decision/report artifact에 남아야 하며, raw resume payload는 report에 노출하지 않는다.
+12. **Forbidden tool claim은 거부한다.** Provider output이 billing/customer send/decision creation 같은 forbidden mutation을 수행했다고 주장하면 `guardrail_rejected` 또는 fallback 상태로 낮춘다.
 
 ---
 
@@ -84,17 +87,16 @@ AgentPayroll은 총액 dashboard(대시보드)가 아니라 **usage export(사�
 
 ## 5. 제품 척추
 
-첫 화면은 빈 대시보드가 아니다. 사용자는 setup wizard 또는 기존 workspace로 진입한다.
+첫 화면은 빈 대시보드가 아니다. 사용자는 setup wizard가 아니라 **Money Leak Run(비용 누수 진단 실행)**으로 진입한다. 첫 5분의 질문은 "대시보드를 둘러볼까?"가 아니라 "이번 달 AI 때문에 돈이 새는 고객·기능·요금제를 찾을 수 있나?"다.
 
 ```text
-사용량 가져오기
--> Trust / Data Readiness
--> 기능·고객·요금제 매핑
--> 비즈니스 기준값
--> 원가/마진 스냅샷
--> 운영 에이전트 리뷰
+CSV 또는 summary 입력
+-> Trust Gate
+-> 손해 고객 / 마진 깨는 기능 진단
+-> Margin Story
+-> Policy Candidate
 -> 사람의 Adopt / Reject / Hold 결정
--> 리포트 / Rate Card draft / 운영 일지
+-> PDF Artifact / Decision Ledger / 다음 반복 리포트
 ```
 
 기존 v3.2의 5단계 decision flow는 유지한다.
@@ -108,14 +110,14 @@ Next.js 웹앱에서는 이 흐름을 route와 server boundary로 더 명확히 
 | Route 후보 | 목적 | 주요 컴포넌트/기능 |
 | --- | --- | --- |
 | `/` | 제품 진입 또는 workspace redirect | guided setup, sample load |
-| `/workspace/[workspaceId]` | 주 작업 공간 | 5단계 decision workspace, role projection |
-| `/workspace/[workspaceId]/imports` | 사용량 업로드/adapter intake | Trust check, schema mapping, normalized usage |
-| `/workspace/[workspaceId]/decisions` | Decision/Operating Ledger | adopt/reject/hold, agent route metadata |
-| `/workspace/[workspaceId]/reports/[reportId]` | one-page report와 artifacts | markdown/json/pdf artifact download |
-| `/workspace/[workspaceId]/settings/runtime` | runtime 상태 | Supabase, OpenAI embedding, agent service, connectors |
+| `/w/[workspaceId]` | 주 작업 공간 | Money Leak Run, Trust Gate, diagnosis, decision choice, PDF gate |
+| `/w/[workspaceId]/admin` | tenant/admin readiness | Supabase, RAG, Watchtower, retention, connector readiness |
+| `/reports/[id]` | one-page report와 artifacts | markdown/json/pdf artifact download, runtime proof, human approval |
+| `/api/usage/import` | 사용량 업로드/adapter intake | Trust check, schema mapping, normalized usage |
+| `/api/decisions` | Decision/Operating Ledger | adopt/reject/hold, runtime proof, human approval |
 | `/admin/sources` | 내부 소스/Watchtower/RAG 관리 | C1-C9 registry, source freshness, review queue |
 
-초기 Next.js 전환에서는 모든 route를 한 번에 완성하지 않는다. 먼저 workspace shell, imports, decisions, reports, runtime status를 P0로 잡는다.
+초기 Next.js 전환에서는 모든 route를 한 번에 완성하지 않는다. 먼저 `/w/[workspaceId]`의 Money Leak Run, `/w/[workspaceId]/admin`, report artifact, runtime status, RAG/watchtower/report/retention route handler를 P0로 잡는다.
 
 ---
 
@@ -132,16 +134,20 @@ Next.js 웹앱에서는 이 흐름을 route와 server boundary로 더 명확히 
 | Trust | Data Intake Policy, Security Middleware, raw prompt/API key/PII 차단, retention note |
 | Front Operating | ICP, self-assessment, data readiness, offer ladder, approval matrix, learning loop context |
 | Operating Team | 11 operating agents, 10 operating assets, stage routing, all-hands/fallback smoke |
-| Agent Runtime | TypeScript deterministic runtime + Python `agent_service` FastAPI/LangChain runtime |
-| RAG | C1-C9 corpus contract, official docs vector RAG, benchmark/usage/decision split retrieval, backend Chroma store, Supabase production store 준비 |
-| Reports | one-page report, report artifacts, `/api/reports/[id]/download` wrapper |
-| Runtime Ops | `/api/runtime/status`, `/api/retention/run`, audit export refs, retention jobs |
+| Agent Runtime | TypeScript deterministic runtime + Python `agent_service` FastAPI/LangChain runtime + provider/fallback/hardening guardrails |
+| HITL / Runtime Proof | checkpoint interrupt/resume, providerRunId, agentInvocationProof, runtime status, human approval metadata |
+| RAG | C1-C9 corpus contract, official docs vector RAG, benchmark/usage/decision split retrieval, backend Chroma store, Supabase production store 준비, `official_docs`/`benchmark_evidence`/`decision_history` collection 분리 |
+| Reports | one-page report, report artifacts, `/api/reports/[id]/download`, runtime proof + human approval + checkpoint resume proof |
+| Runtime Ops | `/api/runtime/status`, `/api/retention/run`, `/api/watchtower/*`, `/api/reports/*`, audit export refs, retention jobs |
+| Service Validation | `AI Cost Snapshot report` 유료 리포트 offer, ICP scorecard, data readiness checklist, review call script, validation ledger |
 
 진행 중인 구현 범위:
 
 - Supabase pgvector official-doc RAG retrieval: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`가 있을 때 official docs index/retrieval을 production store로 연결한다.
-- Next.js App Router 이관: 현재 Vite app과 Vercel `api/*` wrapper를 App Router page/route handler 구조로 옮긴다.
-- Customer-facing SaaS dashboard: 내부 운영 콘솔에서 workspace-auth, setup wizard, monthly review history가 있는 고객용 웹앱으로 확장한다.
+- Production demo tenant: Supabase Auth, membership, usage snapshot, accepted facts, watchtower run, RAG chunks, report artifact, `agent_service` reachability가 모두 연결되어야 성공이다.
+- Money Leak Run hardening: Trust Gate, 손해 고객/기능 진단, Decision Candidate, explicit Adopt/Reject/Hold, PDF artifact gate를 첫 화면의 기본 흐름으로 유지한다.
+- HITL runtime proof hardening: checkpoint resume는 human approval과 함께 decision/report ledger에 남기고, provider/preview/unavailable 상태를 섞지 않는다.
+- Service MVP validation: broad SaaS 기능 요구가 아니라 `AI Cost Snapshot report 30만~100만 원` 유료 리포트 반복 요청으로 시장 신호를 판정한다.
 
 ---
 
@@ -173,18 +179,20 @@ P0 목표:
 
 ### 7.3 API 이관 대상
 
-현재 Vercel `api/*` wrapper를 아래 Next Route Handler로 옮기는 것이 목표다.
+현재 목표는 Vercel `api/*` wrapper의 책임을 Next Route Handler로 옮기고, production route에서 demo/memory/request fixture를 운영 데이터처럼 쓰지 않는 것이다.
 
 | 현재 API | Next.js 목표 | 역할 |
 | --- | --- | --- |
-| `api/rag/p1-evidence.ts` | `src/app/api/rag/p1-evidence/route.ts` | C1/C2/C4/C9 evidence retrieval |
-| `api/rag/index.ts` | `src/app/api/rag/index/route.ts` | official doc chunks index |
-| `api/runtime/status.ts` | `src/app/api/runtime/status/route.ts` | Supabase/OpenAI/agent/connectors capability |
-| `api/retention/run.ts` | `src/app/api/retention/run/route.ts` | retention jobs, audit export refs |
-| `api/reports/[id]/download.ts` | `src/app/api/reports/[id]/download/route.ts` | markdown/json/pdf artifact serving |
-| `api/sdk-lite/usage.ts` | `src/app/api/sdk-lite/usage/route.ts` | prompt-free usage event ingestion |
-| `api/team-cost/calibrate.ts` | `src/app/api/team-cost/calibrate/route.ts` | planned vs actual calibration |
-| `api/agent/run.ts` | `src/app/api/agent/run/route.ts` | Python agent service bridge |
+| `api/rag/p1-evidence.ts` | `app/api/rag/p1-evidence/route.ts` | C1/C2/C4/C9 evidence retrieval |
+| `api/rag/index.ts` | `app/api/rag/index/route.ts` | official doc chunks index |
+| `api/runtime/status.ts` | `app/api/runtime/status/route.ts` | Supabase/OpenAI/agent/connectors capability |
+| `api/retention/run.ts` | `app/api/retention/run/route.ts` | retention jobs, audit export refs |
+| `api/reports/[id]/download.ts` | `app/api/reports/[id]/download/route.ts` | markdown/json/pdf artifact serving |
+| `api/usage/import.ts` | `app/api/usage/import/route.ts` | Trust-safe usage import |
+| `api/team-cost/calibrate.ts` | future `app/api/team-cost/calibrate/route.ts` | planned vs actual calibration |
+| `api/agent/run.ts` | `app/api/agent/run/route.ts` | Python agent service bridge |
+| decision store API | `app/api/decisions/route.ts` | decision ledger CRUD with runtime proof/human approval |
+| watchtower API | `app/api/watchtower/runs/route.ts`, `app/api/watchtower/review/route.ts` | official source run/review queue |
 
 ### 7.4 Next.js에서 유지할 UI 경계
 
@@ -198,9 +206,9 @@ P0 목표:
 
 ## 8. MVP 순서
 
-### MVP 1: Service MVP
+### MVP 1: Money Leak Run + AI Cost Snapshot report Service MVP
 
-샘플/CSV/export 기반으로 실제 사용 기록을 분석한다.
+샘플/CSV/export 기반으로 실제 사용 기록을 분석하고, 첫 산출물은 넓은 SaaS dashboard가 아니라 `AI Cost Snapshot report 30만~100만 원` 유료 리포트다.
 
 - Trust Intake로 prompt/API key/PII/schema health 확인
 - normalized usage table 생성
@@ -208,8 +216,9 @@ P0 목표:
 - 원가/마진/손해 고객/가격 시나리오 계산
 - stage-routed operating agents review
 - adopt/reject/hold decision ledger
-- report artifact export
+- runtime proof + human approval metadata가 붙은 report artifact export
 - Next.js workspace shell에서 같은 flow 제공
+- ICP scorecard, data readiness checklist, review call script, validation ledger로 반복 리포트 요청 여부 기록
 
 ### MVP 2: SDK-lite 자동 수집
 
@@ -358,6 +367,36 @@ P1 runtime endpoints는 Next.js 전환 후에도 제품 요구로 유지한다.
 - UsageEvent v2: multimodal/cache/tool/search 컬럼 확장
 - Rate Card Draft: included credits, overage, cap, affected customers, margin basis, draft_only
 
+### 9.8 Money Leak Run
+
+Money Leak Run은 `/w/[workspaceId]`의 첫 고객 경험이다.
+
+- CSV/summary 입력 직후 Trust Gate가 raw prompt, API key, PII, mapping gap을 먼저 설명한다.
+- 진단은 손해 고객, 마진 깨는 기능, Decision Candidate, Adopt/Reject/Hold, PDF artifact 순서로 이어진다.
+- `ReportFirstDiagnosisWorkspace`는 일반 고객 화면에서 evidence refs를 요약하고, expert/audience surface에서 tool/snapshot/evidence refs를 펼친다.
+- Decision Candidate는 기본 선택을 갖지 않는다. 사용자가 Adopt/Reject/Hold를 명시해야 report payload와 PDF gate가 열린다.
+- blocked 또는 needs_mapping 상태에서는 손익 판단과 PDF를 완료처럼 렌더하지 않는다.
+
+### 9.9 HITL Runtime Proof and Human Approval
+
+LangChain 1.0 runtime은 결정을 대신하지 않고 checkpoint를 통해 사람 승인을 기다린다.
+
+- `hitlCheckpoint`는 all-hands 또는 민감한 agent delegation에서 `interrupt_requested`로 멈출 수 있다.
+- Adopt/Reject/Hold 후 resume은 Decision Log/report artifact에서 `runtime.status=resumed`와 `humanApproval.approvalMode=checkpoint_resume`으로 남을 수 있다.
+- Decision Log와 report artifact는 `runtimeProof`, `humanApproval`, checkpoint id/thread id를 보존한다.
+- report는 raw `resumePayload`를 출력하지 않고 checkpoint status/id와 approval mode만 공유한다.
+- provider output이 forbidden mutation tool claim을 만들면 runtime은 거부하거나 fallback으로 낮춘다.
+
+### 9.10 Service MVP Validation
+
+제품 검증은 "대시보드 기능을 더 만들자"가 아니라 유료 리포트 반복 요청으로 판정한다.
+
+- Offer: `AI Cost Snapshot report 30만~100만 원`, 데이터 수령 후 3~5영업일, 1장 요약 리포트 + 계산 부록 + 30분 리뷰콜.
+- ICP: 실제 AI 기능 운영, 월 LLM/API 비용, usage metadata 보유, 가격/limit 결정 압박, 리포트 공유 대상이 있는 리드를 A/B/C로 나눈다.
+- Data readiness: raw prompt, 개인정보, API key 없이 customer/plan/feature/model/token/cost/revenue metadata만 받는다.
+- Review call: 데이터 공유 의도, 리포트 공유 의도, 가격/limit 결정 의도, 반복 리포트 요청 신호를 quote로 기록한다.
+- Pass는 반복 서비스 리포트 요청 또는 2개 이상 ICP 적합 고객의 유료 리포트 요청으로만 준다.
+
 ---
 
 ## 10. 아키텍처
@@ -376,10 +415,13 @@ Customer CSV / SDK-lite / Adapter export
   -> Cost / Margin / Pricing Pure Modules
   -> RAG Evidence Retrieval
   -> Python Operating Agents
+  -> HITL Checkpoint when approval is required
   -> Supervisor Synthesis
   -> Human Decision
+  -> Runtime Proof + Human Approval Metadata
   -> Decision + Operating Ledger
-  -> Report / Rate Card Draft / Audit Export
+  -> PDF Report / Rate Card Draft / Audit Export
+  -> Service MVP Learning Loop
 ```
 
 권위:
@@ -389,6 +431,7 @@ Customer CSV / SDK-lite / Adapter export
 - RAG: evidence snippets, source refs, context blocks
 - 해석: AI agent with refs
 - 결정: human approval + ledger
+- 실행 증거: runtime proof + checkpoint proof + provider/fallback status
 - 반복 학습: Plan vs Actual + Decision history
 
 Runtime 분리:
@@ -411,10 +454,12 @@ Runtime 분리:
 - report export 횟수
 - pricing scenario와 rate-card draft 생성 횟수
 - decision log 기록 수(adopt/reject/hold)
+- checkpoint interrupt/resume 중 human approval metadata가 붙은 비율
 - role switch 후 핵심 숫자 불일치 0건
 - RAG evidence coverage(C1/C2/C4/C9 refs)
 - runtime status configured workspace 수
 - retention/audit job 완료율
+- 유료 `AI Cost Snapshot report` 요청 수와 반복 리포트 요청 수
 
 정성:
 
@@ -424,6 +469,7 @@ Runtime 분리:
 - "prompt를 안 가져가면 붙여볼 수 있다."
 - "다음 달에도 같은 리포트를 받고 싶다."
 - "개발자와 CEO가 같은 숫자로 이야기할 수 있다."
+- "raw prompt 없이 이 정도 usage metadata는 공유할 수 있다."
 
 안티지표:
 
@@ -433,7 +479,10 @@ Runtime 분리:
 - Developer/CEO view 숫자가 서로 다름
 - AI가 근거 없는 숫자를 설명함
 - RAG 결과가 가격 숫자를 직접 덮어씀
+- provider output이 실제 실행하지 않은 tool/customer/billing mutation을 실행 완료처럼 주장함
+- checkpoint resume 또는 human approval 없이 report가 ledger-backed처럼 보임
 - Next.js 전환 후 client bundle이 과도하게 커지고 workspace 첫 진입이 느려짐
+- SaaS dashboard 기능 요청만 많고 유료 리포트 반복 요청은 없음
 
 ---
 
@@ -447,6 +496,9 @@ Runtime 분리:
 - prompt, messages, API key, secrets, PII를 기본 수집하지 않는다.
 - Next.js 전환을 핑계로 계산 모듈을 UI 컴포넌트 안으로 옮기지 않는다.
 - 고객 화면에 내부 `tool:*`, `asset:*`, `source:*`, raw agent route를 과도하게 노출하지 않는다.
+- provider output의 forbidden mutation claim을 그대로 신뢰하지 않는다.
+- raw checkpoint resume payload를 customer-facing report에 노출하지 않는다.
+- 넓은 SaaS 기능 관심을 Service MVP pass로 계산하지 않는다.
 
 ---
 
@@ -461,23 +513,26 @@ Runtime 분리:
 | Supabase/OpenAI env로 build crash | lazy initialization, runtime status endpoint, not_configured fallback |
 | RAG가 fact authority처럼 보임 | `mayOverrideFacts:false`, Fact Ledger approval flow, source refs |
 | 2-runtime 드리프트 | shared schemas, provider smoke, Python/TS contract tests |
+| provider가 forbidden mutation을 했다고 주장 | middleware/tool allowlist, forbidden tool claim rejection, fallback status |
+| HITL resume이 승인 없는 실행처럼 보임 | checkpoint metadata, humanApproval, approvalMode, report artifact proof |
 | alert fatigue | decision-needed 4종만 customer-facing alert로 시작 |
 | Gateway 책임 과중 | SDK-lite 이후 P2, outage/security plan 먼저 |
 | 모델 가격 신선도 하락 | Watchtower, official source registry, human review queue |
+| 서비스 검증이 SaaS 기능 요구로 흐림 | AI Cost Snapshot report offer/ledger에서 반복 리포트 요청만 pass로 계산 |
 
 ---
 
 ## 14. 미해결 질문
 
-- 제품명 `AgentPayroll` 유지 여부. 내부 문서에는 `AgentCost` 표현도 남아 있다.
-- Next.js repo 구조를 현재 repo 안에서 전환할지, 별도 `apps/web`로 둘지.
-- Auth를 언제 도입할지. P0는 workspace id 기반 내부 사용, P1은 customer auth 필요.
+- 내부 문서의 `AgentCost` 잔여 표현을 언제 `AgentPayroll`로 정리할지.
+- Next.js route handler와 legacy Vercel/Vite wrapper 제거 시점.
+- Supabase Auth를 production membership/RLS와 어디까지 묶어 P0 demo 성공 기준으로 볼지.
 - Supabase를 모든 persistence의 기본으로 승격할 트리거.
 - SDK-lite 패키지 형태: npm package, snippet, server endpoint 중 무엇부터인가.
 - Alert delivery: in-app first, Slack/Email opt-in later.
 - Gateway의 첫 지원 provider 범위.
 - Chroma와 Supabase pgvector의 장기 역할 분리. local proof vs production default.
-- Bootcamp 이후 Wedge A와 Wedge B 중 어느 쪽에 2주 더 투자할지.
+- `AI Cost Snapshot report` 반복 리포트 요청이 몇 건이면 SaaS dashboard build로 넘어갈지.
 
 ---
 
@@ -493,9 +548,15 @@ Runtime 분리:
 | `docs/superpowers/plans/2026-05-24-operating-team-runtime-remaining-scope.md` | 11-agent runtime 남은 범위 |
 | `docs/superpowers/plans/2026-05-24-rate-card-decision-loop.md` | Rate Card, Decision Header, export gate 계획 |
 | `docs/superpowers/plans/2026-05-23-p1-extension-backlog.md` | P1 backlog와 activation rule |
+| `docs/superpowers/plans/2026-05-26-agentpayroll-money-leak-run.md` | Money Leak Run 구현 계획 |
+| `docs/superpowers/specs/2026-05-26-agentpayroll-langchain-1-agent-runtime-design.md` | LangChain 1.0 agent runtime / HITL 설계 |
+| `docs/superpowers/plans/2026-05-26-agentpayroll-service-mvp-validation.md` | AI Cost Snapshot report 서비스 검증 계획 |
+| `docs/service-validation/` | ICP, data readiness, offer, review call, learning loop, validation ledger 운영 자산 |
 | `src/lib/calculator.ts` | 비용 계산 헌법상 단일 경로 |
 | `src/lib/format.ts` | 표시 숫자 formatting 경계 |
 | `src/features/p1/lib/p1OperatingSystem.ts` | P1 usage, external action, RAG, retention 운영 계약 |
 | `src/server/p1ApiHandlers.ts` | 현재 API handler 구현 경계 |
 | `src/server/storage/supabaseProductionStore.ts` | Supabase persistence/pgvector store 준비 |
+| `src/features/report-first/` | Money Leak Run 진단/step rail/first-view workspace |
+| `src/features/provenance/lib/runtimeApprovalMetadata.ts` | runtime proof와 human approval metadata |
 | `agent_service/` | Python FastAPI/LangChain operating agent runtime |

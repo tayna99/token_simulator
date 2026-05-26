@@ -22,6 +22,40 @@ const baseInput = {
   providerRegistry: [{ id: 'fact-openai', provider: 'openai' }],
   modelPerfMatrix: [{ taskType: 'classification', modelId: 'gpt-5-mini' }],
   operatingLedger: [{ id: 'ledger-1', workstream: 'Cost Modeling' }],
+  usageLog: [{
+    requestId: 'req-1',
+    customerId: 'cust-pro-1',
+    planId: 'pro',
+    feature: 'support_reply',
+    modelId: 'gpt-5-mini',
+    inputTokens: 1200,
+    outputTokens: 420,
+    totalCostUsd: 1.24,
+    costSource: 'model_price',
+  }],
+  providerModelPriceRefs: [{
+    modelId: 'gpt-5-mini',
+    provider: 'openai',
+    inputPrice: 0.25,
+    outputPrice: 2,
+    priceSourceUrl: 'https://openai.com/api/pricing/',
+    providerRegistryVersion: 'provider_registry_v0.4',
+  }],
+  costAttribution: {
+    feature: { totalCostUsd: 1.24, topRowLabel: 'support_reply', coveragePct: 1 },
+  },
+  marginProfitability: {
+    plans: [{ planId: 'pro', grossMarginPct: 0.72, marginRisk: 'healthy' }],
+    customers: [{ customerId: 'cust-pro-1', grossMarginPct: 0.7, marginRisk: 'healthy' }],
+    heavyUsers: { topDecileShare: 0.28, lossCustomerCount: 0 },
+  },
+  optimizationWhatIfSavings: [{
+    id: 'rec-cache_reused_input-research',
+    policy: 'cache_reused_input',
+    monthlySavingsUsd: 540,
+    decisionMode: 'deterministic',
+    affectedAgentIds: ['research'],
+  }],
   officialSourceRegistry: [{ id: 'zai-pricing', modelOwner: 'zai_glm' }],
   officialSourceSnippets: [{ snippetId: 'source:zai-pricing#glm-5', text: 'GLM-5 input price' }],
   modelReleaseCandidates: [{ candidateId: 'zai:glm:z-ai:global', status: 'needs_pricing_review' }],
@@ -63,6 +97,60 @@ describe('buildAgentSnapshot', () => {
 
     expect(changedPolicy.snapshotVersion).not.toBe(original.snapshotVersion)
     expect(changedDecision.snapshotVersion).not.toBe(original.snapshotVersion)
+  })
+
+  it('includes P0 domain payloads for usage, provider pricing, attribution, margin, optimization, and decisions', () => {
+    const snapshot = buildAgentSnapshot(baseInput)
+
+    expect(snapshot.usageLog).toEqual(baseInput.usageLog)
+    expect(snapshot.providerModelPriceRefs).toEqual(baseInput.providerModelPriceRefs)
+    expect(snapshot.costAttribution).toEqual(baseInput.costAttribution)
+    expect(snapshot.marginProfitability).toEqual(baseInput.marginProfitability)
+    expect(snapshot.optimizationWhatIfSavings).toEqual(baseInput.optimizationWhatIfSavings)
+    expect(snapshot.decisionHistory).toEqual(baseInput.decisionHistory)
+  })
+
+  it('exposes empty P0 domain payloads when no current data is available', () => {
+    const {
+      usageLog,
+      providerModelPriceRefs,
+      costAttribution,
+      marginProfitability,
+      optimizationWhatIfSavings,
+      ...inputWithoutP0Domains
+    } = baseInput
+
+    const snapshot = buildAgentSnapshot(inputWithoutP0Domains)
+
+    expect(snapshot.usageLog).toEqual([])
+    expect(snapshot.providerModelPriceRefs).toEqual([])
+    expect(snapshot.costAttribution).toEqual({})
+    expect(snapshot.marginProfitability).toEqual({})
+    expect(snapshot.optimizationWhatIfSavings).toEqual([])
+  })
+
+  it('changes the snapshot version when usage rows or threshold policy change', () => {
+    const original = buildAgentSnapshot(baseInput)
+    const changedUsage = buildAgentSnapshot({
+      ...baseInput,
+      usageLog: [
+        {
+          ...baseInput.usageLog[0],
+          outputTokens: 840,
+          totalCostUsd: 2.1,
+        },
+      ],
+    })
+    const changedThresholdPolicy = buildAgentSnapshot({
+      ...baseInput,
+      thresholdPolicy: {
+        ...baseInput.thresholdPolicy,
+        gross_margin_thin_pct: { currentValue: 0.55, policyVersion: 'v2' },
+      },
+    })
+
+    expect(changedUsage.snapshotVersion).not.toBe(original.snapshotVersion)
+    expect(changedThresholdPolicy.snapshotVersion).not.toBe(original.snapshotVersion)
   })
 
   it('includes trust, formula, provider, and data limitation metadata', () => {
