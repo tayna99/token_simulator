@@ -1,771 +1,102 @@
-# Folder Structure MVP Expansion Implementation Plan
+# 폴더 구조 MVP 확장 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **목적:** 프로젝트를 token cost simulator(토큰 비용 계산기)에서 AI 제품의 비용, 마진, 가격, 사용량 가져오기, 알림을 다루는 workspace(작업공간)로 확장하기 쉽게 재구조화한다.
 
-**Goal:** Make the project easier to extend from a token cost simulator into an AI product cost, margin, pricing, usage import, and alert workspace.
+## 핵심 원칙
 
-**Architecture:** Keep the current working MVP behavior intact, then reorganize files around product capabilities instead of a flat component pile. Preserve `src/lib/calculator.ts` and `src/lib/format.ts` as public calculation/formatting entry points to satisfy the project rules while gradually moving feature-specific logic into clearer folders.
+- 현재 동작하는 MVP는 깨지지 않아야 한다.
+- 파일은 "컴포넌트 묶음"이 아니라 product capability(제품 기능 역량) 기준으로 나눈다.
+- `src/lib/calculator.ts`와 `src/lib/format.ts`는 공개 계산/표시 진입점으로 유지한다.
+- 기능별 세부 로직은 점진적으로 `src/features/*/lib`로 옮긴다.
+- design_system(디자인 시스템 참고 자료)과 실제 앱 UI의 관계를 문서화한다.
 
-**Tech Stack:** Vite 6, React 18, TypeScript 5, Tailwind CSS 3, Vitest 4, Testing Library.
+## 왜 구조를 바꾸는가
 
----
+현재 구조는 데모에는 충분하지만 확장에는 약하다.
 
-## Why Change The Structure
+- `src/components`에 MVP 화면, legacy panel(이전 패널), 실험 UI, 재사용 UI가 한 층에 섞여 있다.
+- 비즈니스 로직이 `src/lib`에 흩어져 있어 product concept(제품 개념)이 폴더명에서 바로 보이지 않는다.
+- 다음 제품 방향은 usage import(사용량 가져오기), cost calculation(비용 계산), quality burden(품질·검수 부담), pricing/margin(가격·마진), reporting(리포트), operations alerts(운영 알림)를 분리해야 한다.
 
-Current structure is workable for a demo, but weak for MVP expansion.
-
-The main issue:
-
-- `src/components` contains MVP screens, legacy panels, future experiments, and reusable UI at the same level.
-- Business logic is split across `src/lib`, but the product concepts are not obvious from folder names.
-- Design-system code exists in both `design_system/` and `src/components/ui` / `src/styles`, but the relationship is not documented.
-- The next product direction needs separate areas for usage import, cost calculation, quality burden, pricing/margin, reporting, and operations alerts.
-
-The target should make a non-developer founder, a developer, and a future contributor understand this quickly:
+비개발자 창업자, 개발자, 미래 기여자가 아래 문장을 구조만 보고 이해할 수 있어야 한다.
 
 ```txt
-This app takes LLM usage data,
-turns it into feature-level cost,
-adds quality burden,
-maps it to business metrics,
-then helps decide pricing, margin, savings, and alerts.
+이 앱은 LLM 사용량 데이터를 받아 기능별 원가로 바꾸고,
+품질·검수 부담을 더해 사업 지표와 연결한 뒤,
+가격·마진·절감·알림 결정을 돕는다.
 ```
 
----
-
-## Recommended Target Structure
+## 권장 목표 구조
 
 ```txt
 src/
-  app/
-    App.tsx
-    App.test.tsx
-    providers/
-      I18nProvider.tsx
-    layout/
-      AppShell.tsx
-
+  app/                  앱 조립, 레이아웃, provider
   features/
-    usage/
-      components/
-        UsageSetup.tsx
-        UsageImportPanel.tsx
-        WorkloadBuilder.tsx
-      lib/
-        usageImport.ts
-        workload.ts
-      data/
-        workloadPresets.ts
-
-    current-cost/
-      components/
-        CurrentCostPanel.tsx
-        CostBreakdown.tsx
-      lib/
-        breakdown.ts
-
-    alternatives/
-      components/
-        AlternativeComparison.tsx
-        ModelComparisonMatrix.tsx
-        RequirementsFilter.tsx
-      data/
-        models.ts
-        qualityProfiles.ts
-
-    savings/
-      components/
-        SavingsLeverTable.tsx
-        CostOptimizationRoadmap.tsx
-      lib/
-        savingsLevers.ts
-
-    unit-economics/
-      components/
-        CostPerBusinessMetric.tsx
-        FeatureUnitEconomicsPanel.tsx
-        CostAttributionByFeature.tsx
-      lib/
-        businessMetrics.ts
-        unitEconomics.ts
-
-    report/
-      components/
-        ExportAnalysis.tsx
-        SummaryCard.tsx
-
-    guardrails/
-      components/
-        BudgetGuardrails.tsx
-        BudgetCap.tsx
-      lib/
-        budget.ts
-
-  domain/
-    cost/
-      calculator.ts
-      decisionMetrics.ts
-      period.ts
-    pricing/
-      providerPricing.ts
-    quality/
-      qualityBurden.ts
-
-  shared/
-    ui/
-      Button.tsx
-      Badge.tsx
-      Field.tsx
-      MetricTile.tsx
-      Surface.tsx
-      Toast.tsx
-      Tooltip.tsx
-    format/
-      format.ts
-    i18n/
-      i18n.ts
-    styles/
-      montage.css
-      fonts/
-        PretendardVariable.woff2
-
-  lib/
-    calculator.ts
-    format.ts
-
-  main.tsx
-  index.css
-  vite-env.d.ts
-  test-setup.ts
+    usage/              사용량 입력, CSV import, workload 계산
+    current-cost/       현재 비용, 비용 분해
+    alternatives/       모델 대안 비교
+    savings/            절감 레버와 최적화 로드맵
+    unit-economics/     고객·기능·요금제별 단위경제성
+    pricing/            가격 시나리오와 rate card 초안
+    report/             리포트 산출물
+    decision-log/       결정 로그
+    alerts/             운영 알림 후보
+  lib/                  공개 계산/포맷 진입점
+  components/ui/        재사용 UI primitive(기본 부품)
+  styles/               전역 스타일과 토큰
 ```
 
-Important compatibility rule:
+## 작업 1: 공개 계약 고정
 
-- Keep `src/lib/calculator.ts` as the official import path for cost math.
-- Keep `src/lib/format.ts` as the official import path for display formatting.
-- If implementation moves under `src/domain/`, `src/lib/*` should re-export or wrap the new files.
-- This avoids breaking `AGENTS.md` rules and keeps old tests/imports stable.
+- [ ] `src/lib/calculator.ts`는 비용 계산의 유일한 공개 경로로 유지한다.
+- [ ] `src/lib/format.ts`는 사용자 표시 숫자의 유일한 공개 경로로 유지한다.
+- [ ] feature 폴더가 내부 helper를 가져가더라도 기존 import가 깨지지 않게 한다.
+- [ ] 테스트는 기존 화면의 값이 재구조화 전후로 같음을 확인한다.
 
----
+## 작업 2: Usage 기능 폴더
 
-## Folder Meaning In Plain Korean
+- [ ] `usageImport.ts`, workload/preset 관련 코드를 `src/features/usage`로 모은다.
+- [ ] CSV 필수 컬럼과 오류 메시지를 문서화한다.
+- [ ] README에는 usage event(사용량 이벤트), attribution key(귀속 키), snapshot(분석 데이터 묶음)을 설명한다.
 
-- `app/`: 앱의 껍데기입니다. 전체 레이아웃, provider, root state가 여기 있습니다.
-- `features/`: 사용자가 보는 기능 단위입니다. Usage, Cost, Alternative, Savings, Report처럼 화면 흐름과 맞춥니다.
-- `domain/`: 화면과 상관없는 순수 계산 규칙입니다. 비용, 품질 부담, 가격, 마진 계산이 들어갑니다.
-- `shared/`: 여러 기능에서 같이 쓰는 UI, 포맷, i18n, 스타일입니다.
-- `data/`는 장기적으로 줄입니다. 모델 단가나 프리셋은 관련 feature 또는 domain 안으로 옮깁니다.
-- `components/`는 최종적으로 비우거나 compatibility re-export만 남깁니다.
+## 작업 3: Current Cost와 Alternatives 분리
 
----
+- [ ] 현재 비용 패널과 모델 비교 패널을 분리한다.
+- [ ] model catalog(모델 카탈로그)는 alternatives data로 이동하되 계산 경로는 유지한다.
+- [ ] "cheapest" 같은 모호한 표현은 scope(비교 범위)를 붙여 쓴다.
 
-## Migration Rule
+## 작업 4: Savings와 Unit Economics
 
-Do not move everything at once.
+- [ ] savings lever(절감 수단)와 unit economics(단위경제성)를 별도 기능으로 둔다.
+- [ ] raw cost와 effective cost(재시도·사람 검수·CS 비용 포함 실제 원가)를 구분한다.
+- [ ] gross margin(매출총이익률)과 customer profitability(고객별 수익성)를 같은 계산 snapshot에서 읽는다.
 
-Move in this order:
+## 작업 5: Pricing, Report, Decision Log
 
-1. Shared UI and styles
-2. Usage import/workload
-3. Current cost and alternatives
-4. Savings and unit economics
-5. Report and guardrails
-6. App shell
-7. Remove compatibility folders only after all imports are migrated
+- [ ] pricing scenario(가격 시나리오)와 rate card draft(요금표 초안)를 `pricing`으로 묶는다.
+- [ ] report artifact(리포트 산출물)는 `report`에서 관리한다.
+- [ ] decision log(결정 로그)는 pricing/report와 느슨하게 연결하고, 저장/삭제/export 계약을 명확히 한다.
 
-Each task must end with:
+## 작업 6: UI primitive 정리
 
-```bash
-npm run test:run
-npm run build
-```
+- [ ] 버튼, 카드, 표, 탭, segmented control, trust notice를 재사용 UI로 분리한다.
+- [ ] 카드 안 카드 구조를 피한다.
+- [ ] 긴 한국어 문장이 모바일에서 겹치지 않는지 확인한다.
 
----
+## 작업 7: 문서화
 
-### Task 1: Add Architecture Document
+- [ ] 각 feature 폴더에 README를 둔다.
+- [ ] README에는 목적, 소유 파일, 핵심 타입, 테스트 명령을 적는다.
+- [ ] 내부 용어는 처음 등장할 때 괄호로 풀어 쓴다.
 
-**Files:**
-- Create: `docs/architecture/folder-structure.md`
+## 검증
 
-- [ ] **Step 1: Create the architecture folder document**
+- [ ] `npm run test:run`
+- [ ] `npm run build`
+- [ ] CSV import → 비용 분해 → 마진 → 가격 시나리오 → 리포트 흐름 스모크
 
-Create `docs/architecture/folder-structure.md` with this structure:
+## 완료 기준
 
-```md
-# Folder Structure
-
-이 프로젝트는 단순 LLM 비용 계산기가 아니라 AI 제품의 사용량 기반 원가, 마진, 품질 리스크를 판단하는 도구다.
-
-## Top-Level Intent
-
-- `src/app`: 앱 조립과 전역 상태
-- `src/features`: 사용자가 보는 기능 단위
-- `src/domain`: 화면과 무관한 계산 규칙
-- `src/shared`: 공통 UI, 포맷, i18n, 스타일
-- `docs`: 제품/기술 의사결정 문서
-- `design_system`: 원본 디자인 시스템 레퍼런스
-
-## Compatibility
-
-`src/lib/calculator.ts`와 `src/lib/format.ts`는 계속 공식 public path로 유지한다.
-```
-
-- [ ] **Step 2: Verify the document is readable**
-
-Run:
-
-```bash
-git diff -- docs/architecture/folder-structure.md
-```
-
-Expected:
-
-```txt
-The new document explains app/features/domain/shared boundaries.
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add docs/architecture/folder-structure.md
-git commit -m "docs: define folder structure direction"
-```
-
----
-
-### Task 2: Move Shared UI Primitives
-
-**Files:**
-- Create: `src/shared/ui/primitives.tsx`
-- Create: `src/shared/ui/primitives.test.tsx`
-- Modify: `src/components/ui/primitives.tsx`
-- Modify imports in components that use primitives.
-
-- [ ] **Step 1: Move implementation into shared UI**
-
-Move the current contents of `src/components/ui/primitives.tsx` into:
-
-```txt
-src/shared/ui/primitives.tsx
-```
-
-Keep the old file as a compatibility re-export:
-
-```ts
-export * from '../../shared/ui/primitives'
-```
-
-- [ ] **Step 2: Move the primitive test**
-
-Move:
-
-```txt
-src/components/ui/primitives.test.tsx
-```
-
-to:
-
-```txt
-src/shared/ui/primitives.test.tsx
-```
-
-Update imports inside the test:
-
-```ts
-import { Button, Surface, Badge, Field, MetricTile } from './primitives'
-```
-
-- [ ] **Step 3: Run focused test**
-
-Run:
-
-```bash
-npm run test:run -- src/shared/ui/primitives.test.tsx
-```
-
-Expected:
-
-```txt
-PASS src/shared/ui/primitives.test.tsx
-```
-
-- [ ] **Step 4: Run full verification**
-
-Run:
-
-```bash
-npm run test:run
-npm run build
-```
-
-Expected:
-
-```txt
-177 tests pass, build succeeds
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/shared/ui src/components/ui/primitives.tsx
-git commit -m "refactor: move UI primitives to shared"
-```
-
----
-
-### Task 3: Group Usage Workflow
-
-**Files:**
-- Create folder: `src/features/usage/components`
-- Create folder: `src/features/usage/lib`
-- Create folder: `src/features/usage/data`
-- Move:
-  - `src/components/UsageSetup`
-  - `src/components/UsageImportPanel`
-  - `src/components/WorkloadBuilder`
-  - `src/lib/usageImport.ts`
-  - `src/lib/workload.ts`
-  - `src/data/workloadPresets.ts`
-
-- [ ] **Step 1: Move usage components**
-
-Move these component folders:
-
-```txt
-src/components/UsageSetup -> src/features/usage/components/UsageSetup
-src/components/UsageImportPanel -> src/features/usage/components/UsageImportPanel
-src/components/WorkloadBuilder -> src/features/usage/components/WorkloadBuilder
-```
-
-- [ ] **Step 2: Move usage logic**
-
-Move these pure logic files:
-
-```txt
-src/lib/usageImport.ts -> src/features/usage/lib/usageImport.ts
-src/lib/usageImport.test.ts -> src/features/usage/lib/usageImport.test.ts
-src/lib/workload.ts -> src/features/usage/lib/workload.ts
-src/lib/workload.test.ts -> src/features/usage/lib/workload.test.ts
-src/data/workloadPresets.ts -> src/features/usage/data/workloadPresets.ts
-src/data/workloadPresets.test.ts -> src/features/usage/data/workloadPresets.test.ts
-```
-
-- [ ] **Step 3: Add compatibility re-exports**
-
-Create `src/lib/usageImport.ts`:
-
-```ts
-export * from '../features/usage/lib/usageImport'
-```
-
-Create `src/lib/workload.ts`:
-
-```ts
-export * from '../features/usage/lib/workload'
-```
-
-Create `src/data/workloadPresets.ts`:
-
-```ts
-export * from '../features/usage/data/workloadPresets'
-```
-
-- [ ] **Step 4: Update direct imports in `src/App.tsx`**
-
-Replace:
-
-```ts
-import { USE_CASE_PRESETS, type UseCasePresetId } from './data/workloadPresets'
-import type { UsageImportSummary } from './lib/usageImport'
-import { UsageSetup } from './components/UsageSetup'
-```
-
-with:
-
-```ts
-import { USE_CASE_PRESETS, type UseCasePresetId } from './features/usage/data/workloadPresets'
-import type { UsageImportSummary } from './features/usage/lib/usageImport'
-import { UsageSetup } from './features/usage/components/UsageSetup'
-```
-
-- [ ] **Step 5: Run focused tests**
-
-Run:
-
-```bash
-npm run test:run -- src/features/usage
-```
-
-Expected:
-
-```txt
-Usage import, workload, workload preset, UsageSetup, UsageImportPanel, WorkloadBuilder tests pass.
-```
-
-- [ ] **Step 6: Run full verification and commit**
-
-```bash
-npm run test:run
-npm run build
-git add src/features/usage src/lib/usageImport.ts src/lib/workload.ts src/data/workloadPresets.ts src/App.tsx
-git commit -m "refactor: group usage workflow feature"
-```
-
----
-
-### Task 4: Group Cost, Alternatives, Savings, Unit Economics, Report
-
-**Files:**
-- Create folders:
-  - `src/features/current-cost`
-  - `src/features/alternatives`
-  - `src/features/savings`
-  - `src/features/unit-economics`
-  - `src/features/report`
-  - `src/features/guardrails`
-
-- [ ] **Step 1: Move current cost**
-
-Move:
-
-```txt
-src/components/CurrentCostPanel -> src/features/current-cost/components/CurrentCostPanel
-src/components/CostBreakdown -> src/features/current-cost/components/CostBreakdown
-src/lib/breakdown.ts -> src/features/current-cost/lib/breakdown.ts
-src/lib/breakdown.test.ts -> src/features/current-cost/lib/breakdown.test.ts
-```
-
-Keep compatibility:
-
-```ts
-// src/lib/breakdown.ts
-export * from '../features/current-cost/lib/breakdown'
-```
-
-- [ ] **Step 2: Move alternatives**
-
-Move:
-
-```txt
-src/components/AlternativeComparison -> src/features/alternatives/components/AlternativeComparison
-src/components/ModelComparisonMatrix -> src/features/alternatives/components/ModelComparisonMatrix
-src/components/RequirementsFilter -> src/features/alternatives/components/RequirementsFilter
-src/data/models.ts -> src/features/alternatives/data/models.ts
-src/data/models.test.ts -> src/features/alternatives/data/models.test.ts
-src/data/qualityProfiles.ts -> src/features/alternatives/data/qualityProfiles.ts
-src/data/qualityProfiles.test.ts -> src/features/alternatives/data/qualityProfiles.test.ts
-```
-
-Keep compatibility:
-
-```ts
-// src/data/models.ts
-export * from '../features/alternatives/data/models'
-```
-
-```ts
-// src/data/qualityProfiles.ts
-export * from '../features/alternatives/data/qualityProfiles'
-```
-
-- [ ] **Step 3: Move savings**
-
-Move:
-
-```txt
-src/components/SavingsLeverTable -> src/features/savings/components/SavingsLeverTable
-src/components/CostOptimizationRoadmap -> src/features/savings/components/CostOptimizationRoadmap
-src/lib/savingsLevers.ts -> src/features/savings/lib/savingsLevers.ts
-src/lib/savingsLevers.test.ts -> src/features/savings/lib/savingsLevers.test.ts
-```
-
-Keep compatibility:
-
-```ts
-// src/lib/savingsLevers.ts
-export * from '../features/savings/lib/savingsLevers'
-```
-
-- [ ] **Step 4: Move unit economics**
-
-Move:
-
-```txt
-src/components/CostPerBusinessMetric -> src/features/unit-economics/components/CostPerBusinessMetric
-src/components/FeatureUnitEconomicsPanel -> src/features/unit-economics/components/FeatureUnitEconomicsPanel
-src/components/CostAttributionByFeature -> src/features/unit-economics/components/CostAttributionByFeature
-src/lib/businessMetrics.ts -> src/features/unit-economics/lib/businessMetrics.ts
-src/lib/businessMetrics.test.ts -> src/features/unit-economics/lib/businessMetrics.test.ts
-src/lib/unitEconomics.ts -> src/features/unit-economics/lib/unitEconomics.ts
-src/lib/unitEconomics.test.ts -> src/features/unit-economics/lib/unitEconomics.test.ts
-```
-
-- [ ] **Step 5: Move report and guardrails**
-
-Move:
-
-```txt
-src/components/SummaryCard -> src/features/report/components/SummaryCard
-src/components/ExportAnalysis -> src/features/report/components/ExportAnalysis
-src/components/BudgetGuardrails -> src/features/guardrails/components/BudgetGuardrails
-src/components/BudgetCap -> src/features/guardrails/components/BudgetCap
-src/lib/budget.ts -> src/features/guardrails/lib/budget.ts
-src/lib/budget.test.ts -> src/features/guardrails/lib/budget.test.ts
-```
-
-- [ ] **Step 6: Update `src/App.tsx` imports**
-
-Update imports so active MVP panels come from `src/features/*`.
-
-Example:
-
-```ts
-import { CurrentCostPanel } from './features/current-cost/components/CurrentCostPanel'
-import { AlternativeComparison } from './features/alternatives/components/AlternativeComparison'
-import { SavingsLeverTable } from './features/savings/components/SavingsLeverTable'
-import { SummaryCard } from './features/report/components/SummaryCard'
-```
-
-- [ ] **Step 7: Run verification**
-
-```bash
-npm run test:run
-npm run build
-```
-
-Expected:
-
-```txt
-All tests pass and production build succeeds.
-```
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add src/features src/components src/lib src/data src/App.tsx
-git commit -m "refactor: group MVP panels by product feature"
-```
-
----
-
-### Task 5: Create Domain Layer Without Breaking Public Imports
-
-**Files:**
-- Create: `src/domain/cost/calculator.ts`
-- Create: `src/domain/cost/decisionMetrics.ts`
-- Create: `src/domain/cost/period.ts`
-- Create: `src/domain/quality/qualityBurden.ts`
-- Modify:
-  - `src/lib/calculator.ts`
-  - `src/lib/decisionMetrics.ts`
-  - `src/lib/period.ts`
-
-- [ ] **Step 1: Move pure cost domain files**
-
-Move:
-
-```txt
-src/lib/calculator.ts -> src/domain/cost/calculator.ts
-src/lib/calculator.test.ts -> src/domain/cost/calculator.test.ts
-src/lib/decisionMetrics.ts -> src/domain/cost/decisionMetrics.ts
-src/lib/decisionMetrics.test.ts -> src/domain/cost/decisionMetrics.test.ts
-src/lib/period.ts -> src/domain/cost/period.ts
-src/lib/period.test.ts -> src/domain/cost/period.test.ts
-```
-
-- [ ] **Step 2: Preserve official calculator import path**
-
-Create `src/lib/calculator.ts`:
-
-```ts
-export * from '../domain/cost/calculator'
-```
-
-Create `src/lib/decisionMetrics.ts`:
-
-```ts
-export * from '../domain/cost/decisionMetrics'
-```
-
-Create `src/lib/period.ts`:
-
-```ts
-export * from '../domain/cost/period'
-```
-
-- [ ] **Step 3: Add quality burden placeholder domain**
-
-Create `src/domain/quality/qualityBurden.ts`:
-
-```ts
-export interface QualityBurdenInput {
-  retryCostUsd: number
-  humanReviewCostUsd: number
-  csEscalationCostUsd: number
-}
-
-export function calculateQualityBurden(input: QualityBurdenInput): number {
-  const values = [input.retryCostUsd, input.humanReviewCostUsd, input.csEscalationCostUsd]
-  if (values.some(value => !Number.isFinite(value))) return 0
-  return Math.max(0, input.retryCostUsd) +
-    Math.max(0, input.humanReviewCostUsd) +
-    Math.max(0, input.csEscalationCostUsd)
-}
-```
-
-Create `src/domain/quality/qualityBurden.test.ts`:
-
-```ts
-import { describe, expect, it } from 'vitest'
-import { calculateQualityBurden } from './qualityBurden'
-
-describe('calculateQualityBurden', () => {
-  it('adds retry, review, and CS escalation costs', () => {
-    expect(calculateQualityBurden({
-      retryCostUsd: 10,
-      humanReviewCostUsd: 20,
-      csEscalationCostUsd: 30,
-    })).toBe(60)
-  })
-
-  it('guards invalid and negative values', () => {
-    expect(calculateQualityBurden({
-      retryCostUsd: Number.NaN,
-      humanReviewCostUsd: 20,
-      csEscalationCostUsd: 30,
-    })).toBe(0)
-
-    expect(calculateQualityBurden({
-      retryCostUsd: -10,
-      humanReviewCostUsd: 20,
-      csEscalationCostUsd: 30,
-    })).toBe(50)
-  })
-})
-```
-
-- [ ] **Step 4: Run verification**
-
-```bash
-npm run test:run -- src/domain src/lib/calculator.test.ts
-npm run test:run
-npm run build
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/domain src/lib
-git commit -m "refactor: introduce domain cost layer"
-```
-
----
-
-### Task 6: Move App Shell Last
-
-**Files:**
-- Create: `src/app/App.tsx`
-- Create: `src/app/App.test.tsx`
-- Modify: `src/App.tsx`
-- Modify: `src/App.test.tsx`
-- Modify: `src/main.tsx`
-
-- [ ] **Step 1: Move root app implementation**
-
-Move:
-
-```txt
-src/App.tsx -> src/app/App.tsx
-src/App.test.tsx -> src/app/App.test.tsx
-```
-
-- [ ] **Step 2: Keep root compatibility file**
-
-Create `src/App.tsx`:
-
-```ts
-export { default } from './app/App'
-export type { Role, Period, SimState } from './app/App'
-```
-
-- [ ] **Step 3: Update `src/main.tsx`**
-
-Use:
-
-```ts
-import App from './app/App'
-```
-
-- [ ] **Step 4: Run app-level tests**
-
-```bash
-npm run test:run -- src/app/App.test.tsx
-npm run test:run
-npm run build
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/app src/App.tsx src/main.tsx
-git commit -m "refactor: move app shell into app folder"
-```
-
----
-
-## What Not To Move Yet
-
-Do not move these in the first pass:
-
-- `design_system/`: keep as external design reference.
-- `.github/`: keep at root.
-- `phases/`: keep until the harness workflow is either retired or documented.
-- `scripts/`: keep at root.
-- `docs/superpowers/`: keep existing plan/spec history.
-- root config files: `vite.config.ts`, `tailwind.config.js`, `tsconfig*.json`, `postcss.config.js`, `eslint.config.js`.
-
-Also keep these ignored local files on disk but out of git:
-
-- `클로드 코드 구조 (5).jpg`
-- `클로드 코드 구조(5).jpg`
-- `하네스 프레임워크 튜토리얼 가이드 1103fbff97b0828286a781accadb81dc.md`
-
----
-
-## Final MVP Shape
-
-After the refactor, the MVP product should read like this:
-
-```txt
-src/features/usage
-  사용량을 가져온다.
-
-src/features/current-cost
-  지금 얼마 쓰는지 계산한다.
-
-src/features/alternatives
-  후보 모델로 바꾸면 어떻게 되는지 비교한다.
-
-src/features/savings
-  캐싱, 배치, 출력 제한, 라우팅 중 뭘 할지 추천한다.
-
-src/features/unit-economics
-  request, ticket, report, user 같은 비즈니스 단위당 원가를 보여준다.
-
-src/features/report
-  PM, CEO, 개발자에게 공유 가능한 요약을 만든다.
-
-src/features/guardrails
-  예산 초과와 비용 폭증을 감시한다.
-```
-
-This is better than the current flat structure because the folder names match the product story.
-
----
-
-## Self Review
-
-- Spec coverage: Covers current MVP, CSV import, cost comparison, savings levers, raw/effective unit economics, report, guardrails, and future domain split.
-- Placeholder scan: No TBD/TODO placeholders are used.
-- Type consistency: Compatibility re-exports keep existing import paths stable, especially `src/lib/calculator.ts` and `src/lib/format.ts`.
-- Risk: Moving many files can create noisy diffs. Execute task-by-task and commit after each verified move.
+- 새 기여자가 폴더명만 보고 기능 경계를 이해한다.
+- 계산과 표시의 단일 진입점이 유지된다.
+- 기존 UI 동작은 유지되고, 기능별 테스트 위치가 명확해진다.

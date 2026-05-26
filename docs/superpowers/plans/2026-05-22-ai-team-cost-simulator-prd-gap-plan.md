@@ -1,422 +1,106 @@
-# AI Team Cost Simulator PRD Gap Plan
+# AI Team Cost Simulator PRD 갭 클로저 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **목표:** `docs/research/2026-05-22-ai-team-cost-simulator-prd.md`와 현재 `C:\token_simulator` 구현 사이에 남은 차이를 닫는다.
 
-**Goal:** Close the remaining gaps between `docs/research/2026-05-22-ai-team-cost-simulator-prd.md` and the current `C:\token_simulator` implementation.
+## 아키텍처
 
-**Architecture:** Keep the Wedge A simulator client-only for P0. Deterministic TypeScript tools produce all token and cost numbers; LangGraph.js and UI copy only explain, compare, audit risk, and draft decisions.
+- Wedge A simulator(운영 전 AI 팀 비용 설계 도구)는 P0에서 client-only(브라우저 단독)로 유지한다.
+- 모든 token/cost 숫자는 deterministic TypeScript tools(결정론 TypeScript 도구)가 만든다.
+- LangGraph.js와 UI 문구는 설명, 비교, 위험 감사, 결정 초안만 담당한다.
 
-**Tech Stack:** Vite, React, TypeScript, Vitest, Testing Library, `@langchain/langgraph`, localStorage Decision Log, existing `calculateCost`.
+## 기술 스택
 
----
+- Vite, React, TypeScript
+- Vitest, Testing Library
+- `@langchain/langgraph`
+- localStorage Decision Log
+- 기존 `calculateCost`
 
-## Current Implementation Status
+## 현재 구현 상태
 
-Implemented:
+이미 구현됨:
 
-- `AgentSpec`, `Artifact`, `Frequency`, review gate schema in `src/features/team-cost/lib/agentSpec.ts`.
-- `AgentSpec -> monthly tokens -> calculateCost` mapper in `src/features/team-cost/lib/estimateAgentWorkload.ts`.
-- 25 artifact token templates in `src/features/team-cost/lib/artifactTemplates.ts`.
-- 9-agent catalog in `src/features/team-cost/lib/agentCatalog.ts`.
-- Bottleneck detection in `src/features/team-cost/lib/bottleneckAnalysis.ts`.
-- Optimization candidate mapping in `src/features/team-cost/lib/optimizationPolicies.ts`.
-- LangGraph.js team-cost flow in `src/features/agent/lib/teamCostGraph.ts`.
-- Tool snapshot contract in `src/features/agent/lib/teamCostToolContract.ts`.
-- UI panels for screens 1-4 in `src/features/team-cost/components/*`.
-- A Wedge A toggle path in `src/app/App.tsx`.
-- Decision Log primitives in `src/features/decision-log/lib/decisionLog.ts`.
+- `AgentSpec`, `Artifact`, `Frequency`, review gate schema: `src/features/team-cost/lib/agentSpec.ts`
+- `AgentSpec -> monthly tokens -> calculateCost` mapper: `src/features/team-cost/lib/estimateAgentWorkload.ts`
+- artifact token template 25개: `src/features/team-cost/lib/artifactTemplates.ts`
+- 9-agent catalog: `src/features/team-cost/lib/agentCatalog.ts`
+- bottleneck detection(병목 탐지): `src/features/team-cost/lib/bottleneckAnalysis.ts`
+- optimization candidate mapping(최적화 후보 매핑): `src/features/team-cost/lib/optimizationPolicies.ts`
+- LangGraph.js team-cost flow: `src/features/agent/lib/teamCostGraph.ts`
+- tool snapshot contract(도구 스냅샷 계약): `src/features/agent/lib/teamCostToolContract.ts`
+- screen 1~4 UI panel: `src/features/team-cost/components/*`
+- Wedge A toggle path: `src/app/App.tsx`
+- Decision Log primitive: `src/features/decision-log/lib/decisionLog.ts`
 
-Verified:
+검증 기준:
 
 ```bash
 npm test -- --run src/features/team-cost/lib/agentSpec.test.ts src/features/team-cost/lib/estimateAgentWorkload.test.ts src/features/team-cost/lib/artifactTemplates.test.ts src/features/team-cost/lib/agentCatalog.test.ts src/features/team-cost/lib/bottleneckAnalysis.test.ts src/features/team-cost/lib/optimizationPolicies.test.ts src/features/agent/lib/teamCostGraph.test.ts src/features/agent/lib/teamCostRuntime.test.ts src/features/agent/lib/teamCostToolContract.test.ts
 ```
 
-Expected: 9 files / 13 tests pass.
+예상: 9개 파일 / 13개 테스트 통과.
 
 ```bash
 npm test -- --run src/app/App.test.tsx
 ```
 
-Expected: 1 file / 6 tests pass.
-
-Main remaining gap:
-
-The core engine exists, but the PRD's 5-screen MVP is not fully productized. Screen 1 is mostly static, Screen 2 only edits monthly runs, Screen 4 does not expose risk cards and adoption controls, and Screen 5 is a placeholder instead of a Wedge A Decision Log workflow.
-
----
-
-## Task 1: Make Screen 1 Editable
-
-**Files:**
-
-- Modify: `src/app/App.tsx`
-- Modify: `src/features/team-cost/components/CompanyWorkInputPanel/index.tsx`
-- Test: `src/app/App.test.tsx`
-
-- [ ] **Step 1: Write the failing test**
-
-Add this test to `src/app/App.test.tsx`:
-
-```tsx
-it('updates team cost company setup from screen 1 inputs', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  await user.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
-  await user.clear(screen.getByLabelText(/Monthly AI team budget/i))
-  await user.type(screen.getByLabelText(/Monthly AI team budget/i), '500')
+예상: 1개 파일 / 6개 테스트 통과.
 
-  expect(screen.getByText('$500')).toBeInTheDocument()
-})
-```
+## 남은 핵심 갭
 
-- [ ] **Step 2: Verify the test fails**
+core engine(핵심 엔진)은 있지만 PRD의 5-screen MVP(5개 화면 MVP)가 완전히 제품화되지 않았다.
 
-Run:
+- Screen 1은 대부분 static(정적)이다.
+- Screen 2는 monthly runs(월 실행 횟수)만 편집한다.
+- Screen 4는 risk cards(위험 카드)와 adoption controls(채택 조작)를 충분히 노출하지 않는다.
+- Screen 5는 Wedge A Decision Log workflow가 아니라 placeholder(자리표시자)에 가깝다.
 
-```bash
-npm test -- --run src/app/App.test.tsx -t "updates team cost company setup"
-```
+## 작업 1: Screen 1 편집 가능하게 만들기
 
-Expected: fail because `CompanyWorkInputPanel` renders static cards, not editable inputs.
+- [ ] company setup(회사 설정) 입력이 실제 team cost state를 바꾸게 한다.
+- [ ] monthly AI team budget(월 AI 팀 예산)을 수정하면 화면 값이 갱신된다.
+- [ ] 테스트는 `userEvent`로 입력 변경 후 새 금액이 보이는지 확인한다.
 
-- [ ] **Step 3: Implement editable inputs**
+## 작업 2: Screen 2 입력 확장
 
-Change `CompanyWorkInputPanel` props to:
+- [ ] monthly runs 외에도 document size, review level, model choice를 편집하게 한다.
+- [ ] 편집 값이 token workload estimate(토큰 작업량 추정)에 반영된다.
+- [ ] 값이 비어 있거나 잘못돼도 계산이 깨지지 않는다.
 
-```ts
-interface CompanyWorkInputPanelProps {
-  companyType: string
-  stage: string
-  monthlyBudgetUsd: number
-  onCompanyTypeChange: (value: string) => void
-  onStageChange: (value: string) => void
-  onMonthlyBudgetUsdChange: (value: number) => void
-}
-```
+## 작업 3: Screen 3 병목 설명 강화
 
-Render accessible inputs:
+- [ ] highest-cost agent와 highest-cost artifact를 분리해 보여 준다.
+- [ ] bottleneck reason(병목 이유)을 사람 말로 설명한다.
+- [ ] 같은 snapshot ref를 유지한다.
 
-```tsx
-<Field label="Company type" htmlFor="team-cost-company-type">
-  <input
-    id="team-cost-company-type"
-    value={companyType}
-    onChange={event => onCompanyTypeChange(event.target.value)}
-    className="h-9 w-full rounded-wds border border-line-neutral px-3 text-sm"
-  />
-</Field>
-<Field label="Stage" htmlFor="team-cost-stage">
-  <input
-    id="team-cost-stage"
-    value={stage}
-    onChange={event => onStageChange(event.target.value)}
-    className="h-9 w-full rounded-wds border border-line-neutral px-3 text-sm"
-  />
-</Field>
-<Field label="Monthly AI team budget" htmlFor="team-cost-budget">
-  <input
-    id="team-cost-budget"
-    type="number"
-    min={0}
-    value={monthlyBudgetUsd}
-    onChange={event => onMonthlyBudgetUsdChange(Number(event.target.value))}
-    className="h-9 w-full rounded-wds border border-line-neutral px-3 text-sm"
-  />
-</Field>
-```
-
-In `App`, replace the memoized constant profile with state:
-
-```ts
-const [teamCostCompanyProfile, setTeamCostCompanyProfile] = useState({
-  companyType: '1-person B2B SaaS',
-  stage: 'MVP',
-  monthlyBudgetUsd: 300,
-  locale: i18n.language === 'ko' ? 'ko' as const : 'en' as const,
-})
-```
-
-Keep locale synced with language:
-
-```ts
-useEffect(() => {
-  setTeamCostCompanyProfile(profile => ({
-    ...profile,
-    locale: i18n.language === 'ko' ? 'ko' : 'en',
-  }))
-}, [i18n.language])
-```
+## 작업 4: Screen 4 Risk Card와 Adoption Controls
 
-- [ ] **Step 4: Verify**
+- [ ] 각 optimization candidate 옆에 Risk Card를 붙인다.
+- [ ] Adopt/Reject/Hold 버튼을 추가한다.
+- [ ] 품질 민감 후보는 Risk Auditor 결과 없이는 채택되지 않는다.
 
-Run:
+## 작업 5: Screen 5 Decision Log Workflow
 
-```bash
-npm test -- --run src/app/App.test.tsx -t "updates team cost company setup"
-```
+- [ ] 선택한 결정, 이유, 가정, snapshot ref를 Decision Log에 저장한다.
+- [ ] export/import 가능성을 남긴다.
+- [ ] AI가 만든 초안은 사람 승인과 구분한다.
 
-Expected: pass.
+## 작업 6: Wedge A 리포트
 
----
+- [ ] 설계 전 AI 팀 비용 리포트를 만든다.
+- [ ] 팀 구성, 예상 월 비용, 병목, 추천 조정, 리스크를 포함한다.
+- [ ] 실제 운영 사용량이 아니라 estimate임을 명확히 표시한다.
 
-## Task 2: Make Screen 2 Edit I/O and Model Settings
+## 검증
 
-**Files:**
+- [ ] team-cost lib 테스트 전체
+- [ ] App 테스트
+- [ ] Screen 1~5 수동 스모크
+- [ ] `npm run test:run`
+- [ ] `npm run build`
 
-- Modify: `src/features/team-cost/components/AITeamSpecPanel/index.tsx`
-- Modify: `src/app/App.tsx`
-- Test: `src/app/App.test.tsx`
+## 완료 기준
 
-- [ ] **Step 1: Write the failing test**
-
-Add:
-
-```tsx
-it('updates agent calls per run and cache rate from screen 2', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  await user.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
-  const before = screen.getByTestId('team-monthly-cost').textContent
-  await user.clear(screen.getByLabelText(/Engineering Agent calls per run/i))
-  await user.type(screen.getByLabelText(/Engineering Agent calls per run/i), '2')
-
-  expect(screen.getByTestId('team-monthly-cost').textContent).not.toBe(before)
-})
-```
-
-- [ ] **Step 2: Verify failure**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "updates agent calls per run"
-```
-
-Expected: fail because only monthly runs are editable.
-
-- [ ] **Step 3: Implement callbacks**
-
-Extend `AITeamSpecPanelProps`:
-
-```ts
-onCallsPerRunChange: (agentId: string, callsPerRun: number) => void
-onCacheHitRateChange: (agentId: string, cacheHitRate: number) => void
-onHumanReviewGateChange: (agentId: string, gate: HumanReviewGate) => void
-```
-
-Render fields per agent:
-
-```tsx
-<Field label={`${agent.role} calls per run`} htmlFor={`team-cost-calls-${agent.id}`}>
-  <input
-    id={`team-cost-calls-${agent.id}`}
-    type="number"
-    min={0}
-    value={agent.callsPerRun}
-    onChange={event => onCallsPerRunChange(agent.id, Number(event.target.value))}
-    className="h-9 w-full rounded-wds border border-line-neutral px-3 text-sm"
-  />
-</Field>
-<Field label={`${agent.role} cache hit rate`} htmlFor={`team-cost-cache-${agent.id}`}>
-  <input
-    id={`team-cost-cache-${agent.id}`}
-    type="number"
-    min={0}
-    max={100}
-    value={Math.round(agent.cacheHitRate * 100)}
-    onChange={event => onCacheHitRateChange(agent.id, Number(event.target.value) / 100)}
-    className="h-9 w-full rounded-wds border border-line-neutral px-3 text-sm"
-  />
-</Field>
-```
-
-Add App handlers:
-
-```ts
-const patchTeamCostAgent = (agentId: string, patch: Partial<AgentSpec>) => {
-  setTeamCostAgents(agents => agents.map(agent => agent.id === agentId ? { ...agent, ...patch } : agent))
-}
-```
-
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "updates agent calls per run"
-```
-
-Expected: pass.
-
----
-
-## Task 3: Expose Risk Cards and Approval in Screen 4
-
-**Files:**
-
-- Modify: `src/features/team-cost/components/OptimizationReviewPanel/index.tsx`
-- Modify: `src/app/App.tsx`
-- Test: `src/app/App.test.tsx`
-
-- [ ] **Step 1: Write the failing test**
-
-Add:
-
-```tsx
-it('shows risk cards and lets the user adopt a team-cost optimization', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  await user.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
-
-  expect(screen.getByText(/Risk Auditor/i)).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: /Adopt team-cost optimization/i }))
-  expect(screen.getByText(/Adopt AI team cost optimization/i)).toBeInTheDocument()
-})
-```
-
-- [ ] **Step 2: Verify failure**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "shows risk cards"
-```
-
-Expected: fail because the Wedge A optimization panel currently lists recommendations and events only.
-
-- [ ] **Step 3: Implement risk-carded adoption**
-
-In `App`, derive risk cards for the first recommendation:
-
-```ts
-const teamCostRiskCards = useMemo(() => {
-  const first = teamCostRecommendations[0]
-  return first ? retrieveRiskCards(first.riskTags) : []
-}, [teamCostRecommendations])
-```
-
-Add handler:
-
-```ts
-const handleAdoptTeamCostOptimization = () => {
-  const recommendation = teamCostRecommendations[0]
-  if (!recommendation) return
-  const cards = retrieveRiskCards(recommendation.riskTags)
-  const decision = createDecision({
-    what: 'Adopt AI team cost optimization',
-    why: recommendation.rationale,
-    assumptions: {
-      recommendationId: recommendation.id,
-      agentId: recommendation.agentId,
-      costAfterUsd: recommendation.costAfterUsd,
-      monthlySavingsUsd: recommendation.monthlySavingsUsd,
-    },
-    toolResultRefs: recommendation.toolResultRefs,
-    riskCards: cards.map(card => card.id),
-    status: 'adopted',
-  })
-  const next = [decision, ...decisions]
-  setDecisions(next)
-  saveDecisionLog(next)
-}
-```
-
-Pass `riskCards` and `onAdopt` into `OptimizationReviewPanel`.
-
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "shows risk cards"
-```
-
-Expected: pass.
-
----
-
-## Task 4: Turn Screen 5 into Wedge A Decision Log
-
-**Files:**
-
-- Modify: `src/app/App.tsx`
-- Test: `src/app/App.test.tsx`
-
-- [ ] **Step 1: Write the failing test**
-
-Add:
-
-```tsx
-it('records Wedge A assumptions in the Decision Log', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  await user.click(screen.getByRole('button', { name: /AI Team Cost Simulator/i }))
-  await user.click(screen.getByRole('button', { name: /Adopt team-cost optimization/i }))
-
-  expect(screen.getByText(/monthlySavingsUsd/i)).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /Export JSON/i })).toBeInTheDocument()
-})
-```
-
-- [ ] **Step 2: Verify failure**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "records Wedge A assumptions"
-```
-
-Expected: fail because `DecisionLogWorkspace` does not display assumptions.
-
-- [ ] **Step 3: Show assumptions**
-
-In `DecisionLogWorkspace`, render assumptions:
-
-```tsx
-<pre className="mt-2 max-h-40 overflow-auto rounded-wds bg-fill-alternative p-2 text-xs" translate="no">
-  {JSON.stringify(decision.assumptions, null, 2)}
-</pre>
-```
-
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-npm test -- --run src/app/App.test.tsx -t "records Wedge A assumptions"
-```
-
-Expected: pass.
-
----
-
-## Task 5: Final Verification
-
-- [ ] **Step 1: Run focused tests**
-
-```bash
-npm test -- --run src/app/App.test.tsx src/features/team-cost/lib/agentSpec.test.ts src/features/team-cost/lib/estimateAgentWorkload.test.ts src/features/team-cost/lib/artifactTemplates.test.ts src/features/team-cost/lib/agentCatalog.test.ts src/features/team-cost/lib/bottleneckAnalysis.test.ts src/features/team-cost/lib/optimizationPolicies.test.ts src/features/agent/lib/teamCostGraph.test.ts src/features/agent/lib/teamCostRuntime.test.ts src/features/agent/lib/teamCostToolContract.test.ts
-```
-
-Expected: all pass.
-
-- [ ] **Step 2: Run build**
-
-```bash
-npm run build
-```
-
-Expected: TypeScript build and Vite build pass.
-
-- [ ] **Step 3: Manual smoke**
-
-```bash
-npm run dev
-```
-
-Open the local app, click `AI Team Cost Simulator`, complete the 5-screen Wedge A path, adopt one team-cost optimization, and verify the Decision Log shows the recommendation, risk cards, tool refs, and assumptions.
+- Wedge A가 static demo가 아니라 편집 가능한 5-screen MVP가 된다.
+- 숫자는 모두 `calculateCost` 경로에서 온다.
+- Decision Log에 사람의 선택과 근거가 남는다.

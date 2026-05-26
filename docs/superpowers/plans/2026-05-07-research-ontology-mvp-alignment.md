@@ -1,415 +1,77 @@
-# Research Ontology MVP Alignment Implementation Plan
+# 리서치 온톨로지 MVP 정렬 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Ontology(온톨로지)**는 제품이 세상을 어떤 개념으로 나눠 보는지 정한 지도다. 이 계획은 리서치 근거, pain taxonomy(고통 지점 분류), 제품 개념, README 포지셔닝, MVP 우선순위를 모두 "AI SaaS 비용·마진·가격 결정"으로 맞춘다.
 
-**Goal:** Align research evidence, pain taxonomy, product ontology, README positioning, and MVP priorities around AI SaaS cost, margin, and pricing decisions.
+## 목표
 
-**Architecture:** Treat `docs/research/evidence_board.csv` as the source of truth. `pain_taxonomy.md` defines the allowed pain language, `token_cost_ontology.md` maps evidence into product decisions, and reports/README translate the evidence into MVP direction. Code changes are limited to `scripts/research/validate-evidence-board.mjs` unless the CSV contract changes again.
+AI SaaS cost, margin, pricing decision(비용·마진·가격 결정)을 중심으로 아래 문서를 정렬한다.
 
-**Tech Stack:** Markdown, CSV, Node ESM validation script, existing Vite/React app documentation.
+- research evidence(리서치 근거)
+- pain taxonomy(고객 고통 분류)
+- product ontology(제품 개념 지도)
+- README positioning(첫 설명 문구)
+- MVP priorities(우선 구현 범위)
 
----
+## 아키텍처
 
-## File Structure
+- `docs/research/evidence_board.csv`를 source of truth(근거의 기준 파일)로 둔다.
+- `pain_taxonomy.md`는 허용된 pain language(고객 문제 표현)를 정의한다.
+- `token_cost_ontology.md`는 근거를 제품 결정으로 연결한다.
+- report/README는 근거를 MVP 방향으로 번역한다.
+- 코드 변경은 CSV 계약이 바뀌지 않는 한 `scripts/research/validate-evidence-board.mjs`로 제한한다.
 
-- Modify: `docs/research/evidence_board.csv`
-  - Official evidence board with one row per verified or pending candidate.
-  - Uses the fixed columns: `evidence_id,source,url,published_date,crawled_date,persona,exact_quote,summary_ko,group,pain_tag,frequency_signal,wtp_score,evidence_strength,quote_verified,possible_feature,notes`.
-- Modify: `scripts/research/validate-evidence-board.mjs`
-  - Validates required columns, pain tag count, group values, numeric scores, quote verification state, and top pain ranking.
-- Modify: `docs/research/pain_taxonomy.md`
-  - Separates frequent complaints from high-WTP business pain.
-  - Promotes customer-level cost, feature-level cost, gross margin, heavy-user loss, and usage-based pricing mismatch.
-- Modify: `docs/research/token_cost_ontology.md`
-  - Reframes the ontology around `LLM usage -> feature cost -> customer cost -> gross margin -> pricing decision`.
-- Modify: `docs/research/developer-token-cost-pain-report.md`
-  - Rename or rewrite as an AI SaaS cost and margin report.
-  - Keeps developer pain, but makes CFO/CEO/Founder WTP explicit.
-- Modify: `docs/research/mvp-wtp-interview-guide.md`
-  - Adds interview questions that test whether teams will pay for customer profitability, margin, and pricing decisions.
-- Modify: `README.md`
-  - Updates product positioning from token simulator to AI SaaS cost, margin, and pricing workspace.
-- Optional Modify: `docs/cost-quality-decision-workspace.md`
-  - Aligns the older decision-workspace narrative with the newer evidence-backed positioning.
+## 파일 구조
 
----
+- `docs/research/evidence_board.csv`: 검증됐거나 검증 대기 중인 후보를 한 행씩 담는 공식 evidence board(근거 표).
+- `scripts/research/validate-evidence-board.mjs`: 필수 컬럼, pain tag 수, group 값, 점수, quote verification(인용 검증 상태), top pain ranking을 검증한다.
+- `docs/research/pain_taxonomy.md`: 잦은 불평과 돈을 낼 만한 business pain(사업 고통)을 분리한다.
+- `docs/research/token_cost_ontology.md`: `LLM usage -> feature cost -> customer cost -> gross margin -> pricing decision` 흐름으로 재정의한다.
+- `docs/research/developer-token-cost-pain-report.md`: 개발자 불편은 유지하되 CFO/CEO/Founder willingness to pay(지불 의사)를 명확히 한다.
+- `docs/research/mvp-wtp-interview-guide.md`: 고객별 수익성, 마진, 가격 결정에 돈을 낼지 묻는 질문을 추가한다.
+- `README.md`: token simulator가 아니라 AI SaaS cost/margin/pricing workspace로 설명한다.
 
-### Task 1: Lock Evidence Board Contract
+## 작업 1: Evidence Board 계약 고정
 
-**Files:**
-- Modify: `docs/research/evidence_board.csv`
-- Modify: `scripts/research/validate-evidence-board.mjs`
+- [ ] CSV 첫 행의 필수 컬럼을 고정한다.
+- [ ] 각 근거 행에는 URL, 날짜, 짧은 인용 또는 요약을 둔다.
+- [ ] 묶음 메모를 여러 근거처럼 쪼개지 않는다.
+- [ ] `quote_verified`는 `true`, `false`, `pending` 중 하나로 표시한다.
+- [ ] Reddit, paywall(유료 장벽), 접근 불가, 미확인 소스는 `pending`으로 둔다.
+- [ ] `npm run research:validate`가 통과해야 한다.
 
-- [ ] **Step 1: Confirm the CSV header**
+## 작업 2: Pain Taxonomy 재정렬
 
-Open `docs/research/evidence_board.csv` and confirm the first row is exactly:
+- [ ] 단순 token cost anxiety(토큰 비용 불안)와 구매 가능한 margin pain(마진 고통)을 분리한다.
+- [ ] customer-level cost(고객별 비용), feature-level cost(기능별 비용), gross margin, heavy-user loss(과사용 고객 손실), pricing mismatch(가격제 불일치)를 상위 pain으로 올린다.
+- [ ] 개발자 불편은 entry point(진입점)로 남기고, 유료 가치는 business decision(사업 결정)에 둔다.
 
-```csv
-evidence_id,source,url,published_date,crawled_date,persona,exact_quote,summary_ko,group,pain_tag,frequency_signal,wtp_score,evidence_strength,quote_verified,possible_feature,notes
-```
+## 작업 3: Product Ontology 재작성
 
-- [ ] **Step 2: Keep only evidence rows with row-level support**
+- [ ] `LLM usage`를 `feature cost`, `customer cost`, `plan margin`, `pricing decision`으로 연결한다.
+- [ ] observability(관측 도구), billing(과금 도구), FinOps(클라우드 비용 운영) 사이에서 비어 있는 레이어를 명확히 설명한다.
+- [ ] "토큰 계산기" 표현은 역사적 설명으로만 남긴다.
 
-Keep Grok candidates only when they have an individual URL, date, and short quote. Do not create separate CSV rows from bundled notes such as "additional candidates 4-10" unless each one has its own URL, date, and quote.
+## 작업 4: Report와 README 정렬
 
-- [ ] **Step 3: Mark verification state honestly**
+- [ ] README 첫 문장은 "AI SaaS 비용·마진·가격 결정 워크스페이스"로 쓴다.
+- [ ] report는 총 비용보다 손해 고객, 마진 깨는 기능, 가격 변경 후보를 먼저 말한다.
+- [ ] 내부 용어는 괄호 설명을 붙인다.
 
-Use:
+## 작업 5: Interview Guide 업데이트
 
-```txt
-quote_verified=true
-quote_verified=false
-quote_verified=pending
-```
+- [ ] "고객별/기능별 AI 비용을 보고 있나요?"를 묻는다.
+- [ ] "많이 쓰는 고객이 손해 고객인지 확인했나요?"를 묻는다.
+- [ ] "이 리포트로 가격제나 기능 제한을 바꿀 수 있나요?"를 묻는다.
+- [ ] 반응 문장을 여섯 반론 bucket(가격/신뢰/필요성/대체재/타이밍/메시지)으로 코딩한다.
 
-Set `pending` when the source is Reddit, paywalled, inaccessible, or not checked in the current pass.
+## 검증
 
-- [ ] **Step 4: Validate the board**
+- [ ] `npm run research:validate`
+- [ ] README와 research docs에서 "token calculator"가 주 포지셔닝으로 남아 있지 않은지 확인한다.
+- [ ] evidence board의 quote_verified 상태가 솔직한지 확인한다.
 
-Run:
+## 완료 기준
 
-```bash
-npm run research:validate
-```
-
-Expected:
-
-```txt
-Validated <N> evidence rows. Top pain: ...
-```
-
-- [ ] **Step 5: Commit the evidence contract**
-
-```bash
-git add docs/research/evidence_board.csv scripts/research/validate-evidence-board.mjs
-git commit -m "docs: update evidence board contract"
-```
-
----
-
-### Task 2: Update Pain Taxonomy Around Buyer Pain
-
-**Files:**
-- Modify: `docs/research/pain_taxonomy.md`
-
-- [ ] **Step 1: Add a short positioning note**
-
-Add this rule near the top:
-
-```md
-이 taxonomy는 "불만이 많이 보이는가"와 "돈을 낼 가능성이 큰가"를 분리한다. Group A는 개발자 유입 이유이고, Group B는 회사가 결제할 이유다.
-```
-
-- [ ] **Step 2: Promote the five MVP pain tags**
-
-Make these the current P0/P1 focus:
-
-```txt
-pain_margin_unknown
-pain_customer_profitability_unknown
-pain_heavy_user_loss
-pain_usage_pricing_mismatch
-pain_feature_cost_unknown
-```
-
-If a tag is missing, add it only after updating the validator allowed-tag list or confirming the validator allows open tags.
-
-- [ ] **Step 3: Keep developer operations pain as adoption drivers**
-
-Classify these as adoption or P1/P2 unless WTP evidence increases:
-
-```txt
-pain_cost_unpredictable
-pain_tracking_wrong
-pain_token_waste
-pain_limit_confusion
-pain_team_budget
-```
-
-- [ ] **Step 4: Validate examples against CSV**
-
-Check that every pain tag described in `pain_taxonomy.md` appears in `docs/research/evidence_board.csv` or is explicitly marked as a planned tag.
-
-- [ ] **Step 5: Commit taxonomy update**
-
-```bash
-git add docs/research/pain_taxonomy.md
-git commit -m "docs: align pain taxonomy with buyer signals"
-```
-
----
-
-### Task 3: Rebuild Product Ontology Flow
-
-**Files:**
-- Modify: `docs/research/token_cost_ontology.md`
-
-- [ ] **Step 1: Update the core ontology sentence**
-
-Use this product flow as the primary ontology:
-
-```txt
-LLM usage -> feature cost -> customer cost -> gross margin -> pricing decision
-```
-
-- [ ] **Step 2: Add buyer-side entities**
-
-Add or elevate these entities:
-
-```txt
-Customer
-Feature / Workflow
-Revenue Unit
-Gross Margin
-Pricing Model
-Heavy User Segment
-Buyer Persona
-```
-
-- [ ] **Step 3: Update the Mermaid map**
-
-The Mermaid map should show:
-
-```txt
-Evidence -> Pain -> Cost Object -> Customer/Feature -> Margin -> Pricing Decision -> MVP Feature
-```
-
-- [ ] **Step 4: Separate solved vs gated features**
-
-Put these under current MVP:
-
-```txt
-CSV usage import
-feature-level cost
-customer/business unit cost
-gross margin
-raw cost vs effective cost
-role-based report
-```
-
-Put these under research-gated:
-
-```txt
-budget guardrails
-developer diagnostics
-SDK
-gateway/proxy
-Slack alerts
-```
-
-- [ ] **Step 5: Commit ontology update**
-
-```bash
-git add docs/research/token_cost_ontology.md
-git commit -m "docs: update token cost ontology for margin decisions"
-```
-
----
-
-### Task 4: Rewrite the Research Report
-
-**Files:**
-- Modify: `docs/research/developer-token-cost-pain-report.md`
-
-- [ ] **Step 1: Rename the framing in the title**
-
-Change the title to:
-
-```md
-# AI SaaS Cost and Margin Pain Report
-```
-
-- [ ] **Step 2: Split findings into Group A and Group B**
-
-Use:
-
-```md
-## Group A: Frequent Developer / Operations Complaints
-## Group B: Less Frequent but High-WTP Business Signals
-```
-
-- [ ] **Step 3: Add the core conclusion**
-
-Include:
-
-```md
-Group A는 개발자가 제품을 써볼 이유이고, Group B는 회사가 돈을 낼 이유다.
-```
-
-- [ ] **Step 4: Add MVP priority table**
-
-Use this P0 order:
-
-```txt
-1. CSV usage import
-2. Feature-level cost
-3. Customer/business unit cost
-4. Gross margin
-5. Heavy-user profitability
-6. Usage-based / credit pricing simulation
-7. PM/CEO/Developer report
-```
-
-- [ ] **Step 5: Commit report update**
-
-```bash
-git add docs/research/developer-token-cost-pain-report.md
-git commit -m "docs: rewrite research report around ai saas margin"
-```
-
----
-
-### Task 5: Update WTP Interview Guide
-
-**Files:**
-- Modify: `docs/research/mvp-wtp-interview-guide.md`
-
-- [ ] **Step 1: Add buyer qualification questions**
-
-Add questions:
-
-```md
-- 현재 AI 기능의 고객별 원가를 알고 있나요?
-- heavy user 때문에 손해 본 고객이나 플랜이 있나요?
-- 기능별 gross margin을 보고 있나요?
-- AI 기능 가격을 seat, usage, credit, hybrid 중 무엇으로 정했나요?
-- 이 숫자를 CEO, CFO, 투자자, board에 보고해야 하나요?
-```
-
-- [ ] **Step 2: Add strong signal criteria**
-
-Add strong WTP signals:
-
-```md
-- 이미 spreadsheet, SQL, FinOps tool, internal dashboard로 계산하고 있다.
-- 특정 고객이 손해인지 확인해야 한다.
-- pricing 변경이나 AI credit 도입을 검토 중이다.
-- margin 하락이 CEO/CFO/투자자 보고 이슈다.
-```
-
-- [ ] **Step 3: Add weak signal criteria**
-
-Add weak signals:
-
-```md
-- 있으면 좋겠다는 반응만 있다.
-- 월 LLM 비용이 작다.
-- 고객별/기능별 수익성 질문이 없다.
-- pricing이나 margin 결정과 연결되지 않는다.
-```
-
-- [ ] **Step 4: Commit interview guide update**
-
-```bash
-git add docs/research/mvp-wtp-interview-guide.md
-git commit -m "docs: sharpen wtp interview guide"
-```
-
----
-
-### Task 6: Update README and Product Positioning
-
-**Files:**
-- Modify: `README.md`
-- Optional Modify: `docs/cost-quality-decision-workspace.md`
-
-- [ ] **Step 1: Update the opening sentence**
-
-Use this positioning:
-
-```md
-AI SaaS 팀이 LLM 사용량을 기능별·고객별 원가, gross margin, 가격정책 판단으로 바꾸도록 돕는 워크스페이스입니다.
-```
-
-- [ ] **Step 2: Add the core product question**
-
-Add:
-
-```md
-이 제품이 답하려는 핵심 질문은 "우리 AI 기능은 고객별·기능별로 얼마의 원가를 만들고, 어떤 고객이나 기능이 마진을 깨고 있는가?"입니다.
-```
-
-- [ ] **Step 3: Reorder roadmap**
-
-Put these before SDK/gateway:
-
-```txt
-customer-level cost
-feature-level cost
-gross margin
-heavy-user profitability
-usage-based pricing simulator
-```
-
-- [ ] **Step 4: Keep budget guardrails gated**
-
-Make sure budget/quota guardrails remain described as research-gated, not MVP default.
-
-- [ ] **Step 5: Commit README update**
-
-```bash
-git add README.md docs/cost-quality-decision-workspace.md
-git commit -m "docs: reposition product as ai saas margin workspace"
-```
-
----
-
-### Task 7: Final Verification and Rollup
-
-**Files:**
-- Read: all modified files
-
-- [ ] **Step 1: Validate research CSV**
-
-Run:
-
-```bash
-npm run research:validate
-```
-
-Expected:
-
-```txt
-Validated <N> evidence rows. Top pain: ...
-```
-
-- [ ] **Step 2: Run app checks only if README or docs mention implemented UI behavior**
-
-Run:
-
-```bash
-npm run test:run
-npm run build
-```
-
-Expected:
-
-```txt
-Test Files ... passed
-✓ built in ...
-```
-
-- [ ] **Step 3: Check git status**
-
-Run:
-
-```bash
-git status --short
-```
-
-Expected: only intentionally uncommitted research scratch files remain, or a clean tree.
-
-- [ ] **Step 4: Create rollup commit if tasks were not committed separately**
-
-If individual commits were skipped, use:
-
-```bash
-git add docs/research/evidence_board.csv scripts/research/validate-evidence-board.mjs docs/research/pain_taxonomy.md docs/research/token_cost_ontology.md docs/research/developer-token-cost-pain-report.md docs/research/mvp-wtp-interview-guide.md README.md docs/cost-quality-decision-workspace.md
-git commit -m "docs: align research ontology and mvp positioning"
-```
-
-- [ ] **Step 5: Push when user approves**
-
-```bash
-git push
-```
+- 리서치, 제품 문서, README가 같은 언어로 말한다.
+- AgentPayroll의 유료 가치는 "비용 보기"가 아니라 "마진과 가격 결정"으로 설명된다.
+- 고객 인터뷰 질문이 실제 구매 거부 문장 수집에 바로 쓰일 수 있다.

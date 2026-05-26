@@ -1,34 +1,35 @@
-# Montage — Wanted Lab Web Design System
+# Montage — Wanted Lab 웹 디자인 시스템
 
-Montage is the web design system used by **Wanted Lab** (the team behind wanted.co.kr — Korea's career platform).
-This project is a portable **mirror** of the open-source `@wanteddev/wds` family, restructured for design agents who need to produce well-branded interfaces, slides, and prototypes.
+Montage는 **Wanted Lab**(wanted.co.kr을 운영하는 팀)이 쓰는 웹 디자인 시스템이다. 이 폴더는 오픈소스 `@wanteddev/wds` 계열을 이 프로젝트에서 참고하기 좋게 옮긴 mirror(원본을 복제해 둔 참고본)다. 디자인 에이전트가 브랜드에 맞는 인터페이스, 슬라이드, 프로토타입을 만들 때 쓰는 자료다.
 
-> Source repo: <https://github.com/wanteddev/montage-web>
-> Docs site: <https://montage.wanted.co.kr>
-> License: MIT
+> 원본 저장소: <https://github.com/wanteddev/montage-web>
+> 문서 사이트: <https://montage.wanted.co.kr>
+> 라이선스: MIT
 
-## What's in here
+## 이 폴더에 있는 것
 
-| File / folder              | Purpose |
-| -------------------------- | ------- |
-| `colors_and_type.css`      | All color (atomic + semantic, light/dark) and type (sizes, weights, families) tokens as CSS variables. |
-| `assets/`                  | Logos, icons (SVG), illustrations, brand imagery copied from the source repo. |
-| `ui_kits/wanted/`          | High-fidelity recreation of the Wanted job-board product (homepage, job detail, profile, etc.). |
-| `preview/`                 | Small HTML cards that populate the **Design System** tab. |
-| `SKILL.md`                 | Agent skill manifest (cross-compatible with Claude Code). |
+| 파일/폴더 | 용도 |
+| --- | --- |
+| `colors_and_type.css` | color token(색상 토큰)과 type token(글꼴·크기·굵기 토큰)을 CSS 변수로 모은 파일 |
+| `assets/` | 로고, SVG 아이콘, 일러스트, 브랜드 이미지 |
+| `ui_kits/wanted/` | Wanted 채용 제품 화면을 고해상도로 재현한 UI kit(디자인 부품 묶음) |
+| `preview/` | Design System 탭에 표시할 작은 HTML 미리보기 카드 |
+| `SKILL.md` | 에이전트가 이 디자인 시스템을 사용하는 방법을 적은 skill manifest(작업 지침 파일) |
 
-## Source packages (mirrored from `wanteddev/montage-web`)
+## 원본 패키지
 
-| Package | Role |
-| ------- | ---- |
-| `@wanteddev/wds`        | Core React component library (Emotion-based). |
-| `@wanteddev/wds-engine` | Styling engine (theme/css/variants). |
-| `@wanteddev/wds-theme`  | **Design tokens** — atomic colors, semantic colors, spacing, opacity, breakpoints, shadows. |
-| `@wanteddev/wds-icon`   | 340+ icon components (SVG). |
-| `@wanteddev/wds-lottie` | Lottie animation primitives. |
-| `@wanteddev/wds-nextjs` | Next.js App Router & Pages Router integration. |
+| 패키지 | 역할 |
+| --- | --- |
+| `@wanteddev/wds` | React component library(React 컴포넌트 라이브러리) |
+| `@wanteddev/wds-engine` | theme/css/variant를 처리하는 styling engine(스타일 엔진) |
+| `@wanteddev/wds-theme` | design tokens(색상·간격·투명도·반응형 기준·그림자 같은 디자인 변수) |
+| `@wanteddev/wds-icon` | 340개 이상의 SVG icon component(아이콘 컴포넌트) |
+| `@wanteddev/wds-lottie` | Lottie animation primitive(애니메이션 기본 부품) |
+| `@wanteddev/wds-nextjs` | Next.js App Router와 Pages Router 통합 도구 |
 
-## Install (production code)
+## 설치 메모
+
+운영 코드에서 직접 쓸 때는 GitHub Packages registry(패키지 저장소)를 `.npmrc`에 설정한 뒤 설치한다.
 
 ```sh
 # .npmrc
@@ -38,143 +39,60 @@ This project is a portable **mirror** of the open-source `@wanteddev/wds` family
 pnpm i @wanteddev/wds @wanteddev/wds-icon
 ```
 
-> All `@wanteddev/wds-*` packages must use the **same version** — version drift creates multiple theme contexts and breaks styling.
+모든 `@wanteddev/wds-*` 패키지는 같은 버전을 써야 한다. version drift(패키지 버전이 서로 어긋나는 상태)가 생기면 theme context(테마 상태)가 여러 개 생겨 스타일이 깨질 수 있다.
 
-The system requires the **Pretendard** webfont. Load it from jsDelivr (already imported by `colors_and_type.css`).
+Pretendard 웹폰트가 필요하다. 이 저장소에서는 `colors_and_type.css`가 jsDelivr 경로를 이미 불러온다.
 
----
+## 콘텐츠 기본 원칙
 
-## CONTENT FUNDAMENTALS
+Wanted 제품 문구는 한국어가 기본이고 영어는 보조다. 분위기는 **차분하고, 구체적이며, 존중하는 전문가 톤**이다. HR 친화적인 동료처럼 말하고, 마케팅 과장처럼 말하지 않는다.
 
-Wanted's product copy is bilingual (Korean primary, English secondary) and built around **respectful, low-key professionalism** — it's a career platform, so it talks like an HR-friendly colleague, not a marketer.
+### 톤
 
-**Tone**
-- Calm, declarative, second-person — addresses the reader as **"당신"** (Korean polite *you*), or simply uses honorific verb endings (`-요`, `-습니다`).
-- No exclamation marks for hype. Excitement is shown by **specificity** (numbers, company names) not punctuation.
-- English copy on the same product is short, sentence-case, and avoids capitalised "Marketing Voice." e.g. *"Find your next role"*, not *"Discover Your Career Journey!"*
+- 차분한 선언형 문장을 쓴다.
+- 독자를 직접 부를 때는 `당신` 또는 높임말 어미를 쓴다.
+- 느낌표로 흥분을 만들지 않는다. 숫자, 회사명, 구체 조건으로 신뢰를 만든다.
+- 영어 문구는 짧고 sentence case(문장 첫 글자만 대문자)에 가깝게 쓴다.
 
-**Casing**
-- Korean: standard 한글 paragraphs, no SHOUT CASE.
-- English UI labels: **sentence case** (`Apply now`, `Save job`), never Title Case.
-- Brand & product names keep their canonical casing: **Wanted**, **Montage**, **WDS**.
+### 표기
 
-**Person**
-- "당신/회원님" → reader; "우리" → almost never used (avoid us-vs-them).
-- CTAs are imperative: `지원하기`, `저장하기`, `매칭 시작하기`. English equivalent: `Apply`, `Save`, `Start matching`.
+- 한국어는 일반 문단으로 쓴다. SHOUT CASE(전부 대문자 강조)는 쓰지 않는다.
+- 영어 UI label은 sentence case를 쓴다.
+- 브랜드명은 Wanted, Montage, WDS처럼 원래 표기를 유지한다.
 
-**Numbers and specificity**
-- Lean on hard data: salary ranges, %s, year counts, company logos. The brand earns trust with *concrete*, not adjectives.
-- Examples: `합격 보너스 50만원`, `평균 응답 2일`, `면접 제안 12건`.
+### 호칭
 
-**Emoji**
-- **Not used** in product UI or marketing copy. The icon library is rich enough that emoji are unnecessary.
-- Notification copy and casual zones (community posts) may render emoji because they're user-generated, but the brand itself does not author emoji.
+- 독자는 `당신` 또는 `회원님`으로 읽힌다.
+- `우리`는 거의 쓰지 않는다. 우리/그들 대립처럼 보일 수 있기 때문이다.
+- CTA(행동 버튼)는 `지원하기`, `저장하기`, `매칭 시작하기`처럼 동사로 쓴다.
 
-**Vibe**
-- Trustworthy, restrained, slightly soft. The system uses generous corner radii and blue-led primary colors to feel optimistic without being loud.
-- Reads like LinkedIn × Korean polish: information-dense but visually quiet.
+### 숫자와 구체성
 
-Examples (paraphrased from product context):
-- ✅ `이력서 한 번으로 여러 회사에 지원하세요` ("Apply to many companies with one resume.")
-- ✅ `합격하면 보너스가 지급돼요` ("If you're hired, a bonus is paid.")
-- ❌ `🎉 지금 바로 시작하세요!!! 🚀` (too loud, emoji + exclamation — off-brand)
+- 연봉 범위, 퍼센트, 연차, 회사 로고처럼 확인 가능한 정보를 적극 쓴다.
+- 신뢰는 형용사가 아니라 구체적인 데이터로 만든다.
+- 예: `합격 보너스 50만원`, `평균 응답 2일`, `면접 제안 12건`.
 
----
+### 이모지
 
-## VISUAL FOUNDATIONS
+- 제품 UI나 마케팅 카피에는 쓰지 않는다.
+- 커뮤니티 글처럼 사용자가 만든 영역에서는 보일 수 있지만, 브랜드가 직접 작성하는 문구에는 쓰지 않는다.
 
-**Color**
-- Primary brand color is **`#0066FF` (`atomic.blue.50`)** — a saturated, optimistic web-blue. Pairs are `blue.45 / blue.40` for hover/press.
-- Neutrals are **cool-tinted** (`coolNeutral`, slight blue cast) — never warm gray. This pairs with the blue primary and reads more "tech / SaaS."
-- A 7-color **accent** spectrum exists (redOrange, lime, cyan, lightBlue, violet, purple, pink). It's reserved for **categorical data** (tags, badges, charts) — *not* decorative gradients.
-- Status: green (`#00BF40`) positive, orange (`#FF9200`) cautionary, red (`#FF4242`) negative. All three sit on the saturated end of their hue.
+### 분위기
 
-**Type**
-- **Pretendard** is the only typeface (variable font, 400/500/600/700 used). Korean and Latin glyphs share the same font family.
-- 19-step scale: `display1–3`, `title1–3`, `heading1–2`, `headline1–2`, `body1/1-reading/2/2-reading`, `label1/1-reading/2`, `caption1–2`. Reading variants increase line-height for paragraph copy.
-- Negative letter-spacing on display/title sizes (`-0.025em` ish), positive on body/caption — typical of Pretendard's tightening recipe.
-- Weights are *capped at 700* and only on display/title. Headings stop at 600.
+- 믿을 수 있고 절제되어 있으며 약간 부드럽다.
+- 넉넉한 모서리, 파랑 중심 색상, 조용한 정보 밀도를 쓴다.
+- LinkedIn식 정보 밀도와 한국 SaaS식 정돈감을 함께 가진다.
 
-**Spacing**
-- Quantised: `0, 0.5, 1, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 56, 64, 72, 80px`. Build everything off these — no `13px`, no `18px`.
+## 예시
 
-**Backgrounds**
-- Almost always solid white (`#fff`) or a near-white tint (`coolNeutral.99`). Dark mode uses `coolNeutral.15 / 17`.
-- **No gradients** in chrome. No textures, no hand-drawn motifs. Imagery is restricted to:
-  - Photographic content cards (job thumbnails, company hero shots).
-  - Lottie illustrations (via `wds-lottie`) for empty/loading/celebration states.
+- 좋은 예: `이력서 한 번으로 여러 회사에 지원하세요`
+- 좋은 예: `합격하면 보너스가 지급돼요`
+- 나쁜 예: `지금 바로 시작하세요!!!` 같은 과장된 문장
 
-**Animation**
-- Subtle, fast, business-like. Standard transitions are `300ms ease` on `background-color, color, box-shadow` (taken from chip styles).
-- No bounces, no spring overshoot, no parallax.
-- Lottie used for moments worth illustrating (success, empty state).
+## AgentPayroll에 적용할 때
 
-**Hover & press states**
-- Hover: small darken via `fill.normal` overlay (`rgba(112,115,124,0.08)`) or step the primary color one shade darker (`blue.50 → blue.45`).
-- Press: deeper fill (`fill.strong`, `rgba(112,115,124,0.16)`). No `transform: scale(0.97)` shrink — Wanted's interactions stay still.
-- Disabled: `interaction.disable` (`coolNeutral.98`) + `label.assistive` text.
-
-**Borders**
-- Default border = `line.normal.neutral` = `rgba(112,115,124,0.16)` — a translucent gray that reads correctly on both light and dark surfaces.
-- Solid alternatives (`line.solid.normal` = `coolNeutral.96`) exist for dividers between two surfaces of the same elevation.
-
-**Shadows**
-- 5-step shadow scale: `xsmall → xlarge`, plus 2 spread shadows for floating menus / popovers. All built from `neutral.10` (`#171717`) with low alpha (3–12%).
-- `xlarge` is reserved for modals/dialogs. `medium` is the workhorse for cards lifted off the page.
-
-**Transparency / blur**
-- iOS-style navigation chrome uses `rgba(elevated.normal, 0.88)` + `backdrop-filter: blur(32px)` (defined in `theme.platform.ios.navigation`).
-- Sheets / dimmers use `material.dimmer` (`rgba(23,23,25,0.52)` light, `0.74` dark).
-
-**Corner radii**
-- Buttons: `8 / 10 / 12px` (small / medium / large).
-- Chips: `6 / 8 / 8 / 10px` (xs / sm / md / lg).
-- Cards: typically `12–16px`.
-- Pill (avatars, status dots): `999px`.
-
-**Cards**
-- White background, `1px` translucent border (`line.normal.neutral`), no shadow at rest, `shadow-medium` on hover when interactive. Rounded `12–16px`.
-- Avoid the "rounded box + colored left border" trope — Wanted does not use that pattern.
-
-**Layout**
-- 5 breakpoints: `xs 0`, `sm 768`, `md 992`, `lg 1200`, `xl 1600`.
-- Wanted's homepage uses a centered `1200px` content column with a sticky top nav.
-- Spacing rhythm: `24px` gutter, `16px` inter-card gap, `8px` for inline element gap.
-
----
-
-## ICONOGRAPHY
-
-Wanted ships **its own SVG icon set** as `@wanteddev/wds-icon` — 340+ icons exported as React components. They share a consistent visual language:
-
-- **24×24 base canvas** (some variants are 16/20).
-- **Two-style system**: `outline` (default, ~1.5px stroke equivalent rendered as filled paths) and `fill` (suffix `-fill`, e.g. `icon-bell` vs `icon-bell-fill`). Filled icons signal active/selected state.
-- **`-color` variants** exist for a small set (e.g. `icon-blank-color`, `icon-agent-color`) — these are multi-color illustrations, used as decorative accents in onboarding/empty states.
-- Stroke is rendered as `currentColor`, so icons inherit the surrounding `color` — easy to theme.
-- No emoji, no Unicode characters used as icons. Brand surfaces should always reach for the WDS icon set first.
-
-**Substitutions**
-- For prototypes where we don't import the full icon set, we use **Lucide** (CDN: `lucide.dev`) as the closest match — same 24×24 stroke-based aesthetic. We **flag this substitution** anywhere it occurs. The real product always uses WDS icons.
-
-**Logos**
-- Wanted wordmark (blue `#0066FF` set in Pretendard Bold) — used in primary nav and footer.
-- Montage wordmark — only on the design-system docs site, not in product surfaces.
-
----
-
-## INDEX (project root)
-
-- `README.md` — this file.
-- `SKILL.md` — agent skill description.
-- `colors_and_type.css` — all design tokens.
-- `assets/` — logos, icons, illustrations.
-- `preview/` — Design-System-tab cards.
-- `ui_kits/wanted/` — Wanted product UI kit (`index.html`, components).
-
----
-
-## Caveats
-
-- The Wanted product UI kit is built from **token-level reconstruction** of `@wanteddev/wds` components, not from screenshots of wanted.co.kr. The component shapes (paddings, radii, weights) are accurate; the *page compositions* (e.g. the homepage hero) are educated reconstructions of Wanted's published marketing.
-- Icons in the kit use **Lucide via CDN** as a substitution. The real product uses `@wanteddev/wds-icon`. To swap back, install the package and replace `<i data-lucide="…" />` with `<IconBell />` etc.
-- Pretendard is loaded from jsDelivr (the same CDN the official `wds` README recommends).
+- "큰 랜딩 페이지"보다 실제 작업 화면을 우선한다.
+- 파랑은 주요 행동과 선택 상태에만 쓴다.
+- 카드는 반복 항목과 실제 도구 표면에만 사용한다.
+- 데이터 표, KPI, 결정 버튼은 조용하지만 명확해야 한다.
+- 내부 용어는 처음 등장할 때 괄호로 풀어 쓴다.

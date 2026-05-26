@@ -25,9 +25,9 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 | 사용자 | 주요 관심 | 기본 화면 강조 |
 |---|---|---|
 | Developer | import schema, trace, retry/cache, model usage, agent-run 병목 | operational signals, debug refs, serving bottleneck |
-| PM | feature/customer/plan economics, pricing scenario | feature economics, decision readiness, customer-safe report |
+| PM | 기능/고객/요금제 경제성, 가격 시나리오 | 기능 경제성, 결정 준비도, 고객에게 보여도 안전한 리포트 |
 | CEO | margin risk, 손실 고객, rate card, report | margin risk, one-page summary, export/billing gate |
-| Admin/Owner | auth, membership, corpus, connector, retention | readiness checklist, blocked reasons, sandbox controls |
+| Admin/Owner | 인증, 멤버십, 근거 문서 묶음, 외부 연동, 보관 정책 | 준비도 체크리스트, 차단 이유, 샌드박스 제어 |
 | Customer viewer | 내부 ref 없는 결과 확인 | report, accepted evidence, masked refs |
 
 ## 4. Route 구조
@@ -42,24 +42,24 @@ AgentPayroll은 AI SaaS의 사용 로그를 고객·기능·모델·플랜·세�
 
 ## 5. 메인 Workspace 레이아웃
 
-1. Health header: workspace id/name, role switch, audience mode, production status, stale badge.
-2. KPI strip: monthly AI cost, margin risk, loss customers/features, recommended next decision.
-3. Stage navigator: `Design -> Cost -> Bottleneck -> Optimize+Risk -> Decision Log`.
+1. Health header(상태 헤더): workspace id/name, role switch, audience mode, production status, stale badge.
+2. KPI strip(핵심 지표 막대): monthly AI cost, margin risk, loss customers/features, recommended next decision.
+3. Stage navigator(단계 이동): `Design -> Cost -> Bottleneck -> Optimize+Risk -> Decision Log`.
 4. Primary work area: role별 primary card.
-5. Evidence/Agent rail: RAG refs, accepted facts, provider proof, fallback reason.
-6. Decision footer/rail: adopt/reject/hold, report export gate, last actor/time.
+5. Evidence/Agent rail(근거·에이전트 보조 영역): RAG refs, accepted facts, provider proof, fallback reason.
+6. Decision footer/rail(결정 하단 영역): adopt/reject/hold, report export gate, last actor/time.
 
 ## 6. Stage별 기능
 
 | Stage | 주요 기능 | 대표 UI |
 |---|---|---|
-| Design | usage import, schema mapping, team/agent setup, trust gate | import panel, schema checklist, trust warnings |
-| Cost | customer/feature/model/plan/session/agent-run attribution | tables, KPI cards, cost breakdown |
+| Design | 사용량 가져오기, 스키마 매핑, 팀/에이전트 설정, trust gate | import panel, schema checklist, trust warnings |
+| Cost | 고객/기능/모델/요금제/세션/에이전트 실행별 귀속 | tables, KPI cards, cost breakdown |
 | Bottleneck | retry/cache/model/serving 병목 | operational signal cards, trace refs |
-| Optimize+Risk | routing, pricing, benchmark, rate card, risk cards | scenario panel, risk cards, rate card readiness |
-| Decision Log | adopt/reject/hold, report gate, ledger | decision list, export gate, report CTA |
+| Optimize+Risk | 라우팅, 가격, 벤치마크, 요금표 초안, 위험 카드 | scenario panel, risk cards, rate card readiness |
+| Decision Log | 채택/거절/보류, 리포트 관문, 장부 | decision list, export gate, report CTA |
 
-## 6.1 Trust Gate First
+## 6.1 Trust Gate First(신뢰 관문 우선)
 
 Design/Import stage의 첫 성공 순간은 비용 차트가 아니라 "이 데이터로 무엇을 하지 않았는가"를 확인시키는 것이다.
 
@@ -73,16 +73,16 @@ Design/Import stage의 첫 성공 순간은 비용 차트가 아니라 "이 데�
 - `blocked`: usage snapshot(사용량 분석 묶음), decision history corpus(결정 이력 문서 묶음), report artifact(보고서 결과물)로 넘어가지 않는다고 명시한다.
 - 상세 보안/retention 정보는 보조 패널로 두되, 첫 화면은 신뢰와 다음 행동 중심으로 쓴다.
 
-## 7. Role Projection
+## 7. Role Projection(역할별 투영)
 
 같은 snapshot을 쓰되 중앙 콘텐츠 순서가 바뀐다. 숫자는 바뀌면 안 된다.
 
-| Role | Primary | Auxiliary/Hidden |
+| 역할 | 우선 영역 | 보조/숨김 영역 |
 |---|---|---|
-| Developer | operational signals, import/schema, trace, retry/cache, serving | CEO summary, customer-facing report |
-| PM | feature economics, pricing scenario, customer/plan readiness | low-level debug refs |
-| CEO | margin risk, loss customers, rate card/report/export | detailed trace/debug |
-| Customer audience | accepted facts, public-safe report | internal refs, debug, raw trace |
+| Developer | 운영 신호, 가져오기/스키마, trace, retry/cache, serving | CEO 요약, 고객용 리포트 |
+| PM | 기능 경제성, 가격 시나리오, 고객/요금제 준비도 | 낮은 수준의 debug refs |
+| CEO | 마진 리스크, 손해 고객, 요금표/리포트/export | 세부 trace/debug |
+| Customer audience | 승인된 사실, 공개 가능한 리포트 | 내부 ref, debug, 원시 trace |
 
 모든 role header에는 `same snapshot` 배지를 둔다. Developer는 "왜 비용이 늘었는지", PM은 "어떤 기능/플랜이 문제인지", CEO는 "얼마가 새고 어떤 결정을 해야 하는지"를 먼저 묻지만 월 비용, 마진, 고객 수, snapshot id는 동일해야 한다.
 
@@ -108,49 +108,49 @@ Design/Import stage의 첫 성공 순간은 비용 차트가 아니라 "이 데�
 
 ## 9. 기능 전체 목록
 
-- Supabase Auth login
-- workspace membership/RLS gate
-- production demo readiness check
-- usage CSV/summary/SDK-lite import
+- Supabase Auth login(Supabase 인증 로그인)
+- workspace membership/RLS gate(작업공간 멤버십과 행 단위 보안 관문)
+- production demo readiness check(운영 데모 준비도 확인)
+- usage CSV/summary/SDK-lite import(사용량 CSV/요약/SDK-lite 가져오기)
 - Trust Gate: raw prompt/API key blocked, PII needs_mapping, file type/size 검사
-- deterministic cost/margin calculator
-- customer/feature/model/plan/session/agent-run attribution
-- C1 official source corpus
-- C2 benchmark corpus
-- C3 serving economics corpus
-- C4 usage schema corpus
-- C9 decision history corpus
-- pgvector-backed RAG search
-- Watchtower runs/review/accepted facts
-- provider-backed agent runtime
-- runtime status API
-- risk cards
-- optimization recommendation
-- rate card state machine
-- billing readiness panel
-- Slack/Email/Stripe/Metronome connector readiness
-- external action approval/execution ledger
-- persisted report artifacts: PDF, Markdown, JSON
-- retention jobs: deletion/export audit
-- admin readiness/review surface
+- deterministic cost/margin calculator(결정론 비용·마진 계산기)
+- customer/feature/model/plan/session/agent-run attribution(고객·기능·모델·요금제·세션·에이전트 실행별 귀속)
+- C1 official source corpus(공식 출처 문서 묶음)
+- C2 benchmark corpus(비교 기준 문서 묶음)
+- C3 serving economics corpus(서빙 비용 문서 묶음)
+- C4 usage schema corpus(사용량 스키마 문서 묶음)
+- C9 decision history corpus(결정 이력 문서 묶음)
+- pgvector-backed RAG search(pgvector 기반 근거 검색)
+- Watchtower runs/review/accepted facts(감시 실행·검토·승인 사실)
+- provider-backed agent runtime(제공자 모델을 실제 호출하는 에이전트 실행)
+- runtime status API(실행 상태 API)
+- risk cards(위험 카드)
+- optimization recommendation(최적화 추천)
+- rate card state machine(요금표 초안 상태 기계)
+- billing readiness panel(과금 준비도 패널)
+- Slack/Email/Stripe/Metronome connector readiness(외부 연동 준비도)
+- external action approval/execution ledger(외부 실행 승인·실행 장부)
+- persisted report artifacts: PDF, Markdown, JSON(저장된 리포트 산출물)
+- retention jobs: deletion/export audit(보관 작업: 삭제·내보내기 감사)
+- admin readiness/review surface(관리자 준비도·검토 화면)
 
-## 10. Admin UX
+## 10. Admin UX(관리자 경험)
 
 Admin은 "실행 도구"보다 "왜 막혔는지 보는 곳"이 먼저다.
 
 필수 패널:
 
-- Supabase/Auth readiness
-- workspace membership status
-- corpus readiness: C1/C2/C3/C4/C9
-- Watchtower latest run + review queue
-- accepted facts ledger status
-- RAG index status
-- connector status
-- rate card/billing gate
-- retention jobs
-- report artifacts
-- agent_service reachability
+- Supabase/Auth readiness(Supabase/인증 준비도)
+- workspace membership status(작업공간 멤버십 상태)
+- corpus readiness: C1/C2/C3/C4/C9(문서 묶음 준비도)
+- Watchtower latest run + review queue(최신 감시 실행과 검토 대기열)
+- accepted facts ledger status(승인 사실 장부 상태)
+- RAG index status(RAG 검색 색인 상태)
+- connector status(외부 연동 상태)
+- rate card/billing gate(요금표/과금 관문)
+- retention jobs(보관·삭제 작업)
+- report artifacts(리포트 산출물)
+- agent_service reachability(agent_service 접근 가능 여부)
 
 Mutation 버튼은 기본 blocked:
 
@@ -161,25 +161,25 @@ Mutation 버튼은 기본 blocked:
 - rollback metadata 필요
 - ledger row 필요
 
-## 11. Report UX
+## 11. Report UX(리포트 경험)
 
 Report page는 persisted artifact viewer다.
 
 우선순위:
 
-1. PDF download primary CTA
-2. Markdown secondary
-3. JSON secondary/internal
+1. PDF download primary CTA(PDF 다운로드를 1순위 행동으로 표시)
+2. Markdown secondary(Markdown은 보조)
+3. JSON secondary/internal(JSON은 보조 또는 내부용)
 
 반드시 표시:
 
-- report id
-- workspace id
-- artifact format/content type
-- source decision ids
-- generated timestamp
-- evidence refs
-- unavailable/deleted status
+- report id(리포트 식별자)
+- workspace id(작업공간 식별자)
+- artifact format/content type(산출물 형식과 콘텐츠 타입)
+- source decision ids(근거가 된 결정 식별자)
+- generated timestamp(생성 시각)
+- evidence refs(근거 참조)
+- unavailable/deleted status(사용 불가 또는 삭제 상태)
 
 ## 12. 화면 카피 원칙
 
@@ -189,19 +189,19 @@ Report page는 persisted artifact viewer다.
 - production 연결이 없으면 "demo unavailable"이지 "샘플 데이터 표시"가 아니다.
 - provider/model/source id는 `translate="no"`로 보호한다.
 
-## 13. Mobile UX
+## 13. Mobile UX(모바일 경험)
 
 PC 대시보드를 축소하지 말고 순서를 바꾼다.
 
 모바일 순서:
 
-1. production status
-2. next decision
+1. production status(운영 연결 상태)
+2. next decision(다음 결정)
 3. 핵심 KPI 3개
 4. 현재 stage primary card
-5. evidence summary
-6. decision action
-7. report/export gate
+5. evidence summary(근거 요약)
+6. decision action(결정 행동)
+7. report/export gate(리포트/내보내기 관문)
 
 ## 14. 디자인 톤
 
@@ -245,15 +245,15 @@ AgentPayroll 웹앱은 한국어 버전과 영어 버전이 **분리된 언어 �
 
 언어별 분리 대상:
 
-- route/page visible copy
-- status/error/blocked reason copy
+- route/page visible copy(라우트/페이지에 보이는 문구)
+- status/error/blocked reason copy(상태/오류/차단 이유 문구)
 - stage/card 제목과 설명
-- role projection copy
-- Trust Gate warning copy
-- Admin readiness copy
-- Rate card/billing readiness copy
-- Report artifact copy
-- Email/Slack connector draft copy
+- role projection copy(역할별 투영 문구)
+- Trust Gate warning copy(신뢰 관문 경고 문구)
+- Admin readiness copy(관리자 준비도 문구)
+- Rate card/billing readiness copy(요금표/과금 준비도 문구)
+- Report artifact copy(리포트 산출물 문구)
+- Email/Slack connector draft copy(Email/Slack 연동 초안 문구)
 
 언어 전환 수용 조건:
 

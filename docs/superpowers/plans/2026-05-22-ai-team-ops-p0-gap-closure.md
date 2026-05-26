@@ -1,800 +1,222 @@
-# AI Team Ops P0 Gap Closure Implementation Plan
+# AI Team Ops P0 갭 클로저 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **에이전트 작업자 안내:** 이 계획은 `superpowers:subagent-driven-development`(서브에이전트로 독립 작업을 나눠 실행하는 방식) 또는 `superpowers:executing-plans`(계획서를 작업 단위로 실행하는 방식)로 처리한다. 체크박스(`- [ ]`)는 진행 추적용이다.
 
-**Goal:** Bring the current SparkClaw P0 demo up to the two PRDs: `AI SaaS Cost & Margin Workspace v2.0` and `AI Team Operations Workspace v0.4`.
+## 목표
 
-**Architecture:** Keep P0 client-only. Deterministic numbers stay in pure TypeScript tools; LangGraph.js orchestrates interpretation and approval, and never performs arithmetic. Risk Cards and benchmarks start as bundled JSON/TS corpus with deterministic tag search.
+현재 SparkClaw P0 데모를 두 문서의 기준에 맞춘다.
 
-**Tech Stack:** Vite 6, React 18, TypeScript 5, Tailwind 3, Vitest 4, `@langchain/langgraph`, localStorage, JSON export.
+- `AI SaaS Cost & Margin Workspace v2.0`(AI SaaS 비용·마진 작업공간 제품 요구사항)
+- `AI Team Operations Workspace v0.4`(AI 팀 운영 작업공간 제품 요구사항)
 
----
+핵심은 "멋진 대시보드"가 아니라 **사용량 로그 → 원가·마진 계산 → 위험 검토 → 가격 결정 → 리포트와 결정 로그**까지 끊기지 않는 데모를 만드는 것이다.
 
-## PRD Gap Review
+## 아키텍처 원칙
 
-### P0 Must-Fix Gaps
+- P0는 client-only(서버 없이 브라우저 안에서 동작하는 데모)로 유지한다.
+- 모든 숫자는 순수 TypeScript 도구가 결정론적으로 계산한다.
+- LangGraph.js(에이전트 흐름을 그래프로 묶는 라이브러리)는 해석과 승인 흐름만 담당하고 산술 계산을 하지 않는다.
+- Risk Card(위험 카드: 결정 전에 확인해야 할 품질·보안·비용 리스크)와 benchmark(비교 기준)는 번들된 JSON/TS corpus(검색 가능한 문서 묶음)에서 시작한다.
+- 검색은 deterministic tag search(고정 태그 기반 검색)로 시작하고, P1 이후 RAG(검색 증강 생성: 문서 검색 결과를 답변 근거로 붙이는 방식)로 확장한다.
 
-1. `src/features/agent/lib/agentRuntime.ts` is not a LangGraph runtime yet.
-   It accepts `apiKey`, but does not import `@langchain/langgraph`, does not define `StateGraph`, does not model Orchestrator / Margin Analyst / Pricing Strategy / Risk Auditor / CFO Reporter nodes, and does not stream graph events. Current behavior is a deterministic fallback array.
+## 기술 스택
 
-2. `src/features/agent/lib/riskCards.ts` has only 3 cards.
-   PRD v0.4 requires a Risk Card catalog of 10+ cards with evidence metadata. It also requires each recommendation to receive risk review independently, ideally through Risk Auditor as a sub-agent/subgraph.
+- Vite 6, React 18, TypeScript 5, Tailwind 3
+- Vitest 4
+- `@langchain/langgraph`
+- `localStorage`
+- JSON export(파일 내보내기)
 
-3. `PricingSimulatorWorkspace` renders only `flat`, `credit`, and `cap`.
-   `src/features/pricing/lib/pricingScenario.ts` supports `flat | usage | credit | hybrid | cap | overage`, but `src/app/App.tsx` only creates three scenarios. PRD v2.0 requires flat, usage-based, credit bundle, overage, cap, hybrid, AI add-on, and tier upgrade comparison at least at the P0 scenario layer.
+## PRD 갭 리뷰
 
-4. `AITeamConfiguration` is too thin for the architecture PRD.
-   `src/features/team/lib/aiTeamConfiguration.ts` tracks `companyProfile`, `agents`, `usage`, `attribution`, and `decisionLog`, but lacks the PRD fields that make it the shared Wedge A+B object: prompt template, guardrails, expected volume as structured numbers, cost budget, performance history hook, and config snapshot reference.
+### P0 필수 보완 갭
 
-5. Team Designer UI is a thin card list, not the PRD/mockup Team Designer.
-   `src/app/App.tsx` renders no onboarding conversation, scenario selector, org chart, selected-agent detail panel, or benchmark row from `team-designer-mockup.html`. The current panel is acceptable as a stub, not as the P0 demo surface.
+1. `src/features/agent/lib/agentRuntime.ts`가 아직 LangGraph runtime(그래프 기반 에이전트 실행기)이 아니다. 현재는 deterministic fallback array(고정된 대체 이벤트 배열)에 가깝다.
+2. `src/features/agent/lib/riskCards.ts`에는 카드가 3개뿐이다. PRD v0.4는 evidence metadata(근거 메타데이터)가 있는 Risk Card 10개 이상을 요구한다.
+3. `PricingSimulatorWorkspace`는 `flat`, `credit`, `cap`만 렌더한다. 엔진은 `usage`, `hybrid`, `overage`도 지원하므로 P0 UI에서 모두 비교해야 한다.
+4. `AITeamConfiguration`은 Wedge A+B(설계 전 사용자와 운영 중 SaaS 팀을 함께 받는 두 진입점) 공유 객체로 쓰기에는 얇다. prompt template(프롬프트 양식), guardrails(안전장치), expected volume(예상 사용량), cost budget(비용 예산), performance history hook(성능 이력 연결점), config snapshot reference(설정 스냅샷 참조)가 필요하다.
+5. Team Designer UI(사용자가 AI 팀을 구성하는 화면)는 카드 목록 수준이다. onboarding conversation(초기 질의 흐름), scenario selector(시나리오 선택), org chart(조직도), selected-agent detail panel(선택한 에이전트 상세), benchmark row(비교 기준 행)가 필요하다.
+6. Report Output(리포트 출력)은 일부 분리됐지만 PRD 수준의 report system(리포트 체계)은 아니다. Developer, PM, CEO/CFO, Board-ready(이사회 공유용) 산출물이 tool refs(도구 실행 근거)와 risk cards에 묶여야 한다.
+7. Decision Log(결정 로그)에 삭제와 실제 export UI(내보내기 화면)가 부족하다.
+8. Operational Signal Summary(운영 신호 요약)가 없다. token spike(토큰 급증), cache miss(캐시 미스), top session/agent-run cost(비싼 세션·에이전트 실행) 안내가 필요하다.
+9. Raw vs Effective Cost(순수 LLM 원가와 재시도·사람 검수·CS 비용을 더한 실제 원가) 구분이 없다.
+10. Sample data(샘플 데이터)가 하나의 고정 CSV뿐이다. v0.4는 5개 synthetic scenario(합성 시나리오)와 benchmark corpus seed statistics(비교 기준 코퍼스 초기 통계)를 요구한다.
 
-6. Report Output is partly split but still not the PRD report system.
-   `SummaryCard` has 4 audience labels, but `AgentReportWorkspace` is a generic event list. PRD requires Developer breakdown, PM report, CEO/CFO 1-pager, and Board-ready summary grounded in tool refs and risk cards.
+### 이미 건강한 부분
 
-7. Decision Log is missing deletion and real export UI.
-   `src/features/decision-log/lib/decisionLog.ts` supports serialization, load, and save, but `DecisionLogWorkspace` only shows entries. PRD test plan explicitly calls for save/delete/export.
+- CSV 계약 확장과 필수 컬럼 검증은 `src/features/usage/lib/usageImport.ts`에 있다.
+- multi-axis attribution(고객·기능·모델·요금제·세션·에이전트 실행 단위 귀속)은 `src/features/usage/lib/attribution.ts`에 있다.
+- plan/customer margin(요금제·고객 마진)과 heavy-user detection(과사용 고객 감지)은 `src/features/unit-economics/lib/margin.ts`에 있다.
+- pricing engine(가격 정책 엔진)은 여섯 정책 타입을 이미 지원한다.
+- 현재 구현은 client-only P0 제약과 formatter-only display rule(표시 숫자는 formatter만 통과한다는 규칙)을 대체로 지킨다.
 
-8. Operational Signal Summary is absent.
-   PRD v2.0 P0 asks for token spike candidates, cache miss/cacheable share, and top session/agent-run cost guidance. Current attribution tables expose top rows, but no operational summary object or UI.
+## P1/P2 로드맵 리뷰
 
-9. Raw vs Effective Cost is absent.
-   PRD v2.0 requires `effectiveCost = rawCost + retryCost + humanReviewCost + csEscalationCost` as assumption-based what-if. Current margin uses raw LLM cost only.
+P0는 SparkClaw 데모다. client-only, sample/import driven(샘플 또는 CSV 업로드 기반), BYO-key(사용자 키 직접 입력), localStorage/export 중심이다. P1/P2는 패널을 더 붙이는 일이 아니라, 데모 작업공간을 반복 가능한 SaaS workflow(서비스형 반복 업무 흐름)로 바꾸는 단계다.
 
-10. Sample data is one fixed CSV, not the 5-scenario sample generator from v0.4.
-    The SparkClaw sample is useful, but v0.4 P0 asks for five synthetic scenarios and benchmark corpus seed statistics.
+### P1 목표: 실제 로그와 반복 가능한 SaaS 흐름
 
-### What Is Already Sound
+P1은 사용자가 자기 익명화 로그를 분석하고 싶다는 신호가 나온 뒤 시작한다.
 
-- CSV contract extension and required-column validation are in place in `src/features/usage/lib/usageImport.ts`.
-- Multi-axis attribution is in place in `src/features/usage/lib/attribution.ts`.
-- Plan/customer margin and heavy-user detection are in place in `src/features/unit-economics/lib/margin.ts`.
-- The pricing engine supports the six named policy types in `src/features/pricing/lib/pricingScenario.ts`.
-- The current implementation respects the client-only P0 constraint and formatter-only display rule.
+1. **얇은 서버리스 백엔드**
+   - 기존 `runAgent(input) -> events` 인터페이스 뒤에 `/api/agent`를 붙인다.
+   - provider key(모델 제공자 API 키)는 서버에 보관하거나 세션 단위 암호화 키로 받는다.
+   - deterministic L2 functions(결정론 계산 함수)은 공유 패키지에서 재사용하고 계산을 복제하지 않는다.
 
----
+2. **영속 Decision Log와 설정 저장소**
+   - Decision Log, `AITeamConfiguration`, report history를 localStorage에서 KV/DB로 옮긴다.
+   - 신뢰와 이동성을 위해 JSON export/import를 유지한다.
+   - 모든 리포트에 `config_snapshot_ref`, `tool_snapshot_ref`를 붙여 당시 가정으로 역추적 가능하게 한다.
 
-## P1 / P2 Roadmap Review
+3. **실제 usage CSV와 observability export 지원**
+   - OpenAI/Anthropic usage export(사용량 내보내기)와 Helicone/Langfuse류 CSV profile(가져오기 규격)을 추가한다.
+   - 분석 전 PII-safe preview(개인정보 안전 미리보기)를 제공한다.
+   - provider invoice total(제공자 청구 총액)과 내부 row total(행 단위 합계) 대조 필드를 추가한다.
 
-P0 is the SparkClaw demo: client-only, sample/import driven, BYO-key, localStorage/export. P1 and P2 are not "more dashboard panels"; they change the product from a demo workspace into a repeatable SaaS workflow.
+4. **주간/월간 recurring report(반복 리포트)**
+   - 예약 리포트 생성을 추가한다.
+   - period(기간), inputs(입력), deltas(변화량), adopted decisions(채택 결정), unresolved risks(미해결 리스크)를 저장한다.
+   - CEO/CFO digest(경영진 요약)와 다운로드 가능한 리포트 이력을 만든다.
 
-### P1 Goal: Real Logs + Repeatable SaaS Workflow
+5. **Plan vs Actual(계획 대비 실제)**
+   - 이전 가격/모델 라우팅 결정과 새 사용량을 비교한다.
+   - expected margin(예상 마진)과 actual margin(실제 마진), expected reduction(예상 절감)과 actual reduction(실제 절감)을 보여 준다.
+   - 결정 상태를 `validated`, `missed`, `needs-review`로 표시한다.
 
-P1 should start only after P0 proves that users want to analyze their own anonymized usage logs. The key shift is from static/local demo to a thin backend that can safely hold keys, persist decisions, run agents, and create recurring reports.
+6. **서버 RAG 업그레이드**
+   - benchmark와 Risk Card 검색을 서버 도구 뒤로 옮긴다.
+   - `evidence_board.csv`의 evidence metadata를 붙인다.
+   - "근거 없으면 주장 없음" 원칙을 유지한다.
 
-P1 implementation units:
+7. **P1 검증**
+   - 단위 테스트: API 계약, 영속 스키마, report-run diff, import profile.
+   - 통합 테스트: 익명 CSV 업로드 → 에이전트 리포트 → 저장된 결정 → 다음 기간 비교.
+   - 브라우저 테스트: 로그인/세션 → 업로드 → 반복 리포트 미리보기 → export.
 
-1. **Thin Serverless Backend**
-   - Add `/api/agent` as the server-side implementation behind the existing `runAgent(input) -> events` interface.
-   - Store provider keys server-side or accept session-scoped encrypted keys.
-   - Keep deterministic L2 functions shared from TypeScript packages; do not fork calculations.
+### P2 목표: 연동과 멀티테넌트 제품
 
-2. **Persistent Decision Log and Config Store**
-   - Move Decision Log, `AITeamConfiguration`, and report history from localStorage to KV/DB.
-   - Preserve JSON export/import for trust and portability.
-   - Add `config_snapshot_ref` and `tool_snapshot_ref` so every report can be traced back to the exact assumptions.
+P2는 P1에서 반복 사용 신호가 확인된 뒤 시작한다.
 
-3. **Actual Usage CSV and Observability Export Support**
-   - Add import profiles for OpenAI/Anthropic usage exports and common observability CSVs.
-   - Add anonymization guidance and PII-safe preview before analysis.
-   - Add invoice reconciliation fields: provider invoice total vs internal row total.
+1. SDK/Gateway/Proxy ingestion(자동 이벤트 수집)
+2. Helicone/Langfuse/LangSmith/Portkey connector(관측 도구 연동)
+3. Stripe/Metronome/OpenMeter billing integration(과금 데이터 연동)
+4. multi-tenant workspace(여러 조직·프로젝트를 분리하는 작업공간)
+5. board deck/finance package export(이사회·재무 패키지 내보내기)
+6. continuous customer profitability monitoring(고객별 수익성 지속 모니터링)
+7. model routing/cache/output cap/tier migration simulation(모델 라우팅·캐시·출력 제한·요금제 이동 시뮬레이션)
+8. connector contract test(연동 계약 테스트), authorization test(권한 테스트), seeded end-to-end test(시드 데이터 기반 E2E 테스트)
 
-4. **Recurring Weekly/Monthly Reports**
-   - Add scheduled report generation.
-   - Store report runs with period, inputs, deltas, adopted decisions, and unresolved risks.
-   - Add CEO/CFO digest output and downloadable report history.
+### 단계 경계 규칙
 
-5. **Plan vs Actual**
-   - Compare previous pricing/model-routing decisions against new usage.
-   - Show expected margin vs actual margin, expected cost reduction vs actual cost reduction.
-   - Mark decisions as `validated`, `missed`, or `needs-review`.
+- P0가 real-log import path(실제 로그 업로드 경로)와 최소 1명의 "내 CSV로 분석하고 싶다" 신호를 만들기 전에는 P1 백엔드를 시작하지 않는다.
+- P1에서 report history와 Plan vs Actual이 반복 사용을 증명하기 전에는 P2 connector를 시작하지 않는다.
+- CSV/import 흐름이 검증되기 전에는 SDK/gateway ingestion을 추가하지 않는다. 너무 일찍 붙이면 제품이 observability infrastructure(관측 인프라)로 흘러간다.
+- deterministic tools produce numbers, agents explain(숫자는 도구가 만들고 에이전트는 설명한다)는 불변식을 약화하지 않는다.
 
-6. **Server RAG Upgrade**
-   - Move benchmark and Risk Card retrieval behind server tools once corpus grows.
-   - Add evidence metadata from `evidence_board.csv`.
-   - Keep deterministic "no evidence, no claim" behavior.
+## 파일 구조
 
-7. **P1 Verification**
-   - Unit: API contract, persistence schema, report-run diffing, import profiles.
-   - Integration: upload real/anonymized CSV -> agent report -> saved decision -> next-period comparison.
-   - Browser: login/session -> upload -> recurring report preview -> export.
+### Agent Graph와 Tool Contract
 
-### P2 Goal: Integrations + Multi-Tenant Product
+- `src/features/agent/lib/toolContract.ts`
+- `src/features/agent/lib/agentRuntime.ts`
+- `src/features/agent/lib/agentRuntime.test.ts`
 
-P2 should begin only after P1 shows repeated use: users ask for next-month reporting, integrations, shared access, or billing/observability connection. P2 is the expansion from "workspace" to "operating layer."
+### RAG Corpus와 Risk Cards
 
-P2 implementation units:
+- `src/features/agent/lib/riskCards.ts`
+- `src/features/agent/lib/riskCards.test.ts`
+- `src/features/agent/data/`
 
-1. **SDK / Gateway / Proxy Ingestion**
-   - Add optional automatic event collection.
-   - Support trace/session/agent-run ids at source.
-   - Preserve CSV import as the fallback path.
+### Product State와 Team Designer
 
-2. **Helicone / Langfuse / LangSmith / Portkey Connectors**
-   - Import observability exports directly.
-   - Map external trace fields into the internal `UsageImportRow` contract.
-   - Keep connector mapping deterministic and testable.
+- `src/features/team/lib/aiTeamConfiguration.ts`
+- `src/features/team/lib/estimateAgentWorkload.ts`
+- `src/features/team/components/`
+- `src/app/App.tsx`
 
-3. **Billing Integrations**
-   - Add Stripe/Metronome/OpenMeter mapping for customer, plan, subscription, credit, and overage data.
-   - Compare billable usage vs LLM cost attribution.
-   - Produce "pricing change impact" reports with real subscription data.
+### Pricing과 Unit Economics
 
-4. **Multi-Tenant Workspace**
-   - Add organizations, projects, roles, and access control.
-   - Separate developer, PM, finance, and board-view permissions.
-   - Add audit log for pricing decisions and report exports.
-
-5. **Board Deck / Finance Package Export**
-   - Promote Board summary into a recurring package.
-   - Add PPTX/PDF export from structured report artifacts.
-   - Include margin waterfall, heavy-user concentration, pricing scenario comparison, and decision log appendix.
-
-6. **Continuous Customer Profitability Monitoring**
-   - Track customer/plan margin over time.
-   - Alert on margin degradation, agent loop runaway, and plan-level loss.
-   - Turn one-off analysis into monthly operating review.
-
-7. **Advanced Optimization**
-   - Add model routing simulation, cache policy simulation, output cap simulation, and tier migration simulation.
-   - Require eval/risk cards before recommending quality-sensitive routing.
-   - Keep all scenario numbers from deterministic tools only.
-
-8. **P2 Verification**
-   - Contract tests for every connector.
-   - Multi-tenant authorization tests.
-   - End-to-end integration tests with seeded usage + seeded billing.
-   - Browser smoke for dashboard, report package, connector import, decision audit trail.
-
-### Phase Boundary Rules
-
-- Do not start P1 backend work until P0 has a convincing real-log import path and at least one user asks to analyze their own CSV.
-- Do not start P2 connectors until P1 report history and Plan vs Actual prove repeat usage.
-- Do not add SDK/gateway ingestion before CSV/import workflow is validated; otherwise the product becomes observability infrastructure too early.
-- Do not let P1/P2 weaken the core invariant: deterministic tools produce all numbers; agents explain, compare, and draft.
-
----
-
-## File Structure
-
-### Agent Graph and Tool Contract
-
-- Create: `src/features/agent/lib/toolContract.ts`
-  - Owns typed deterministic tool payloads and tool result references.
-  - Exposes `buildAgentToolSnapshot(input)`.
-- Create: `src/features/agent/lib/agentGraph.ts`
-  - Owns LangGraph.js `StateGraph` topology.
-  - Nodes: `orchestrator`, `marginAnalyst`, `pricingStrategy`, `riskAuditor`, `cfoReporter`.
-- Modify: `src/features/agent/lib/agentRuntime.ts`
-  - Keeps public `runAgent(input)` API.
-  - Delegates to LangGraph graph when `apiKey` is present.
-  - Uses deterministic fallback only when no key/runtime is available.
-- Test: `src/features/agent/lib/toolContract.test.ts`
-- Test: `src/features/agent/lib/agentGraph.test.ts`
-- Test: `src/features/agent/lib/agentRuntime.test.ts`
-
-### RAG Corpus and Risk Cards
-
-- Create: `src/features/agent/data/riskCards.ts`
-  - Static catalog of at least 10 cards.
-- Create: `src/features/agent/data/benchmarks.ts`
-  - Bundled benchmark seed rows with evidence metadata.
-- Modify: `src/features/agent/lib/riskCards.ts`
-  - Replace inline 3-card array with corpus import.
-  - Add severity/tag/evidence deterministic matching.
-- Test: `src/features/agent/lib/riskCards.test.ts`
-
-### Product State and Team Designer
-
-- Modify: `src/features/team/lib/aiTeamConfiguration.ts`
-  - Add prompt template, guardrails, structured volume, cost budget, config snapshot ref, and performance history seed.
-- Create: `src/features/team/components/TeamDesignerPanel/index.tsx`
-  - Extract current inline panel from `App.tsx`.
-  - Add mockup-aligned org chart, selected-agent detail, and benchmark row.
-- Test: `src/features/team/lib/aiTeamConfiguration.test.ts`
-- Test: `src/features/team/components/TeamDesignerPanel/TeamDesignerPanel.test.tsx`
-
-### Pricing and Unit Economics
-
-- Modify: `src/features/pricing/lib/pricingScenario.ts`
-  - Add `ai_add_on` and `tier_upgrade` if P0 UI exposes them as explicit scenario cards.
-  - Keep existing six policy values stable unless tests and UI update together.
-- Modify: `src/app/App.tsx`
-  - Render all current supported policies: `flat`, `usage`, `credit`, `hybrid`, `cap`, `overage`.
-- Create: `src/features/unit-economics/lib/effectiveCost.ts`
-  - Owns raw vs effective cost assumptions.
-- Test: `src/features/unit-economics/lib/effectiveCost.test.ts`
-- Test: `src/features/pricing/lib/pricingScenario.test.ts`
+- `src/features/pricing/lib/pricingScenario.ts`
+- `src/features/unit-economics/lib/effectiveCost.ts`
+- `src/features/unit-economics/components/`
 
 ### Operational Signals
 
-- Create: `src/features/usage/lib/operationalSignals.ts`
-  - Computes top session cost, top agent-run cost, high output-token candidates, failed/retry status share, and missing-dimension summary.
-- Create: `src/features/usage/components/OperationalSignalSummary/index.tsx`
-- Test: `src/features/usage/lib/operationalSignals.test.ts`
-- Test: `src/features/usage/components/OperationalSignalSummary/OperationalSignalSummary.test.tsx`
+- `src/features/usage/lib/operationalSignals.ts`
+- `src/features/usage/components/OperationalSignalSummary.tsx`
 
-### Reports and Decision Log
+### Reports와 Decision Log
 
-- Create: `src/features/report/lib/reportArtifacts.ts`
-  - Produces structured Developer / PM / CEO_CFO / Board report payloads from deterministic tool snapshot and agent interpretations.
-- Modify: `src/features/report/components/SummaryCard/index.tsx`
-  - Read structured report payloads rather than audience labels only.
-- Modify: `src/features/decision-log/lib/decisionLog.ts`
-  - Add `deleteDecision`, `exportDecisionLogFileName`, and schema validation on load.
-- Modify: `src/app/App.tsx`
-  - Wire delete/export buttons into Decision Log section.
-- Test: `src/features/report/lib/reportArtifacts.test.ts`
-- Test: `src/features/decision-log/lib/decisionLog.test.ts`
-- Test: `src/app/App.test.tsx`
+- `src/features/report/lib/reportArtifacts.ts`
+- `src/features/report/components/`
+- `src/features/decision-log/lib/decisionLog.ts`
+- `src/features/decision-log/components/DecisionLogWorkspace.tsx`
 
----
+## 작업 1: Agent Tool Contract 고정
 
-## Task 1: Lock Agent Tool Contract
+- [ ] 에이전트가 읽는 입력 계약을 `toolContract.ts`로 고정한다.
+- [ ] tool ref(도구 근거 참조), snapshot ref(스냅샷 참조), risk ref(위험 카드 참조)를 타입으로 분리한다.
+- [ ] 에이전트 이벤트가 숫자를 직접 만들 수 없도록 계산 결과는 `calculator`/`pricing`/`margin` 결과만 참조한다.
+- [ ] 테스트는 잘못된 ref와 누락된 snapshot을 거부해야 한다.
 
-**Files:**
-- Create: `src/features/agent/lib/toolContract.ts`
-- Test: `src/features/agent/lib/toolContract.test.ts`
+## 작업 2: Fallback-only Runtime을 LangGraph.js Skeleton으로 교체
 
-- [ ] **Step 1: Write failing tests**
+- [ ] Orchestrator(흐름 조정자), Margin Analyst(마진 분석), Pricing Strategy(가격 전략), Risk Auditor(위험 검토), CFO Reporter(경영진 리포트) 노드를 정의한다.
+- [ ] BYO-key가 없을 때는 `deterministic_preview`로 표시하고, provider execution(실제 모델 호출)처럼 렌더하지 않는다.
+- [ ] stream events(단계별 이벤트)를 UI가 그대로 소비할 수 있게 유지한다.
 
-```ts
-import { buildAgentToolSnapshot } from './toolContract'
+## 작업 3: Risk Card Corpus를 PRD 최소 기준까지 확장
 
-describe('buildAgentToolSnapshot', () => {
-  it('stores only deterministic fields with stable refs', () => {
-    const snapshot = buildAgentToolSnapshot({
-      monthlyAiCogs: 4820,
-      grossMarginPct: 0.68,
-      topFeature: 'report_generation',
-      lossCustomerCount: 13,
-    })
+- [ ] 10개 이상 Risk Card를 만들고 evidence metadata를 붙인다.
+- [ ] 각 recommendation(추천안)이 독립적으로 risk review를 받도록 연결한다.
+- [ ] "근거 없음" 상태를 실패가 아니라 `needs_evidence`로 표시한다.
 
-    expect(snapshot.refs).toEqual([
-      'tool:monthlyAiCogs',
-      'tool:grossMarginPct',
-      'tool:topFeature',
-      'tool:lossCustomerCount',
-    ])
-    expect(snapshot.values['tool:monthlyAiCogs']).toBe(4820)
-  })
+## 작업 4: 모든 가격 정책을 P0 UI에 렌더
 
-  it('drops non-finite numbers instead of exposing agent math', () => {
-    const snapshot = buildAgentToolSnapshot({
-      monthlyAiCogs: Number.NaN,
-      grossMarginPct: 0.41,
-    })
+- [ ] flat, usage, credit, hybrid, cap, overage를 모두 보여 준다.
+- [ ] AI add-on(별도 AI 부가 요금)과 tier upgrade(상위 요금제 이동)는 P0 비교 후보로 추가한다.
+- [ ] 같은 입력이 모든 persona(개발자/PM/CEO)에 같은 숫자로 보이게 한다.
 
-    expect(snapshot.refs).toEqual(['tool:grossMarginPct'])
-    expect(snapshot.values['tool:monthlyAiCogs']).toBeUndefined()
-  })
-})
-```
+## 작업 5: Operational Signal Summary 추가
 
-- [ ] **Step 2: Run focused failing test**
+- [ ] token spike, cache miss, top session, top agent-run cost를 계산한다.
+- [ ] alert(경보)처럼 과장하지 말고 "review candidate(검토 후보)"로 표시한다.
+- [ ] attribution table(귀속 표)과 같은 snapshot을 읽는다.
 
-Run: `npm run test:run -- toolContract`
+## 작업 6: Raw vs Effective Cost Engine 추가
 
-Expected: FAIL because `toolContract.ts` does not exist.
+- [ ] raw LLM cost와 retry/human review/CS escalation cost를 분리한다.
+- [ ] assumption(가정)은 사용자가 볼 수 있고 바꿀 수 있어야 한다.
+- [ ] effective cost가 pricing scenario와 report에 이어져야 한다.
 
-- [ ] **Step 3: Implement the contract**
+## 작업 7: Team Designer를 Mockup 방향으로 업그레이드
 
-```ts
-export type ToolValue = number | string | boolean | string[]
+- [ ] onboarding conversation, scenario selector, org chart, selected-agent detail panel을 추가한다.
+- [ ] 9종 AI 팀원과 11개 운영 분석 에이전트를 화면에서 헷갈리지 않게 라벨링한다.
+- [ ] benchmark row는 근거가 없으면 `baseline_unavailable`로 표시한다.
 
-export interface AgentToolSnapshotInput {
-  monthlyAiCogs?: number
-  grossMarginPct?: number
-  topFeature?: string
-  lossCustomerCount?: number
-  riskCardIds?: string[]
-}
+## 작업 8: Decision Log Save/Delete/Export 마무리
 
-export interface AgentToolSnapshot {
-  refs: string[]
-  values: Record<string, ToolValue>
-}
+- [ ] save, delete, export UI를 만든다.
+- [ ] export에는 결정 이유, 가정, snapshot ref, risk ref가 들어간다.
+- [ ] 삭제는 사용자가 명시적으로 확인한 뒤 수행한다.
 
-function keepValue(value: unknown): value is ToolValue {
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (typeof value === 'string') return value.length > 0
-  if (typeof value === 'boolean') return true
-  return Array.isArray(value) && value.every(item => typeof item === 'string')
-}
+## 작업 9: Structured Report Artifacts 구축
 
-export function buildAgentToolSnapshot(input: AgentToolSnapshotInput): AgentToolSnapshot {
-  return Object.entries(input).reduce<AgentToolSnapshot>((snapshot, [key, value]) => {
-    if (!keepValue(value)) return snapshot
-    const ref = `tool:${key}`
-    snapshot.refs.push(ref)
-    snapshot.values[ref] = value
-    return snapshot
-  }, { refs: [], values: {} })
-}
-```
+- [ ] Developer, PM, CEO/CFO, Board-ready report를 타입으로 나눈다.
+- [ ] 모든 숫자에 tool ref를 붙인다.
+- [ ] Risk Card와 unresolved risk를 리포트에 남긴다.
 
-- [ ] **Step 4: Verify**
+## 작업 10: 전체 검증
 
-Run: `npm run test:run -- toolContract`
+- [ ] `npm run test:run`
+- [ ] `npm run build`
+- [ ] CSV import → attribution → margin → pricing → risk review → decision log → report 흐름 스모크
+- [ ] 자동번역 보호(`notranslate`, `lang="en"`) 회귀 확인
 
-Expected: PASS.
+## 완료 기준
 
----
-
-## Task 2: Replace Fallback-Only Runtime With LangGraph.js Skeleton
-
-**Files:**
-- Create: `src/features/agent/lib/agentGraph.ts`
-- Modify: `src/features/agent/lib/agentRuntime.ts`
-- Test: `src/features/agent/lib/agentGraph.test.ts`
-- Test: `src/features/agent/lib/agentRuntime.test.ts`
-
-- [ ] **Step 1: Write graph tests**
-
-```ts
-import { createAgentGraph } from './agentGraph'
-
-describe('createAgentGraph', () => {
-  it('runs deterministic P0 nodes in PRD order', async () => {
-    const graph = createAgentGraph()
-    const result = await graph.invoke({
-      events: [],
-      toolRefs: ['tool:monthlyAiCogs', 'tool:grossMarginPct'],
-      riskCardIds: ['risk-credit-confusion'],
-    })
-
-    expect(result.events.map(event => event.type)).toEqual([
-      'tool_snapshot',
-      'analysis',
-      'pricing_strategy',
-      'risk_audit',
-      'report_draft',
-    ])
-  })
-})
-```
-
-- [ ] **Step 2: Run focused failing test**
-
-Run: `npm run test:run -- agentGraph`
-
-Expected: FAIL because `agentGraph.ts` does not exist.
-
-- [ ] **Step 3: Implement `StateGraph` topology**
-
-Use `@langchain/langgraph` in `agentGraph.ts`. The graph state must contain:
-
-```ts
-export interface AgentGraphState {
-  events: AgentEvent[]
-  toolRefs: string[]
-  riskCardIds: string[]
-}
-```
-
-Node responsibilities:
-- `tool_snapshot`: append event proving deterministic refs were received.
-- `analysis`: append Margin Analyst interpretation with no new numeric fields.
-- `pricing_strategy`: append Pricing Strategy explanation that refers to tool refs only.
-- `risk_audit`: append risk card ids.
-- `report_draft`: append report event grounded in refs and risk cards.
-
-- [ ] **Step 4: Modify `runAgent`**
-
-`runAgent` should:
-- build a tool snapshot with `buildAgentToolSnapshot`
-- call `createAgentGraph().invoke(...)`
-- return `result.events`
-- keep no-key behavior graph-backed, not hand-written fallback
-
-- [ ] **Step 5: Verify**
-
-Run:
-
-```bash
-npm run test:run -- agentGraph agentRuntime
-npm run test:run
-```
-
-Expected: focused tests pass, then full suite passes.
-
----
-
-## Task 3: Expand Risk Card Corpus to PRD Minimum
-
-**Files:**
-- Create: `src/features/agent/data/riskCards.ts`
-- Modify: `src/features/agent/lib/riskCards.ts`
-- Test: `src/features/agent/lib/riskCards.test.ts`
-
-- [ ] **Step 1: Write failing tests**
-
-```ts
-import { RISK_CARDS, retrieveRiskCards } from './riskCards'
-
-describe('Risk Card corpus', () => {
-  it('contains at least ten grounded cards for P0', () => {
-    expect(RISK_CARDS).toHaveLength(10)
-    expect(RISK_CARDS.every(card => card.evidenceId.startsWith('GR-'))).toBe(true)
-  })
-
-  it('matches pricing and model-routing risks deterministically', () => {
-    const cards = retrieveRiskCards(['credit', 'overage', 'model-switch'])
-    expect(cards.map(card => card.id)).toEqual([...cards.map(card => card.id)].sort())
-    expect(cards.some(card => card.tags.includes('credit'))).toBe(true)
-    expect(cards.some(card => card.tags.includes('model-switch'))).toBe(true)
-  })
-})
-```
-
-- [ ] **Step 2: Run focused failing test**
-
-Run: `npm run test:run -- riskCards`
-
-Expected: FAIL because current corpus has only 3 cards.
-
-- [ ] **Step 3: Add 10-card corpus**
-
-Include these card ids:
-- `risk-credit-confusion`
-- `risk-cap-perceived-value`
-- `risk-overage-bill-shock`
-- `risk-hybrid-complexity`
-- `risk-usage-pricing-forecast`
-- `risk-model-routing-quality`
-- `risk-cache-staleness`
-- `risk-output-cap-quality`
-- `risk-agent-loop-runaway`
-- `risk-human-review-bottleneck`
-
-- [ ] **Step 4: Verify**
-
-Run: `npm run test:run -- riskCards`
-
-Expected: PASS.
-
----
-
-## Task 4: Render All Pricing Policies in P0 UI
-
-**Files:**
-- Modify: `src/app/App.tsx`
-- Test: `src/app/App.test.tsx`
-- Test: `src/features/pricing/lib/pricingScenario.test.ts`
-
-- [ ] **Step 1: Write failing component test**
-
-```tsx
-it('renders all P0 pricing policies after sample import', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
-
-  expect(screen.getByText('flat')).toBeInTheDocument()
-  expect(screen.getByText('usage')).toBeInTheDocument()
-  expect(screen.getByText('credit')).toBeInTheDocument()
-  expect(screen.getByText('hybrid')).toBeInTheDocument()
-  expect(screen.getByText('cap')).toBeInTheDocument()
-  expect(screen.getByText('overage')).toBeInTheDocument()
-})
-```
-
-- [ ] **Step 2: Run failing test**
-
-Run: `npm run test:run -- App`
-
-Expected: FAIL because UI only renders `flat`, `credit`, and `cap`.
-
-- [ ] **Step 3: Update scenario list**
-
-In `App.tsx`, build six scenarios from the same imported rows:
-- `flat`: current customer revenue
-- `usage`: `usagePricePerRequest`
-- `credit`: `baseSubscriptionUsd`, `includedRequests`, `overagePricePerRequest`
-- `hybrid`: base plus usage price
-- `cap`: cost cap
-- `overage`: current revenue plus included/overage
-
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-npm run test:run -- pricingScenario App
-npm run test:run
-```
-
-Expected: all pass.
-
----
-
-## Task 5: Add Operational Signal Summary
-
-**Files:**
-- Create: `src/features/usage/lib/operationalSignals.ts`
-- Create: `src/features/usage/components/OperationalSignalSummary/index.tsx`
-- Modify: `src/app/App.tsx`
-- Test: `src/features/usage/lib/operationalSignals.test.ts`
-- Test: `src/features/usage/components/OperationalSignalSummary/OperationalSignalSummary.test.tsx`
-
-- [ ] **Step 1: Write failing lib tests**
-
-```ts
-import { summarizeOperationalSignals } from './operationalSignals'
-
-describe('summarizeOperationalSignals', () => {
-  it('finds top session and agent-run costs', () => {
-    const result = summarizeOperationalSignals(rowsWithSessionAndAgentRun)
-
-    expect(result.topSession?.id).toBe('session-heavy')
-    expect(result.topAgentRun?.id).toBe('agent-run-loop')
-  })
-
-  it('reports failed status share without throwing on missing status', () => {
-    const result = summarizeOperationalSignals(rowsWithMixedStatus)
-
-    expect(result.failedShare).toBeGreaterThan(0)
-    expect(result.missingStatusCount).toBeGreaterThan(0)
-  })
-})
-```
-
-- [ ] **Step 2: Implement signals**
-
-Return:
-
-```ts
-{
-  topSession: { id, costUsd, requestCount } | null,
-  topAgentRun: { id, costUsd, requestCount } | null,
-  highOutputTokenRows: UsageImportRow[],
-  failedShare: number,
-  missingStatusCount: number,
-}
-```
-
-- [ ] **Step 3: Wire UI**
-
-Place the component between Import and Cost Attribution so PRD screen 1 produces operational guidance before attribution.
-
-- [ ] **Step 4: Verify**
-
-Run: `npm run test:run -- operationalSignals App`
-
-Expected: PASS.
-
----
-
-## Task 6: Add Raw vs Effective Cost Engine
-
-**Files:**
-- Create: `src/features/unit-economics/lib/effectiveCost.ts`
-- Modify: `src/features/unit-economics/lib/margin.ts`
-- Test: `src/features/unit-economics/lib/effectiveCost.test.ts`
-- Test: `src/features/unit-economics/lib/margin.test.ts`
-
-- [ ] **Step 1: Write failing tests**
-
-```ts
-import { calculateEffectiveCost } from './effectiveCost'
-
-describe('calculateEffectiveCost', () => {
-  it('adds retry, human review, and CS escalation assumptions', () => {
-    expect(calculateEffectiveCost({
-      rawCostUsd: 100,
-      retryCostUsd: 10,
-      humanReviewCostUsd: 25,
-      csEscalationCostUsd: 5,
-    })).toBe(140)
-  })
-
-  it('guards NaN and negative assumptions', () => {
-    expect(calculateEffectiveCost({
-      rawCostUsd: Number.NaN,
-      retryCostUsd: -10,
-      humanReviewCostUsd: 5,
-      csEscalationCostUsd: 1,
-    })).toBe(6)
-  })
-})
-```
-
-- [ ] **Step 2: Implement**
-
-Use a `finiteNonNegative` helper and return only a number. No formatting in this lib.
-
-- [ ] **Step 3: Extend margin rows**
-
-Add optional effective cost fields:
-- `effectiveCostUsd`
-- `effectiveGrossMarginUsd`
-- `effectiveGrossMarginPct`
-
-- [ ] **Step 4: Verify**
-
-Run: `npm run test:run -- effectiveCost margin`
-
-Expected: PASS.
-
----
-
-## Task 7: Upgrade Team Designer Toward Mockup
-
-**Files:**
-- Modify: `src/features/team/lib/aiTeamConfiguration.ts`
-- Create: `src/features/team/components/TeamDesignerPanel/index.tsx`
-- Modify: `src/app/App.tsx`
-- Test: `src/features/team/components/TeamDesignerPanel/TeamDesignerPanel.test.tsx`
-
-- [ ] **Step 1: Write failing UI tests**
-
-```tsx
-it('renders org chart, selected agent details, review gate, and benchmark', async () => {
-  render(<TeamDesignerPanel config={demoConfig} />)
-
-  expect(screen.getByRole('heading', { name: /Team Designer/i })).toBeInTheDocument()
-  expect(screen.getByText(/team org chart/i)).toBeInTheDocument()
-  expect(screen.getByText(/selected agent/i)).toBeInTheDocument()
-  expect(screen.getByText(/review gate/i)).toBeInTheDocument()
-  expect(screen.getByText(/benchmark/i)).toBeInTheDocument()
-})
-```
-
-- [ ] **Step 2: Extract and expand component**
-
-Implement:
-- company profile panel
-- org chart area using CSS layout, not SVG-heavy generated art
-- selectable agent cards
-- selected-agent detail panel
-- benchmark row from bundled corpus
-
-- [ ] **Step 3: Verify**
-
-Run: `npm run test:run -- TeamDesignerPanel App`
-
-Expected: PASS.
-
----
-
-## Task 8: Finish Decision Log Save/Delete/Export
-
-**Files:**
-- Modify: `src/features/decision-log/lib/decisionLog.ts`
-- Modify: `src/app/App.tsx`
-- Test: `src/features/decision-log/lib/decisionLog.test.ts`
-- Test: `src/app/App.test.tsx`
-
-- [ ] **Step 1: Write failing tests**
-
-```ts
-import { deleteDecision, exportDecisionLogFileName } from './decisionLog'
-
-describe('Decision Log utilities', () => {
-  it('deletes a decision by id', () => {
-    expect(deleteDecision([{ id: 'a' } as any, { id: 'b' } as any], 'a').map(d => d.id)).toEqual(['b'])
-  })
-
-  it('uses a stable export filename prefix', () => {
-    expect(exportDecisionLogFileName('2026-05-22T00:00:00.000Z')).toBe('ai-team-ops-decision-log-2026-05-22.json')
-  })
-})
-```
-
-- [ ] **Step 2: Implement library helpers**
-
-Add:
-- `deleteDecision(decisions, id)`
-- `exportDecisionLogFileName(nowIso)`
-- schema guard in `loadDecisionLog` that keeps only decisions with `id`, `what`, `why`, `status`, `createdAt`
-
-- [ ] **Step 3: Wire UI**
-
-Add buttons:
-- `Export JSON`
-- one delete button per decision
-
-- [ ] **Step 4: Verify**
-
-Run: `npm run test:run -- decisionLog App`
-
-Expected: PASS.
-
----
-
-## Task 9: Build Structured Report Artifacts
-
-**Files:**
-- Create: `src/features/report/lib/reportArtifacts.ts`
-- Modify: `src/features/report/components/SummaryCard/index.tsx`
-- Modify: `src/app/App.tsx`
-- Test: `src/features/report/lib/reportArtifacts.test.ts`
-- Test: `src/features/report/components/SummaryCard/SummaryCard.test.tsx`
-
-- [ ] **Step 1: Write failing tests**
-
-```ts
-import { buildReportArtifact } from './reportArtifacts'
-
-describe('buildReportArtifact', () => {
-  it('builds board report from deterministic refs and risk cards', () => {
-    const report = buildReportArtifact({
-      audience: 'board',
-      toolSnapshot: snapshot,
-      riskCards: [riskCard],
-      decisionStatus: 'adopted',
-    })
-
-    expect(report.audience).toBe('board')
-    expect(report.toolResultRefs).toContain('tool:monthlyAiCogs')
-    expect(report.sections.some(section => section.title.includes('Risk'))).toBe(true)
-  })
-})
-```
-
-- [ ] **Step 2: Implement structured artifacts**
-
-`ReportArtifact` shape:
-
-```ts
-{
-  audience: 'developer' | 'pm' | 'ceo_cfo' | 'board',
-  title: string,
-  sections: { title: string; body: string }[],
-  toolResultRefs: string[],
-  riskCardIds: string[],
-}
-```
-
-- [ ] **Step 3: Wire SummaryCard**
-
-Summary text must remain wrapped with `lang="en"` where English prose is rendered.
-
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-npm run test:run -- reportArtifacts SummaryCard App
-npm run test:run
-```
-
-Expected: all pass.
-
----
-
-## Task 10: Full Verification
-
-- [ ] **Step 1: Run all unit/component tests**
-
-Run: `npm run test:run`
-
-Expected: all tests pass.
-
-- [ ] **Step 2: Build**
-
-Run: `npm run build`
-
-Expected: Vite build succeeds.
-
-- [ ] **Step 3: Preview**
-
-Run: `npm run preview -- --host 127.0.0.1`
-
-Expected: app served at `http://127.0.0.1:4173/token_simulator/`.
-
-- [ ] **Step 4: Browser smoke**
-
-Manual flow:
-1. Open `http://127.0.0.1:4173/token_simulator/`.
-2. Load SparkClaw sample.
-3. Confirm Operational Signal Summary has session or agent-run guidance.
-4. Confirm all six pricing policies render.
-5. Confirm risk cards attach to a recommendation.
-6. Adopt one recommendation.
-7. Export Decision Log JSON.
-8. Delete the saved decision.
-9. Confirm report audiences render: Developer, PM, CEO/CFO, Board.
-
-Expected: every step works without console errors, and no visible user number is formatted inline outside `src/lib/format.ts`.
+- P0 데모에서 사용자가 "어떤 고객/기능/요금제가 손해인지"와 "어떤 가격 결정을 검토해야 하는지"를 한 흐름에서 본다.
+- 에이전트가 숫자를 만들지 않고, 결정론 계산 결과를 설명만 한다.
+- 리포트와 결정 로그가 같은 snapshot을 참조한다.
+- 미구현 backend/connector 기능은 운영 완료처럼 표시하지 않는다.
