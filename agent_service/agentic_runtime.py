@@ -1262,6 +1262,12 @@ def _validate_grounding(response: AgentRunResponse, refs: list[str]) -> list[str
         if has_uncited_numeric_claim(text, refs):
             warnings.append("uncited numeric claim rejected")
             break
+    claimed_tools = set(response.usedTools)
+    for event in response.events:
+        claimed_tools.update(event.usedTools)
+        claimed_tools.update(event.usedCapabilityTools)
+    if claimed_tools.intersection(FORBIDDEN_AGENT_TOOL_NAMES):
+        warnings.append("forbidden agent tool claim rejected")
     return warnings
 
 

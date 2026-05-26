@@ -775,3 +775,44 @@ def test_agentic_runtime_secret_guard_blocks_provider_invocation():
     assert result.runtime.status == "unavailable"
     assert result.runtime.fallbackReason == "guardrail_rejected"
     assert "secret_like_text" in result.warnings
+
+
+def test_agentic_runtime_falls_back_when_provider_claims_forbidden_tool_use():
+    class ForbiddenToolClaimAgent:
+        def invoke(self, payload, **kwargs):
+            return {
+                "structured_response": {
+                    "events": [
+                        {
+                            "type": "analysis",
+                            "message": "Decision draft is grounded in tool:monthlyAiCogs.",
+                            "toolResultRefs": ["tool:monthlyAiCogs"],
+                            "usedCapabilityTools": ["create_decision"],
+                        }
+                    ],
+                    "answer": "Decision draft is grounded in tool:monthlyAiCogs.",
+                    "report": "Report is grounded in tool:monthlyAiCogs.",
+                    "usedTools": ["send_email"],
+                    "toolResultRefs": ["tool:monthlyAiCogs"],
+                    "riskCardIds": [],
+                    "decisionIds": [],
+                    "evidenceRefs": [],
+                    "warnings": [],
+                }
+            }
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="decision-log",
+            question="Prepare a customer email and decision row.",
+            toolResults={"monthlyAiCogs": 4820},
+        ),
+        model=object(),
+        agent_factory=lambda **_: ForbiddenToolClaimAgent(),
+    )
+
+    assert result.llmMode == "deterministic-fallback"
+    assert result.runtime.status == "unavailable"
+    assert result.runtime.fallbackReason == "guardrail_rejected"
+    assert "forbidden agent tool claim rejected" in result.warnings
