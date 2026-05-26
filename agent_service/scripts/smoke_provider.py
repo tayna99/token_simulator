@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from agentic_runtime import run_agentic_runtime
 from interpreter import Interpreter, has_uncited_numeric_claim
+from middleware import FORBIDDEN_AGENT_TOOL_NAMES
 from pipeline import run_pipeline
 from schemas import AgentEvent, AgentRunInput, AgentRunResponse, RunInput
 
@@ -82,6 +83,16 @@ def _validate_grounded_texts(response: AgentRunResponse, refs: list[str]) -> Non
             raise SmokeValidationError("agentic response has an uncited numeric claim")
 
 
+def _validate_no_forbidden_agent_tools(response: AgentRunResponse) -> None:
+    used = set(response.usedTools)
+    for event in response.events:
+        used.update(event.usedTools)
+        used.update(event.usedCapabilityTools)
+    forbidden = sorted(used.intersection(FORBIDDEN_AGENT_TOOL_NAMES))
+    if forbidden:
+        raise SmokeValidationError(f"provider response used forbidden tools: {forbidden}")
+
+
 def validate_agentic_provider_smoke_response(response: AgentRunResponse) -> None:
     """Validate the provider path used by /api/agent/run."""
     if response.llmMode != "provider-llm":
@@ -96,6 +107,7 @@ def validate_agentic_provider_smoke_response(response: AgentRunResponse) -> None
         raise SmokeValidationError("provider response is missing called operating agents")
     if not response.toolResultRefs:
         raise SmokeValidationError("provider response is missing top-level tool refs")
+    _validate_no_forbidden_agent_tools(response)
 
     for event in response.events:
         if not event.agentId:

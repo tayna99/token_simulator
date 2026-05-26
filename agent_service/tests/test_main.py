@@ -122,11 +122,13 @@ def test_agent_run_endpoint_contract(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["llmMode"] in ["deterministic-fallback", "provider-llm"]
-    assert body["runtime"]["status"] in ["unavailable", "provider_llm"]
-    if body["runtime"]["status"] == "provider_llm":
-        assert body["runtime"]["providerRunId"]
-        assert body["runtime"]["agentInvocationProof"]
+    assert body["llmMode"] == "deterministic-fallback"
+    assert body["runtime"]["status"] == "unavailable"
+    assert body["runtime"]["fallbackReason"] == "provider_unavailable"
+    assert body["runtime"]["providerRunId"] is None
+    assert body["runtime"]["agentInvocationProof"] == []
+    assert body["agentRoute"]["previewOnly"] is True
+    assert body["agentRoute"]["calledAgentIds"] == []
     assert "tool:monthlyAiCogs" in body["toolResultRefs"]
     assert body["answer"]
 

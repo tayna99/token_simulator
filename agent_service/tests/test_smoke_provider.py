@@ -144,6 +144,77 @@ def test_agentic_smoke_rejects_uncited_numeric_provider_claims():
         raise AssertionError("Expected uncited provider claim to fail agentic smoke validation")
 
 
+def test_agentic_smoke_rejects_forbidden_capability_tool_names():
+    response = AgentRunResponse(
+        events=[
+            {
+                "type": "analysis",
+                "message": "Cost pressure is grounded in tool:monthlyAiCogs.",
+                "agentId": "cost_modeling",
+                "calledAgentTool": "call_cost_modeling_agent",
+                "toolResultRefs": ["tool:monthlyAiCogs"],
+                "riskCardIds": [],
+                "usedTools": ["calculate_cost"],
+                "usedCapabilityTools": ["calculate_cost"],
+            }
+        ],
+        answer="Cost review is grounded in tool:monthlyAiCogs.",
+        report="Report is grounded in tool:monthlyAiCogs.",
+        llmMode="provider-llm",
+        runtime=AgentRunRuntimeProof(
+            status="provider_llm",
+            providerRunId="agent-service:snapshot:smoke:cost_modeling",
+            agentInvocationProof=["call_cost_modeling_agent"],
+        ),
+        calledAgentIds=["cost_modeling"],
+        primaryAgentId="cost_modeling",
+        snapshotVersion="snapshot:smoke",
+        toolResultRefs=["tool:monthlyAiCogs"],
+        usedTools=["calculate_cost"],
+    )
+
+    try:
+        smoke_provider.validate_agentic_provider_smoke_response(response)
+    except smoke_provider.SmokeValidationError as exc:
+        assert "forbidden" in str(exc)
+    else:
+        raise AssertionError("Expected forbidden capability tools to fail agentic smoke validation")
+
+
+def test_agentic_smoke_requires_provider_status_for_provider_mode():
+    response = AgentRunResponse(
+        events=[
+            {
+                "type": "analysis",
+                "message": "Cost pressure is grounded in tool:monthlyAiCogs.",
+                "agentId": "cost_modeling",
+                "calledAgentTool": "call_cost_modeling_agent",
+                "toolResultRefs": ["tool:monthlyAiCogs"],
+                "riskCardIds": [],
+            }
+        ],
+        answer="Cost review is grounded in tool:monthlyAiCogs.",
+        report="Report is grounded in tool:monthlyAiCogs.",
+        llmMode="provider-llm",
+        runtime=AgentRunRuntimeProof(
+            status="deterministic_preview",
+            providerRunId=None,
+            agentInvocationProof=["call_cost_modeling_agent"],
+        ),
+        calledAgentIds=["cost_modeling"],
+        primaryAgentId="cost_modeling",
+        snapshotVersion="snapshot:smoke",
+        toolResultRefs=["tool:monthlyAiCogs"],
+    )
+
+    try:
+        smoke_provider.validate_agentic_provider_smoke_response(response)
+    except smoke_provider.SmokeValidationError as exc:
+        assert "provider_llm runtime" in str(exc)
+    else:
+        raise AssertionError("Expected preview-like provider response to fail validation")
+
+
 def test_agentic_smoke_validates_all_hands_fallback_route_refs():
     response = AgentRunResponse(
         events=[

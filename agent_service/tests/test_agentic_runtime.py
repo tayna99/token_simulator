@@ -1,6 +1,7 @@
 import json
 
 from schemas import AgentRunInput
+from middleware import LangChainRuntimeContext
 from agentic_runtime import (
     AGENT_TOOL_PERMISSION_MATRIX,
     FORBIDDEN_AGENT_TOOL_NAMES,
@@ -29,9 +30,11 @@ OPERATING_AGENTS = [
 class FakeAgent:
     def __init__(self):
         self.invocations = []
+        self.invoke_kwargs = []
 
-    def invoke(self, payload):
+    def invoke(self, payload, **kwargs):
         self.invocations.append(payload)
+        self.invoke_kwargs.append(kwargs)
         return {
             "structured_response": {
                 "events": [
@@ -60,9 +63,12 @@ class SupervisorToolCallingFactory:
     def __init__(self):
         self.supervisor_tool_names = []
         self.agent_tool_names = []
+        self.factory_kwargs = []
+        self.invoke_kwargs = []
 
     def __call__(self, **kwargs):
         tools = kwargs["tools"]
+        self.factory_kwargs.append(kwargs)
         return SupervisorToolCallingAgent(tools, self)
 
 
@@ -71,7 +77,8 @@ class SupervisorToolCallingAgent:
         self.tools = tools
         self.factory = factory
 
-    def invoke(self, payload):
+    def invoke(self, payload, **kwargs):
+        self.factory.invoke_kwargs.append(kwargs)
         tool_names = [tool.name for tool in self.tools]
         call_tools = [tool for tool in self.tools if tool.name.startswith("call_")]
         if call_tools:
@@ -392,6 +399,11 @@ def test_operating_agent_call_tools_are_registered_for_all_11_agents():
 
 def test_agentic_runtime_uses_create_agent_path_with_structured_response():
     fake_agent = FakeAgent()
+    factory_kwargs = []
+
+    def factory(**kwargs):
+        factory_kwargs.append(kwargs)
+        return fake_agent
 
     result = run_agentic_runtime(
         AgentRunInput(
@@ -421,10 +433,22 @@ def test_agentic_runtime_uses_create_agent_path_with_structured_response():
             ],
         ),
         model=object(),
-        agent_factory=lambda **_: fake_agent,
+        agent_factory=factory,
     )
 
     assert fake_agent.invocations
+    assert factory_kwargs
+    assert all(item["context_schema"] is LangChainRuntimeContext for item in factory_kwargs)
+    assert all(item["middleware"] for item in factory_kwargs)
+    assert fake_agent.invoke_kwargs
+    contexts = [item["context"] for item in fake_agent.invoke_kwargs]
+    assert any(context.runtimeRole == "supervisor" for context in contexts)
+    operating_context = next(context for context in contexts if context.runtimeRole == "operating_agent")
+    assert operating_context.agentId == "cost_modeling"
+    assert operating_context.calledAgentTool == "call_cost_modeling_agent"
+    assert operating_context.snapshotVersion == "snapshot:test"
+    assert set(operating_context.allowedToolNames) == AGENT_TOOL_PERMISSION_MATRIX["cost_modeling"]
+    assert set(operating_context.allowedToolNames).isdisjoint(FORBIDDEN_AGENT_TOOL_NAMES)
     agent_message = json.loads(fake_agent.invocations[0]["messages"][0]["content"])
     assert agent_message["ragContextBlocks"][0]["refs"] == ["source:google-pricing"]
     assert agent_message["ragContextBlocks"][0]["mayOverrideFacts"] is False
@@ -470,6 +494,16 @@ def test_supervisor_provider_path_calls_operating_agent_tools():
     )
 
     assert "call_cost_modeling_agent" in factory.supervisor_tool_names
+    assert factory.factory_kwargs
+    assert all(item["context_schema"] is LangChainRuntimeContext for item in factory.factory_kwargs)
+    assert all(item["middleware"] for item in factory.factory_kwargs)
+    supervisor_context = factory.invoke_kwargs[0]["context"]
+    assert supervisor_context.runtimeRole == "supervisor"
+    assert all(tool_name.startswith("call_") for tool_name in supervisor_context.allowedToolNames)
+    child_context = next(item["context"] for item in factory.invoke_kwargs if item["context"].runtimeRole == "operating_agent")
+    assert child_context.agentId == "cost_modeling"
+    assert set(child_context.allowedToolNames) == AGENT_TOOL_PERMISSION_MATRIX["cost_modeling"]
+    assert set(child_context.allowedToolNames).isdisjoint(FORBIDDEN_AGENT_TOOL_NAMES)
     assert result.runtime.status == "provider_llm"
     assert result.runtime.providerRunId.startswith("agent-service:")
     assert result.runtime.agentInvocationProof == ["call_cost_modeling_agent"]
@@ -482,6 +516,34 @@ def test_supervisor_provider_path_calls_operating_agent_tools():
     assert result.evidenceCoverage["benchmarkEvidence"]["found"] is True
     assert result.evidenceCoverage["decisionHistory"]["found"] is True
     assert result.decisionReadiness == "ready"
+
+
+def test_runtime_context_does_not_allow_requested_agent_to_escape_permission_matrix():
+    fake_agent = FakeAgent()
+
+    def factory(**_):
+        return fake_agent
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            requestedAgentId="trust_security_compliance",
+            executionMode="single_agent",
+            snapshotVersion="snapshot:trust-agent",
+            question="Check trust state.",
+            toolResults={"monthlyAiCogs": 4820},
+            operatingAgents=OPERATING_AGENTS,
+        ),
+        model=object(),
+        agent_factory=factory,
+    )
+
+    operating_context = next(context["context"] for context in fake_agent.invoke_kwargs if context["context"].runtimeRole == "operating_agent")
+    assert operating_context.agentId == "trust_security_compliance"
+    assert set(operating_context.allowedToolNames) == AGENT_TOOL_PERMISSION_MATRIX["trust_security_compliance"]
+    assert "lookup_snapshot_value" not in set(operating_context.allowedToolNames)
+    assert result.primaryAgentId == "trust_security_compliance"
 
 
 def test_provider_all_hands_forces_all_11_agent_calls_even_if_supervisor_calls_one():
@@ -590,7 +652,7 @@ def test_agentic_runtime_all_hands_fallback_returns_all_operating_agents():
 
 def test_agentic_runtime_falls_back_when_numeric_claim_has_no_tool_ref():
     class BadAgent:
-        def invoke(self, payload):
+        def invoke(self, payload, **kwargs):
             return {
                 "structured_response": {
                     "events": [],
@@ -620,3 +682,25 @@ def test_agentic_runtime_falls_back_when_numeric_claim_has_no_tool_ref():
     assert result.runtime.status == "unavailable"
     assert "uncited numeric claim" in " ".join(result.warnings)
     assert "tool:monthlyAiCogs" in result.toolResultRefs
+
+
+def test_agentic_runtime_secret_guard_blocks_provider_invocation():
+    class RaisingFactory:
+        def __call__(self, **kwargs):
+            raise AssertionError("provider should not be invoked for unsafe payload")
+
+    result = run_agentic_runtime(
+        AgentRunInput(
+            mode="ask",
+            activeStage="cost",
+            question="Analyze sk-live-secret-1234567890 before writing the report.",
+            toolResults={"monthlyAiCogs": 4820},
+        ),
+        model=object(),
+        agent_factory=RaisingFactory(),
+    )
+
+    assert result.llmMode == "deterministic-fallback"
+    assert result.runtime.status == "unavailable"
+    assert result.runtime.fallbackReason == "guardrail_rejected"
+    assert "secret_like_text" in result.warnings

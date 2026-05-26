@@ -16,18 +16,14 @@ from langchain.agents import create_agent
 from langchain.tools import tool
 
 from interpreter import has_uncited_numeric_claim
+from middleware import (
+    FORBIDDEN_AGENT_TOOL_NAMES,
+    LangChainRuntimeContext,
+    build_agent_middleware,
+    filter_tools_for_runtime_context,
+    inspect_payload_for_secrets,
+)
 from schemas import AgenticEvent, AgentRunInput, AgentRunResponse, AgentRunRuntimeProof
-
-FORBIDDEN_AGENT_TOOL_NAMES = {
-    "calculate_cost",
-    "calculate_margin",
-    "estimate_savings",
-    "calculate_budget_delta",
-    "create_decision",
-    "adopt_recommendation",
-    "send_email",
-    "charge_billing",
-}
 
 AGENT_SYSTEM_PROMPT = (
     "You are the agentic decision assistant for an AI Team Cost Decision Workspace. "
@@ -1260,6 +1256,26 @@ def _agent_system_prompt(agent_id: str, payload: AgentRunInput) -> str:
     )
 
 
+def _runtime_context(
+    *,
+    agent_id: str,
+    called_agent_tool: str,
+    payload: AgentRunInput,
+    allowed_tool_names: Sequence[str],
+    runtime_role: str,
+) -> LangChainRuntimeContext:
+    safe_allowed = tuple(sorted(set(allowed_tool_names).difference(FORBIDDEN_AGENT_TOOL_NAMES)))
+    return LangChainRuntimeContext(
+        agentId=agent_id,
+        calledAgentTool=called_agent_tool,
+        snapshotVersion=payload.snapshotVersion,
+        allowedToolNames=safe_allowed,
+        toolResultRefs=tuple(_refs_from_tool_results(payload.toolResults)),
+        executionMode=payload.executionMode,
+        runtimeRole=runtime_role,
+    )
+
+
 def _annotate_agent_response(
     *,
     agent_id: str,
@@ -1339,9 +1355,19 @@ def _run_single_operating_agent(
         fx_rate_snapshots=payload.fxRateSnapshots,
         allowed_tool_names=allowed,
     )
+    context = _runtime_context(
+        agent_id=agent_id,
+        called_agent_tool=_agent_tool_name(agent_id),
+        payload=payload,
+        allowed_tool_names=allowed,
+        runtime_role="operating_agent",
+    )
+    tools = filter_tools_for_runtime_context(tools, context)
     agent = agent_factory(
         model=model,
         tools=tools,
+        context_schema=LangChainRuntimeContext,
+        middleware=build_agent_middleware(context),
         response_format=AgentRunResponse,
         system_prompt=_agent_system_prompt(agent_id, payload),
     )
@@ -1361,7 +1387,7 @@ def _run_single_operating_agent(
                 }),
             }
         ]
-    })
+    }, context=context)
     raw = result.get("structured_response", result) if isinstance(result, dict) else result
     response = raw if isinstance(raw, AgentRunResponse) else AgentRunResponse.model_validate(raw)
     return _annotate_agent_response(agent_id=agent_id, response=response, route=route, payload=payload)
@@ -1399,10 +1425,23 @@ def _run_supervisor_agent_as_tool(
         called_responses[agent_id] = response
         return response
 
-    supervisor_tools = build_operating_agent_call_tools(payload, agent_runner=run_called_agent)
+    supervisor_allowed_tools = [_agent_tool_name(agent_id) for agent_id in route["calledAgentIds"]]
+    supervisor_context = _runtime_context(
+        agent_id="supervisor",
+        called_agent_tool="supervisor",
+        payload=payload,
+        allowed_tool_names=supervisor_allowed_tools,
+        runtime_role="supervisor",
+    )
+    supervisor_tools = filter_tools_for_runtime_context(
+        build_operating_agent_call_tools(payload, agent_runner=run_called_agent),
+        supervisor_context,
+    )
     supervisor = agent_factory(
         model=model,
         tools=supervisor_tools,
+        context_schema=LangChainRuntimeContext,
+        middleware=build_agent_middleware(supervisor_context),
         response_format=AgentRunResponse,
         system_prompt=_supervisor_system_prompt(payload, route),
     )
@@ -1422,7 +1461,7 @@ def _run_supervisor_agent_as_tool(
                 }),
             }
         ]
-    })
+    }, context=supervisor_context)
 
     required_agent_ids = (
         list(route["calledAgentIds"])
@@ -1565,6 +1604,9 @@ def run_agentic_runtime(
         operating_agents=payload.operatingAgents,
         trust_inspection=payload.trustInspection,
     )
+    guard = inspect_payload_for_secrets(payload)
+    if not guard.allowed:
+        return _fallback_response(payload, list(guard.warnings), fallback_reason=guard.fallbackReason or "guardrail_rejected")
     if model is None:
         return _fallback_response(payload, fallback_reason="provider_unavailable")
 
