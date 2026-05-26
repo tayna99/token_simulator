@@ -685,9 +685,25 @@ describe('App AI team operations workspace', () => {
     expect(resumeBody.resumePayload.decisionId).toMatch(/^decision-/)
     expect(resumeBody.resumePayload.checkpointId).toMatch(/^checkpoint:agentpayroll:/)
     expect(resumeBody.resumePayload.interruptId).toBe('interrupt:supervisor-tools')
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem('token-simulator:decision-log') ?? '[]')
+      const checkpointedDecision = saved.find((decision: { id?: string }) => decision.id === resumeBody.resumePayload.decisionId)
+      expect(checkpointedDecision?.runtimeProof?.checkpoint).toMatchObject({
+        status: 'interrupt_requested',
+        threadId: expect.stringMatching(/^agentpayroll-/),
+        checkpointNamespace: 'agentpayroll',
+        checkpointId: expect.stringMatching(/^checkpoint:agentpayroll:/),
+      })
+      expect(JSON.stringify(checkpointedDecision?.runtimeProof?.checkpoint)).not.toContain('resumePayload')
+    })
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Resumed after explicit Adopt approval/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: resumed/i)
     expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: resumed/i)
+    await user.click(lifecycleButton(/Decision Log/i))
+    await waitFor(() => expect(screen.getAllByText(/Runtime proof/i).length).toBeGreaterThan(0))
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/checkpoint: interrupt_requested/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval: adopt/i)
+    expect(screen.getByTestId('decision-workspace-panel')).toHaveTextContent(/approval mode: explicit_button/i)
 
     const resumeCallCount = () => fetchMock.mock.calls.filter(([input, init]) => {
       if (!String(input).includes('/api/agent/run') || !init?.body) return false

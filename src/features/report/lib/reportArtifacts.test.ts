@@ -170,6 +170,65 @@ describe('buildReportArtifact', () => {
     expect(report.markdown).toContain('Approval mode: explicit_button')
   })
 
+  it('includes HITL checkpoint resume proof without dumping raw checkpoint payloads', () => {
+    const report = buildOnePageReportArtifact({
+      title: 'AgentPayroll AI Cost Snapshot',
+      executiveSummary: 'Human approval resumed the checkpointed operating-agent workflow.',
+      metrics: [{ label: 'AI COGS', value: '$612' }],
+      recommendations: ['Adopt the checkpointed routing recommendation.'],
+      risks: ['Resume evidence must stay inspectable without raw payloads.'],
+      refs: ['tool:diagnosis.policy_candidate'],
+      trust: {
+        status: 'ready',
+        dataLimitations: [],
+        retentionNote: 'No raw prompt stored.',
+      },
+      formulaVersion: 'cost_formula_v0.3',
+      providerRegistryVersion: 'provider_registry_v0.4',
+      decisionChoice: 'adopt',
+      runtimeProof: {
+        status: 'resumed',
+        providerRunId: 'run:agentpayroll:resume-001',
+        agentInvocationProof: ['call_optimization_routing_agent'],
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:02.000Z',
+        checkpoint: {
+          status: 'resumed',
+          persistence: 'memory',
+          threadId: 'agentpayroll-thread-1',
+          checkpointNamespace: 'agentpayroll',
+          checkpointId: 'checkpoint:agentpayroll:agentpayroll-thread-1',
+          interruptId: 'interrupt:supervisor-tools',
+          reason: 'resume_approved',
+          resumePayload: {
+            decisionId: 'decision-secret',
+            rawPrompt: 'must not be serialized into report runtime proof',
+          },
+        },
+      },
+      humanApproval: {
+        required: true,
+        decisionChoice: 'adopt',
+        approvedBy: 'workspace_user',
+        approvedAt: '2026-05-26T00:00:03.000Z',
+        approvalMode: 'checkpoint_resume',
+      },
+    })
+
+    expect(report.markdown).toContain('Runtime status: resumed')
+    expect(report.markdown).toContain('Provider run id: run:agentpayroll:resume-001')
+    expect(report.markdown).toContain('Checkpoint status: resumed')
+    expect(report.markdown).toContain('Checkpoint thread id: agentpayroll-thread-1')
+    expect(report.markdown).toContain('Checkpoint id: checkpoint:agentpayroll:agentpayroll-thread-1')
+    expect(report.markdown).toContain('Approval mode: checkpoint_resume')
+    expect(report.markdown).toContain('Checkpoint resume approval: recorded')
+    expect(report.markdown).toContain('Approved by: workspace_user')
+    expect(report.markdown).toContain('Approved at: 2026-05-26T00:00:03.000Z')
+    expect(report.markdown).not.toContain('resumePayload')
+    expect(report.markdown).not.toContain('decision-secret')
+    expect(report.markdown).not.toContain('rawPrompt')
+  })
+
   it('keeps empty selected-decision content in Money Leak Run language', () => {
     const report = buildOnePageReportArtifact({
       title: 'AgentPayroll AI 비용 진단 리포트',

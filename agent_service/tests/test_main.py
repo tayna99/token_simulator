@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 import main
-from schemas import Analysis
+from schemas import AgentRunRuntimeProof, Analysis
 
 
 class FakeInterpreter:
@@ -131,6 +131,74 @@ def test_agent_run_endpoint_contract(monkeypatch):
     assert body["agentRoute"]["calledAgentIds"] == []
     assert "tool:monthlyAiCogs" in body["toolResultRefs"]
     assert body["answer"]
+
+
+def test_agent_run_hitl_resume_request_injects_shared_checkpointer(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    captured = {}
+
+    def fake_run_agentic_runtime(payload, *, model=None, checkpointer=None):
+        captured["payload"] = payload
+        captured["model"] = model
+        captured["checkpointer"] = checkpointer
+        return main.AgentRunResponse(
+            answer="captured endpoint runtime call",
+            runtime=AgentRunRuntimeProof(status="resumed"),
+            agentRoute={"previewOnly": False},
+        )
+
+    monkeypatch.setattr(main, "run_agentic_runtime", fake_run_agentic_runtime)
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/agent/run",
+        json={
+            "mode": "ask",
+            "activeStage": "cost",
+            "question": "Resume the operator-approved cost analysis.",
+            "toolResults": {"monthlyAiCogs": 4820},
+            "hitlCheckpoint": True,
+            "checkpointThreadId": "thread-endpoint-1",
+            "checkpointNamespace": "agent_service_test",
+            "resumeCheckpoint": True,
+            "resumePayload": {"approved": True, "reason": "operator approved"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"].hitlCheckpoint is True
+    assert captured["payload"].resumeCheckpoint is True
+    assert captured["payload"].resumePayload == {"approved": True, "reason": "operator approved"}
+    assert captured["model"] is None
+    assert captured["checkpointer"] is main._AGENT_CHECKPOINTER
+    assert response.json()["runtime"]["status"] == "resumed"
+
+
+def test_agent_run_hitl_missing_provider_stays_unavailable(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/agent/run",
+        json={
+            "mode": "ask",
+            "activeStage": "cost",
+            "question": "Prepare a checkpointed cost review.",
+            "toolResults": {"monthlyAiCogs": 4820},
+            "hitlCheckpoint": True,
+            "checkpointThreadId": "thread-missing-provider",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["llmMode"] == "deterministic-fallback"
+    assert body["runtime"]["status"] == "unavailable"
+    assert body["runtime"]["fallbackReason"] == "provider_unavailable"
+    assert body["runtime"]["providerRunId"] is None
+    assert body["runtime"]["agentInvocationProof"] == []
+    assert body["agentRoute"]["previewOnly"] is True
+    assert body["agentRoute"]["calledAgentIds"] == []
 
 
 def test_p1_rag_endpoint_uses_chroma_store(monkeypatch):

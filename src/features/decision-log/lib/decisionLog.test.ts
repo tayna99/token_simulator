@@ -317,6 +317,54 @@ describe('decisionLog', () => {
     expect(serializeDecisionLog([decision])).toContain('"providerRunId": "run:agentpayroll:001"')
   })
 
+  it('preserves HITL checkpoint proof in decision runtime metadata without raw payloads', () => {
+    const decision = createDecision({
+      what: 'Adopt checkpointed operating-agent review',
+      why: 'Human approval resumed the delegated operating-agent workflow.',
+      assumptions: {},
+      toolResultRefs: ['tool:monthlyAiCogs'],
+      riskCards: ['risk-model-routing-quality'],
+      status: 'adopted',
+      decisionChoice: 'adopt',
+      createdAt: '2026-05-26T00:00:00.000Z',
+      runtimeProof: {
+        status: 'resumed',
+        providerRunId: 'run:agentpayroll:resume-001',
+        agentInvocationProof: ['call_optimization_routing_agent'],
+        startedAt: '2026-05-26T00:00:00.000Z',
+        completedAt: '2026-05-26T00:00:02.000Z',
+        checkpoint: {
+          status: 'resumed',
+          persistence: 'memory',
+          threadId: 'agentpayroll-thread-1',
+          checkpointNamespace: 'agentpayroll',
+          checkpointId: 'checkpoint:agentpayroll:agentpayroll-thread-1',
+          interruptId: 'interrupt:supervisor-tools',
+          reason: 'resume_approved',
+          resumePayload: {
+            decisionId: 'decision-secret',
+            rawPrompt: 'must not be serialized into decision runtime proof',
+          },
+        },
+      },
+    })
+
+    expect(decision.runtimeProof?.checkpoint).toEqual({
+      status: 'resumed',
+      persistence: 'memory',
+      threadId: 'agentpayroll-thread-1',
+      checkpointNamespace: 'agentpayroll',
+      checkpointId: 'checkpoint:agentpayroll:agentpayroll-thread-1',
+      interruptId: 'interrupt:supervisor-tools',
+      reason: 'resume_approved',
+    })
+    const serialized = serializeDecisionLog([decision])
+    expect(serialized).toContain('"checkpoint"')
+    expect(serialized).toContain('"checkpointId": "checkpoint:agentpayroll:agentpayroll-thread-1"')
+    expect(serialized).not.toContain('rawPrompt')
+    expect(serialized).not.toContain('decision-secret')
+  })
+
   it('normalizes legacy decisions without trust or report review metadata', () => {
     const storage = {
       getItem: () => JSON.stringify([{

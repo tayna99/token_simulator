@@ -309,6 +309,15 @@ function routeCalledAgentIds(fallback: AgentRunResponse): string[] {
   return routed.length > 0 ? routed : routeStringArray(fallback.agentRoute, 'calledAgentIds')
 }
 
+function responseStringArrayOrFallback(
+  value: unknown,
+  fallback: string[],
+  options: { preserveFallbackWhenEmpty?: boolean } = {},
+): string[] {
+  if (!isStringArray(value)) return fallback
+  return options.preserveFallbackWhenEmpty && value.length === 0 ? fallback : value
+}
+
 function isRuntimeCapabilityStatus(value: unknown): value is RuntimeCapabilityStatus {
   return value === 'provider_llm'
     || value === 'deterministic_preview'
@@ -476,7 +485,7 @@ function normalizeResponse(value: unknown, fallback: AgentRunResponse): AgentRun
     agentRoute: candidate.agentRoute && typeof candidate.agentRoute === 'object' ? candidate.agentRoute as Record<string, unknown> : fallback.agentRoute,
     snapshotVersion: typeof candidate.snapshotVersion === 'string' ? candidate.snapshotVersion : fallback.snapshotVersion,
     usedTools: isStringArray(candidate.usedTools) ? candidate.usedTools : [],
-    toolResultRefs: isStringArray(candidate.toolResultRefs) ? candidate.toolResultRefs : fallback.toolResultRefs,
+    toolResultRefs: responseStringArrayOrFallback(candidate.toolResultRefs, fallback.toolResultRefs, { preserveFallbackWhenEmpty: true }),
     riskCardIds: isStringArray(candidate.riskCardIds) ? candidate.riskCardIds : [],
     decisionIds: isStringArray(candidate.decisionIds) ? candidate.decisionIds : [],
     evidenceRefs: isStringArray(candidate.evidenceRefs) ? candidate.evidenceRefs : [],
@@ -494,6 +503,11 @@ function fallbackResponse(
   const refs = toolRefsFrom(input)
   const refsLabel = refs.join(', ') || 'deterministic snapshot'
   const route = routeOperatingAgents(input)
+  const exposesFallbackRoute = status === 'deterministic_preview'
+    && (route.executionMode === 'all_hands' || route.executionMode === 'single_agent')
+  const fallbackCalledAgentIds = exposesFallbackRoute ? route.calledAgentIds : []
+  const fallbackPrimaryAgentId = exposesFallbackRoute ? route.primaryAgentId : null
+  const fallbackReviewerAgentIds = exposesFallbackRoute ? route.reviewerAgentIds : []
   const evidenceCoverage = evidenceCoverageFromInput(input)
   const evidenceWarnings = unique([
     ...evidenceCoverage.officialDocs.warnings,
@@ -556,10 +570,10 @@ function fallbackResponse(
       'Confirm provider runtime availability before treating AI interpretation as LLM assisted.',
       'Review the cited deterministic refs before adopting a recommendation.',
     ],
-    calledAgentIds: [],
-    primaryAgentId: null,
-    reviewerAgentIds: [],
-    agentRoute: { ...route, routedAgentIds: route.calledAgentIds, calledAgentIds: [], previewOnly: true },
+    calledAgentIds: fallbackCalledAgentIds,
+    primaryAgentId: fallbackPrimaryAgentId,
+    reviewerAgentIds: fallbackReviewerAgentIds,
+    agentRoute: { ...route, routedAgentIds: route.calledAgentIds, calledAgentIds: fallbackCalledAgentIds, previewOnly: true },
     snapshotVersion: input.snapshotVersion ?? '',
     usedTools: [],
     toolResultRefs: refs,

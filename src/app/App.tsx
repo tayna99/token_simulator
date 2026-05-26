@@ -1323,6 +1323,28 @@ function DecisionLogWorkspace({
                     <p>Formula provenance: {decision.reportReview.formulaVersionVisible ? 'yes' : 'no'}</p>
                   </div>
                 )}
+                {showInternal && decision.runtimeProof && (
+                  <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-primary-normal">Runtime proof</p>
+                    <p translate="no">status: {decision.runtimeProof.status}</p>
+                    <p translate="no">provider run: {decision.runtimeProof.providerRunId ?? 'none'}</p>
+                    <p translate="no">agent proof: {decision.runtimeProof.agentInvocationProof.join(', ') || 'none'}</p>
+                    {decision.runtimeProof.checkpoint && (
+                      <>
+                        <p translate="no">checkpoint: {decision.runtimeProof.checkpoint.status}</p>
+                        <p translate="no">checkpoint id: {decision.runtimeProof.checkpoint.checkpointId}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+                {showInternal && decision.humanApproval && (
+                  <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs text-label-neutral">
+                    <p className="font-semibold text-primary-normal">Human approval</p>
+                    <p translate="no">approval: {decision.humanApproval.decisionChoice}</p>
+                    <p translate="no">approved by: {decision.humanApproval.approvedBy}</p>
+                    <p translate="no">approval mode: {decision.humanApproval.approvalMode}</p>
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap gap-1">
                   <Badge tone={decision.aiMode === 'llm_assisted' ? 'positive' : 'neutral'}>{decision.aiMode}</Badge>
                   {showInternal && (
@@ -3281,11 +3303,26 @@ function App() {
 
   const runtimeProofSnapshot = (): RuntimeProofMetadata => ({
     status: agentRun.runtime.status,
-    ...(agentRun.runtime.status === 'provider_llm' && agentRun.runtime.providerRunId ? { providerRunId: agentRun.runtime.providerRunId } : {}),
-    agentInvocationProof: agentRun.runtime.status === 'provider_llm' ? agentRun.runtime.agentInvocationProof ?? [] : [],
+    ...((agentRun.runtime.status === 'provider_llm' || agentRun.runtime.status === 'resumed') && agentRun.runtime.providerRunId ? { providerRunId: agentRun.runtime.providerRunId } : {}),
+    agentInvocationProof: (
+      agentRun.runtime.status === 'provider_llm'
+      || agentRun.runtime.status === 'resumed'
+      || agentRun.runtime.status === 'interrupt_requested'
+    ) ? agentRun.runtime.agentInvocationProof ?? [] : [],
     ...(agentRun.runtime.fallbackReason ? { fallbackReason: agentRun.runtime.fallbackReason } : {}),
     startedAt: agentRun.runtime.startedAt,
     completedAt: agentRun.runtime.completedAt,
+    ...(agentRun.runtime.checkpoint ? {
+      checkpoint: {
+        status: agentRun.runtime.checkpoint.status,
+        persistence: agentRun.runtime.checkpoint.persistence,
+        threadId: agentRun.runtime.checkpoint.threadId,
+        checkpointNamespace: agentRun.runtime.checkpoint.checkpointNamespace,
+        checkpointId: agentRun.runtime.checkpoint.checkpointId,
+        ...(agentRun.runtime.checkpoint.interruptId !== undefined ? { interruptId: agentRun.runtime.checkpoint.interruptId } : {}),
+        ...(agentRun.runtime.checkpoint.reason ? { reason: agentRun.runtime.checkpoint.reason } : {}),
+      },
+    } : {}),
   })
 
   const decisionReviewMetadata = (summary: UsageImportSummary | null = importedUsage) => ({

@@ -272,6 +272,105 @@ describe('runAgentRuntime', () => {
     expect(result.supervisorSummary).toContain('optimization_routing')
   })
 
+  it('preserves fallback route and ref metadata when provider events are partial', async () => {
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'optimize',
+      question: 'Which routing change is safe?',
+      executionMode: 'stage_committee',
+      requestedAgentId: 'optimization_routing',
+      snapshotVersion: 'snapshot:partial-contract',
+      toolResults: { monthlyAiCogs: 4820, 'tool:decisionContext': { approved: false } },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+    }, {
+      runtime: 'server',
+      fetcher: vi.fn(async () => new Response(JSON.stringify({
+        events: [{
+          type: 'analysis',
+          message: 'Provider omitted route fields.',
+          toolResultRefs: [],
+          riskCardIds: [],
+        }],
+        answer: 'Grounded provider answer.',
+        report: 'Grounded provider report.',
+        llmMode: 'provider-llm',
+        runtime: {
+          status: 'provider_llm',
+          providerRunId: 'run:partial-contract',
+          startedAt: '2026-05-25T00:00:00.000Z',
+          completedAt: '2026-05-25T00:00:01.000Z',
+        },
+        toolResultRefs: [],
+      }), { status: 200 })),
+    })
+
+    expect(result.snapshotVersion).toBe('snapshot:partial-contract')
+    expect(result.primaryAgentId).toBe('optimization_routing')
+    expect(result.calledAgentIds).toEqual(['optimization_routing', 'model_inference_research', 'trust_security_compliance'])
+    expect(result.toolResultRefs).toEqual(['tool:monthlyAiCogs', 'tool:decisionContext'])
+    expect(result.events[0]).toMatchObject({
+      agentId: 'optimization_routing',
+      calledAgentTool: 'call_optimization_routing_agent',
+      toolResultRefs: ['tool:monthlyAiCogs', 'tool:decisionContext'],
+      reviewerAgentIds: ['model_inference_research', 'trust_security_compliance'],
+    })
+  })
+
+  it('returns exactly 11 called agents for all-hands deterministic fallback', async () => {
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'cost',
+      question: 'Bring every operating agent into the review.',
+      executionMode: 'all_hands',
+      snapshotVersion: 'snapshot:all-hands',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+    }, { runtime: 'local' })
+
+    expect(result.calledAgentIds).toHaveLength(11)
+    expect(new Set(result.calledAgentIds).size).toBe(11)
+    expect(result.primaryAgentId).toBe(result.calledAgentIds[0])
+    expect(result.reviewerAgentIds).toEqual(result.calledAgentIds.slice(1))
+  })
+
+  it('returns one called agent and no reviewers for single-agent deterministic fallback', async () => {
+    const result = await runAgentRuntime({
+      mode: 'ask',
+      activeStage: 'cost',
+      question: 'Ask only Cost Modeling.',
+      executionMode: 'single_agent',
+      requestedAgentId: 'cost_modeling',
+      snapshotVersion: 'snapshot:single-agent',
+      toolResults: { monthlyAiCogs: 4820 },
+      deterministicEvents: [],
+      thresholdPolicy: {},
+      metricFlags: [],
+      riskCards: [],
+      benchmarkCards: [],
+      decisionHistory: [],
+      factSources: [],
+      operatingAgents: OPERATING_AGENTS.map(agent => ({ ...agent })),
+    }, { runtime: 'local' })
+
+    expect(result.calledAgentIds).toEqual(['cost_modeling'])
+    expect(result.primaryAgentId).toBe('cost_modeling')
+    expect(result.reviewerAgentIds).toEqual([])
+  })
+
   it('normalizes evidence coverage and event stance from provider responses', async () => {
     const result = await runAgentRuntime({
       mode: 'ask',

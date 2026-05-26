@@ -62,11 +62,28 @@ export interface OnePageReportArtifact {
   refs: string[]
 }
 
+interface RuntimeCheckpointMetadata {
+  status?: string
+  threadId?: string
+  checkpointId?: string
+}
+
 const TITLES: Record<ReportAudience, string> = {
   developer: 'Developer breakdown',
   pm: 'PM rollout report',
   ceo_cfo: 'CEO/CFO 1-pager',
   board: 'Board-ready summary',
+}
+
+function runtimeCheckpoint(input: RuntimeProofMetadata | null | undefined): RuntimeCheckpointMetadata | null {
+  const checkpoint = (input as { checkpoint?: unknown } | null | undefined)?.checkpoint
+  if (!checkpoint || typeof checkpoint !== 'object' || Array.isArray(checkpoint)) return null
+  const candidate = checkpoint as Record<string, unknown>
+  return {
+    ...(typeof candidate.status === 'string' && candidate.status.trim() ? { status: candidate.status } : {}),
+    ...(typeof candidate.threadId === 'string' && candidate.threadId.trim() ? { threadId: candidate.threadId } : {}),
+    ...(typeof candidate.checkpointId === 'string' && candidate.checkpointId.trim() ? { checkpointId: candidate.checkpointId } : {}),
+  }
 }
 
 export function buildReportArtifact(input: ReportArtifactInput): ReportArtifact {
@@ -109,6 +126,7 @@ export function buildReportArtifact(input: ReportArtifactInput): ReportArtifact 
 
 export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): OnePageReportArtifact {
   const agentInvocationProof = input.runtimeProof?.agentInvocationProof ?? []
+  const checkpoint = runtimeCheckpoint(input.runtimeProof)
   const lines = [
     `# ${input.title}`,
     '',
@@ -130,6 +148,9 @@ export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): O
       ? agentInvocationProof.map(ref => `- Agent invocation proof: ${ref}`)
       : ['- Agent invocation proof: none']),
     `- Fallback reason: ${input.runtimeProof?.fallbackReason ?? 'none'}`,
+    `- Checkpoint status: ${checkpoint?.status ?? 'none'}`,
+    `- Checkpoint thread id: ${checkpoint?.threadId ?? 'none'}`,
+    `- Checkpoint id: ${checkpoint?.checkpointId ?? 'none'}`,
     `- Started at: ${input.runtimeProof?.startedAt ?? 'not recorded'}`,
     `- Completed at: ${input.runtimeProof?.completedAt ?? 'not recorded'}`,
     '',
@@ -139,6 +160,7 @@ export function buildOnePageReportArtifact(input: OnePageReportArtifactInput): O
     `- Approved by: ${input.humanApproval?.approvedBy ?? 'not recorded'}`,
     `- Approved at: ${input.humanApproval?.approvedAt ?? 'not recorded'}`,
     `- Approval mode: ${input.humanApproval?.approvalMode ?? 'not recorded'}`,
+    `- Checkpoint resume approval: ${input.humanApproval?.approvalMode === 'checkpoint_resume' ? 'recorded' : 'not recorded'}`,
     '',
     '## Risks and limitations',
     ...(input.risks.length > 0 ? input.risks.map(item => `- ${item}`) : ['- No risk cards attached.']),
