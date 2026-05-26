@@ -36,6 +36,12 @@ import {
   type IcpTimingDecisionUrgency,
   type IcpTimingGateAssessment,
 } from '../lib/icpTimingGate'
+import {
+  BUYER_INTERVIEW_SAMPLE_NOTES,
+  BUYER_OBJECTION_BUCKETS,
+  codeBuyerInterviewNotes,
+  type BuyerInterviewCodingResult,
+} from '../lib/buyerInterviewCoding'
 import { importTemplatesByKind, type ImportTemplateProfile } from '../lib/importTemplates'
 import {
   MONEY_LEAK_STEPS,
@@ -505,6 +511,94 @@ function IcpTimingGatePanel({
   )
 }
 
+function BuyerInterviewCodingPanel({
+  rawNotes,
+  result,
+  onRawNotesChange,
+  onLoadSample,
+}: {
+  rawNotes: string
+  result: BuyerInterviewCodingResult
+  onRawNotesChange: (value: string) => void
+  onLoadSample: () => void
+}) {
+  return (
+    <div data-testid="buyer-interview-coding-panel" className="mb-4 rounded-wds border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold" lang="en">Buyer interview coding</p>
+          <p className="mt-1 text-xs leading-5 text-label-neutral">
+            리뷰콜의 exact refusal quote를 6개 반론 bucket으로 태깅하고, 반복 반론을 제품 문구나 요구사항 후보로 올립니다.
+          </p>
+        </div>
+        <Button type="button" variant="secondary" size="sm" onClick={onLoadSample}>샘플 반론 코딩</Button>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Field label="buyer interview notes" htmlFor="buyer-interview-notes" help="한 줄에 하나씩 exact refusal quote를 붙여 넣습니다.">
+          <textarea
+            id="buyer-interview-notes"
+            value={rawNotes}
+            onChange={event => onRawNotesChange(event.currentTarget.value)}
+            rows={6}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          />
+        </Field>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs" lang="en">
+          <p className="font-semibold text-label-normal">Taxonomy</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {BUYER_OBJECTION_BUCKETS.map(bucket => (
+              <Badge key={bucket.id} tone="neutral">{bucket.id}</Badge>
+            ))}
+          </div>
+          <p className="mt-2 text-label-alternative">
+            coded: {fmtNumber(result.codedQuotes.length)} / uncoded: {fmtNumber(result.uncodedQuotes.length)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs">
+          <p className="font-semibold text-label-normal">Bucket counts</p>
+          <div className="mt-2 grid gap-2">
+            {result.bucketSummaries.length === 0 ? (
+              <p className="text-label-alternative">아직 코딩된 반론이 없습니다.</p>
+            ) : result.bucketSummaries.map(summary => (
+              <div key={summary.id} className="rounded-wds border border-line-neutral bg-surface-normal p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2" lang="en">
+                  <span>{summary.id}</span>
+                  <Badge tone="primary">{fmtNumber(summary.count)}</Badge>
+                </div>
+                <p className="mt-1 text-label-neutral">{summary.nextAction}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs">
+          <p className="font-semibold text-label-normal">Promotion candidates</p>
+          <div className="mt-2 grid gap-2">
+            {result.promotions.length === 0 ? (
+              <p className="text-label-alternative">같은 bucket의 반복 반론 2개 이상부터 승격 후보가 생깁니다.</p>
+            ) : result.promotions.map(promotion => (
+              <div key={`${promotion.bucketId}-${promotion.kind}`} className="rounded-wds border border-line-neutral bg-surface-normal p-2">
+                <div className="flex flex-wrap items-center gap-2" lang="en">
+                  <Badge tone={promotion.kind === 'requirement' ? 'caution' : 'positive'}>{promotion.kind}</Badge>
+                  <Badge tone="neutral">{promotion.source}</Badge>
+                  <span>{promotion.bucketId}</span>
+                  <span>{fmtNumber(promotion.count)} bucket quotes</span>
+                  <span>{fmtNumber(promotion.exactQuoteCount)} exact repeats</span>
+                </div>
+                <p className="mt-1 text-label-neutral">{promotion.promotedText}</p>
+                <p className="mt-1 text-label-alternative">"{promotion.quote}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LocalReportPreview({
   snapshot,
   selectedDecisionId,
@@ -562,6 +656,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [snapshotMinutes, setSnapshotMinutes] = useState('')
   const [monthlyReviewMinutes, setMonthlyReviewMinutes] = useState('')
   const [operatorTouchCount, setOperatorTouchCount] = useState('')
+  const [buyerInterviewNotes, setBuyerInterviewNotes] = useState('')
   const [hasCustomerRevenueMapping, setHasCustomerRevenueMapping] = useState(false)
   const [hasHeavyUserSuspicion, setHasHeavyUserSuspicion] = useState(false)
   const [needsCeoFinanceReport, setNeedsCeoFinanceReport] = useState(false)
@@ -576,6 +671,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
   const usageTemplates = useMemo(() => importTemplatesByKind('usage'), [])
   const allowanceTemplates = useMemo(() => importTemplatesByKind('allowance'), [])
+  const buyerInterviewCoding = useMemo(() => codeBuyerInterviewNotes(buyerInterviewNotes), [buyerInterviewNotes])
   const icpTimingAssessment = useMemo(() => assessIcpTimingGate({
     monthlyAiSpendKrw: numericInput(monthlyLlmSpendKrw),
     hasCustomerRevenueMapping,
@@ -911,27 +1007,35 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           onNeedsCeoFinanceReportChange={setNeedsCeoFinanceReport}
         />
         {audience === 'expert' && (
-          <UnitEconomicsPdcaPanel
-            instrumentation={pdcaInstrumentation}
-            monthlyLlmSpendKrw={monthlyLlmSpendKrw}
-            freeFitMinutes={freeFitMinutes}
-            dataReadinessMinutes={dataReadinessMinutes}
-            snapshotMinutes={snapshotMinutes}
-            monthlyReviewMinutes={monthlyReviewMinutes}
-            operatorTouchCount={operatorTouchCount}
-            decisionOwnerConfirmed={decisionOwnerConfirmed}
-            nextReviewDate={nextReviewDate}
-            decisionUrgency={decisionUrgency}
-            onMonthlyLlmSpendKrwChange={setMonthlyLlmSpendKrw}
-            onFreeFitMinutesChange={setFreeFitMinutes}
-            onDataReadinessMinutesChange={setDataReadinessMinutes}
-            onSnapshotMinutesChange={setSnapshotMinutes}
-            onMonthlyReviewMinutesChange={setMonthlyReviewMinutes}
-            onOperatorTouchCountChange={setOperatorTouchCount}
-            onDecisionOwnerConfirmedChange={setDecisionOwnerConfirmed}
-            onNextReviewDateChange={setNextReviewDate}
-            onDecisionUrgencyChange={setDecisionUrgency}
-          />
+          <>
+            <BuyerInterviewCodingPanel
+              rawNotes={buyerInterviewNotes}
+              result={buyerInterviewCoding}
+              onRawNotesChange={setBuyerInterviewNotes}
+              onLoadSample={() => setBuyerInterviewNotes(BUYER_INTERVIEW_SAMPLE_NOTES)}
+            />
+            <UnitEconomicsPdcaPanel
+              instrumentation={pdcaInstrumentation}
+              monthlyLlmSpendKrw={monthlyLlmSpendKrw}
+              freeFitMinutes={freeFitMinutes}
+              dataReadinessMinutes={dataReadinessMinutes}
+              snapshotMinutes={snapshotMinutes}
+              monthlyReviewMinutes={monthlyReviewMinutes}
+              operatorTouchCount={operatorTouchCount}
+              decisionOwnerConfirmed={decisionOwnerConfirmed}
+              nextReviewDate={nextReviewDate}
+              decisionUrgency={decisionUrgency}
+              onMonthlyLlmSpendKrwChange={setMonthlyLlmSpendKrw}
+              onFreeFitMinutesChange={setFreeFitMinutes}
+              onDataReadinessMinutesChange={setDataReadinessMinutes}
+              onSnapshotMinutesChange={setSnapshotMinutes}
+              onMonthlyReviewMinutesChange={setMonthlyReviewMinutes}
+              onOperatorTouchCountChange={setOperatorTouchCount}
+              onDecisionOwnerConfirmedChange={setDecisionOwnerConfirmed}
+              onNextReviewDateChange={setNextReviewDate}
+              onDecisionUrgencyChange={setDecisionUrgency}
+            />
+          </>
         )}
 
         <div className="mb-4 flex flex-wrap gap-2">

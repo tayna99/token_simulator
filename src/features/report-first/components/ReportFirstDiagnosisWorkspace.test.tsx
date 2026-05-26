@@ -30,6 +30,7 @@ describe('ReportFirstDiagnosisWorkspace', () => {
     expect(screen.queryByText(/RAG evidence|Watchtower|agent route|parserStrategy|source:|evidence:|tool:/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/docs\/service-validation|docs\/templates|asset:/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/production_demo_unavailable|UsageImportSummary|trustInspection|artifact|PDF gate|waiting_for_upload|raw_upload_delete/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('buyer-interview-coding-panel')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /PDF 리포트 다운로드/ })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /PDF 리포트 생성/ })[0]).toBeDisabled()
   })
@@ -114,6 +115,34 @@ describe('ReportFirstDiagnosisWorkspace', () => {
 
     expect(screen.getByLabelText(/월 LLM\/API 비용/i)).toHaveValue('3200000')
     expect(screen.getByTestId('icp-timing-gate')).toHaveTextContent(/diagnosis_report/i)
+  })
+
+  it('codes buyer interview objections behind expert mode', () => {
+    render(<ReportFirstDiagnosisWorkspace workspaceId="workspace-demo" productionStatus="connected" audience="expert" />)
+
+    const panel = screen.getByTestId('buyer-interview-coding-panel')
+    expect(panel).toHaveTextContent(/Buyer interview coding/i)
+    expect(panel).toHaveTextContent(/objection_margin_not_felt/i)
+    expect(panel).toHaveTextContent(/objection_positioning_confusing/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /샘플 반론 코딩/ }))
+
+    expect(panel).toHaveTextContent(/requirement/i)
+    expect(panel).toHaveTextContent(/product_copy/i)
+    expect(panel).toHaveTextContent(/monthly leak/i)
+    expect(panel).toHaveTextContent(/AI Token Leakage Report/i)
+
+    fireEvent.change(screen.getByLabelText(/buyer interview notes/i), {
+      target: {
+        value: [
+          '엑셀이나 SQL로 보면 됩니다.',
+          '개발자가 SQL로 뽑으면 됩니다.',
+        ].join('\n'),
+      },
+    })
+
+    expect(panel).toHaveTextContent(/objection_excel_sql_console/i)
+    expect(panel).toHaveTextContent(/엑셀\/SQL이 보여주는 숫자/)
   })
 
   it('updates the diagnosis preview when CSV state changes', () => {
