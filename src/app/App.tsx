@@ -165,6 +165,13 @@ type TeamCostCompanyProfile = {
 
 type RemoteBackendStatus = 'checking' | 'connected' | 'fallback' | 'blocked'
 
+type AgentCheckpointResumeRequest = {
+  requestId: number
+  checkpointThreadId: string
+  checkpointNamespace: string
+  resumePayload: Record<string, unknown>
+}
+
 interface RemoteUsageHistoryEntry {
   snapshotRef: string
   requestCount: number
@@ -1450,6 +1457,7 @@ function LifecycleNavigation({
   activeStage,
   operatingAgents,
   selectedAgentId,
+  agentRun,
   savedDecisionCount,
   showInternal,
   onStageChange,
@@ -1462,6 +1470,7 @@ function LifecycleNavigation({
   activeStage: DecisionStageId
   operatingAgents: OperatingAgent[]
   selectedAgentId: OperatingAgentId | null
+  agentRun: AgentRunResponse
   savedDecisionCount: number
   showInternal: boolean
   onStageChange: (stage: DecisionStageId) => void
@@ -1519,6 +1528,8 @@ function LifecycleNavigation({
         <OperatingTeamPanel
           operatingAgents={operatingAgents}
           selectedAgentId={selectedAgentId}
+          runtimeStatus={agentRun.runtime.status}
+          checkpoint={agentRun.runtime.checkpoint}
           onAgentSelect={onAgentSelect}
           onRunAllHands={onRunAllHands}
         />
@@ -2152,6 +2163,21 @@ function DecisionAssistantPanel({
               decision readiness: {agentRun.decisionReadiness}
             </p>
           )}
+          {showInternal && agentRun.runtime.checkpoint && (
+            <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-primary-normal" translate="no">
+                  checkpoint: {agentRun.runtime.checkpoint.status}
+                </p>
+                <Badge tone={agentRun.runtime.status === 'resumed' ? 'positive' : 'caution'}>
+                  {agentRun.runtime.status}
+                </Badge>
+              </div>
+              <p className="mt-1 break-words text-[11px] text-label-alternative" translate="no">
+                {agentRun.runtime.checkpoint.checkpointId}
+              </p>
+            </div>
+          )}
           {showInternal && agentRun.disagreements.length > 0 && (
             <div className="mt-2 rounded-wds border border-line-neutral bg-surface-normal p-2">
               <p className="text-xs font-semibold text-label-alternative">Reviewer notes</p>
@@ -2580,6 +2606,7 @@ function App() {
   const [agentRun, setAgentRun] = useState<AgentRunResponse>(EMPTY_AGENT_RUN_RESPONSE)
   const [requestedOperatingAgentId, setRequestedOperatingAgentId] = useState<OperatingAgentId | null>(null)
   const [agentExecutionMode, setAgentExecutionMode] = useState<AgentRunExecutionMode>('stage_committee')
+  const [agentCheckpointResume, setAgentCheckpointResume] = useState<AgentCheckpointResumeRequest | null>(null)
   const [thresholdPolicy, setThresholdPolicy] = useState<ThresholdPolicy>(DEFAULT_THRESHOLD_POLICY)
   const [teamCostWorkItems, setTeamCostWorkItems] = useState<WorkCatalogItem[]>(() => (
     DEFAULT_TEAM_COST_WORK_ITEMS.map(item => ({ ...item }))
@@ -3018,16 +3045,19 @@ function App() {
     setActiveDecisionStage(stage)
     setRequestedOperatingAgentId(null)
     setAgentExecutionMode('stage_committee')
+    setAgentCheckpointResume(null)
   }
 
   const handleOperatingAgentSelect = (agentId: OperatingAgentId) => {
     setRequestedOperatingAgentId(agentId)
     setAgentExecutionMode('single_agent')
+    setAgentCheckpointResume(null)
   }
 
   const handleRunFullOperatingReview = () => {
     setRequestedOperatingAgentId(null)
     setAgentExecutionMode('all_hands')
+    setAgentCheckpointResume(null)
   }
 
   const handleOpenFrontFitCheck = () => {
@@ -3046,6 +3076,31 @@ function App() {
     setActiveDecisionStage('decision-log')
     setRequestedOperatingAgentId('knowledge_release_ops')
     setAgentExecutionMode('single_agent')
+    setAgentCheckpointResume(null)
+  }
+
+  const queueAgentCheckpointResume = (
+    decisionChoice: 'adopt' | 'reject' | 'hold',
+    recommendationId: string,
+    reason: string,
+    decisionId: string,
+  ) => {
+    const checkpoint = agentRun.runtime.checkpoint
+    if (agentRun.runtime.status !== 'interrupt_requested' || !checkpoint?.threadId) return
+    setAgentCheckpointResume({
+      requestId: Date.now(),
+      checkpointThreadId: checkpoint.threadId,
+      checkpointNamespace: checkpoint.checkpointNamespace || 'agentpayroll',
+      resumePayload: {
+        recommendationId,
+        decisionId,
+        checkpointId: checkpoint.checkpointId,
+        interruptId: checkpoint.interruptId ?? null,
+        decisionChoice,
+        approved: decisionChoice === 'adopt',
+        reason,
+      },
+    })
   }
 
   const handleSendSdkLiteSample = async (kind: 'clean' | 'blocked') => {
@@ -3344,6 +3399,10 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    const checkpointNamespace = 'agentpayroll'
+    const checkpointThreadId = agentCheckpointResume?.checkpointThreadId
+      ?? `agentpayroll-${workspaceId}-${agentSnapshot.snapshotVersion}-${agentExecutionMode}`.replace(/[^0-9A-Za-z_-]/g, '-')
+    const hitlCheckpoint = agentExecutionMode === 'all_hands' || Boolean(agentCheckpointResume)
     void runAgentRuntime({
       apiKey: '',
       mode: activeDecisionStage === 'decision-log' ? 'decision_support' : 'report',
@@ -3381,6 +3440,11 @@ function App() {
       providerRegistryVersion: agentSnapshot.providerRegistryVersion,
       dataLimitations: agentSnapshot.dataLimitations,
       frontOperatingSystem: agentSnapshot.frontOperatingSystem,
+      hitlCheckpoint,
+      checkpointThreadId,
+      checkpointNamespace: agentCheckpointResume?.checkpointNamespace ?? checkpointNamespace,
+      resumeCheckpoint: Boolean(agentCheckpointResume),
+      resumePayload: agentCheckpointResume?.resumePayload ?? {},
     }).then(result => {
       if (!cancelled) setAgentRun(result)
     })
@@ -3389,10 +3453,12 @@ function App() {
     }
   }, [
     activeDecisionStage,
+    agentCheckpointResume,
     agentExecutionMode,
     agentSnapshot,
     p1RagEvidencePanel.contextBlocks,
     requestedOperatingAgentId,
+    workspaceId,
   ])
 
   const applyUsageSummary = (summary: UsageImportSummary) => {
@@ -3649,6 +3715,7 @@ function App() {
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
+    queueAgentCheckpointResume('adopt', recommendation.id, recommendation.rationale, decision.id)
   }
 
   const handleRejectTeamCostOptimization = async () => {
@@ -3678,6 +3745,7 @@ function App() {
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
+    queueAgentCheckpointResume('reject', recommendation.id, `Rejected for now: ${recommendation.rationale}`, decision.id)
   }
 
   const handleHoldTeamCostOptimization = async () => {
@@ -3707,6 +3775,7 @@ function App() {
     })
     const next = [decision, ...decisions]
     await persistDecisions(next)
+    queueAgentCheckpointResume('hold', recommendation.id, `Held for human review: ${recommendation.rationale}`, decision.id)
   }
 
   const handleRecordOperatingDecision = async () => {
@@ -4364,6 +4433,7 @@ function App() {
           activeStage={activeDecisionStage}
           operatingAgents={OPERATING_AGENTS}
           selectedAgentId={requestedOperatingAgentId}
+          agentRun={agentRun}
           savedDecisionCount={savedTeamCostDecisionCount}
           showInternal={showInternal}
           onStageChange={handleDecisionStageChange}

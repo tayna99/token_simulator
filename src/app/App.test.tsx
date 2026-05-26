@@ -530,6 +530,166 @@ describe('App AI team operations workspace', () => {
     expect(allHandsBody.frontOperatingSystem.learningLoopRecords).toEqual([])
   }, 60000)
 
+  it('resumes a HITL checkpoint after an explicit Adopt decision', async () => {
+    const user = userEvent.setup()
+    vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/api/agent/run')) {
+        const body = init?.body ? JSON.parse(String(init.body)) : {}
+        const checkpointThreadId = typeof body.checkpointThreadId === 'string'
+          ? body.checkpointThreadId
+          : 'thread-test-hitl'
+        const checkpointNamespace = typeof body.checkpointNamespace === 'string'
+          ? body.checkpointNamespace
+          : 'agentpayroll'
+
+        if (body.executionMode === 'all_hands' && body.resumeCheckpoint === true) {
+          return new Response(JSON.stringify({
+            answer: 'Resumed operating review after Adopt approval.',
+            report: 'Operating agents resumed from checkpoint.',
+            supervisorSummary: 'Resumed after explicit Adopt approval.',
+            events: [{
+              type: 'analysis',
+              message: 'Cost Modeling Agent resumed with tool:team.monthlyCostUsd.',
+              calledAgentTool: 'call_cost_modeling_agent',
+              agentId: 'cost_modeling',
+              toolResultRefs: ['tool:team.monthlyCostUsd'],
+              riskCardIds: [],
+            }],
+            llmMode: 'provider-llm',
+            runtime: {
+              status: 'resumed',
+              providerRunId: 'agent-service:test:resume',
+              agentInvocationProof: ['call_cost_modeling_agent'],
+              startedAt: '2026-05-26T00:00:00.000Z',
+              completedAt: '2026-05-26T00:00:01.000Z',
+              checkpoint: {
+                persistence: 'memory',
+                threadId: checkpointThreadId,
+                checkpointNamespace,
+                checkpointId: `checkpoint:${checkpointNamespace}:${checkpointThreadId}`,
+                interruptId: null,
+                status: 'resumed',
+                reason: 'resume_approved',
+                resumePayload: body.resumePayload,
+              },
+            },
+            disagreements: [],
+            decisionReadiness: 'ready',
+            nextQuestions: [],
+            calledAgentIds: ['cost_modeling'],
+            primaryAgentId: 'cost_modeling',
+            reviewerAgentIds: [],
+            agentRoute: { executionMode: 'all_hands' },
+            snapshotVersion: body.snapshotVersion,
+            usedTools: ['lookup_snapshot_value'],
+            toolResultRefs: ['tool:team.monthlyCostUsd'],
+            riskCardIds: [],
+            decisionIds: [],
+            evidenceRefs: [],
+            warnings: [],
+          }), { status: 200 })
+        }
+
+        if (body.executionMode === 'all_hands') {
+          return new Response(JSON.stringify({
+            answer: 'Paused for human approval before delegated agent tools run.',
+            report: 'Checkpoint interrupt requested.',
+            supervisorSummary: 'Supervisor paused before call_*_agent tools.',
+            events: [{
+              type: 'interrupt_requested',
+              message: 'Human approval is required before delegated operating agents run.',
+              calledAgentTool: null,
+              agentId: null,
+              toolResultRefs: ['tool:team.monthlyCostUsd'],
+              riskCardIds: [],
+            }],
+            llmMode: 'provider-llm',
+            runtime: {
+              status: 'interrupt_requested',
+              agentInvocationProof: [],
+              startedAt: '2026-05-26T00:00:00.000Z',
+              completedAt: '2026-05-26T00:00:01.000Z',
+              checkpoint: {
+                persistence: 'memory',
+                threadId: checkpointThreadId,
+                checkpointNamespace,
+                checkpointId: `checkpoint:${checkpointNamespace}:${checkpointThreadId}`,
+                interruptId: 'interrupt:supervisor-tools',
+                status: 'interrupt_requested',
+                reason: 'approval_required_before_operating_agent_tools',
+                resumePayload: {},
+              },
+            },
+            disagreements: [],
+            decisionReadiness: 'needs_review',
+            nextQuestions: ['Should a human approve, reject, or hold this delegation?'],
+            calledAgentIds: [],
+            primaryAgentId: null,
+            reviewerAgentIds: [],
+            agentRoute: { executionMode: 'all_hands', checkpointInterrupted: true },
+            snapshotVersion: body.snapshotVersion,
+            usedTools: [],
+            toolResultRefs: ['tool:team.monthlyCostUsd'],
+            riskCardIds: [],
+            decisionIds: [],
+            evidenceRefs: [],
+            warnings: ['human approval required before delegated operating agent tools'],
+          }), { status: 200 })
+        }
+
+        return new Response(JSON.stringify({
+          answer: 'Stage committee preview.',
+          supervisorSummary: 'Stage committee preview.',
+          events: [],
+          llmMode: 'deterministic-fallback',
+          snapshotVersion: body.snapshotVersion,
+        }), { status: 200 })
+      }
+      if (url.includes('/api/agent')) {
+        return new Response(JSON.stringify({ events: [] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ error: 'storage_not_configured' }), { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    window.history.pushState({}, '', '/token_simulator/?debug=1')
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /Run full operating review/i }))
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Paused for human approval/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: interrupt_requested/i)
+    expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: interrupt_requested/i)
+
+    await user.click(screen.getByRole('button', { name: /Adopt top recommendation/i }))
+
+    const resumeBody = await waitFor(() => {
+      const resumeCall = fetchMock.mock.calls.find(([input, init]) => {
+        if (!String(input).includes('/api/agent/run') || !init?.body) return false
+        const body = JSON.parse(String(init.body))
+        return body.executionMode === 'all_hands' && body.resumeCheckpoint === true
+      })
+      expect(resumeCall).toBeDefined()
+      return JSON.parse(String(resumeCall?.[1]?.body))
+    })
+    expect(resumeBody).toMatchObject({
+      hitlCheckpoint: true,
+      resumeCheckpoint: true,
+      checkpointNamespace: 'agentpayroll',
+      resumePayload: expect.objectContaining({
+        decisionChoice: 'adopt',
+        approved: true,
+      }),
+    })
+    expect(resumeBody.resumePayload.recommendationId).toMatch(/^rec-/)
+    expect(resumeBody.resumePayload.decisionId).toMatch(/^decision-/)
+    expect(resumeBody.resumePayload.checkpointId).toMatch(/^checkpoint:agentpayroll:/)
+    expect(resumeBody.resumePayload.interruptId).toBe('interrupt:supervisor-tools')
+    await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Resumed after explicit Adopt approval/i))
+    expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: resumed/i)
+    expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: resumed/i)
+  }, 60000)
+
   it('shows an evidence drawer with explicit baseline unavailable state in the AI panel', async () => {
     vi.stubEnv('VITE_AGENT_RUNTIME', 'server')
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
