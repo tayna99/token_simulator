@@ -688,6 +688,19 @@ describe('App AI team operations workspace', () => {
     await waitFor(() => expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/Resumed after explicit Adopt approval/i))
     expect(screen.getByTestId('decision-assistant-panel')).toHaveTextContent(/checkpoint: resumed/i)
     expect(screen.getByTestId('lifecycle-nav')).toHaveTextContent(/checkpoint: resumed/i)
+
+    const resumeCallCount = () => fetchMock.mock.calls.filter(([input, init]) => {
+      if (!String(input).includes('/api/agent/run') || !init?.body) return false
+      return JSON.parse(String(init.body)).resumeCheckpoint === true
+    }).length
+    const callsBeforeThresholdChange = fetchMock.mock.calls.length
+
+    fireEvent.change(screen.getByLabelText(/Retry rate above/i), { target: { value: '15' } })
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBeforeThresholdChange)
+      expect(resumeCallCount()).toBe(1)
+    })
   }, 60000)
 
   it('shows an evidence drawer with explicit baseline unavailable state in the AI panel', async () => {

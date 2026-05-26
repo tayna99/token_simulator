@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MODELS, getModelById, type Model } from '../features/alternatives/data/models'
 import { USE_CASE_PRESETS } from '../features/usage/data/workloadPresets'
@@ -2607,6 +2607,7 @@ function App() {
   const [requestedOperatingAgentId, setRequestedOperatingAgentId] = useState<OperatingAgentId | null>(null)
   const [agentExecutionMode, setAgentExecutionMode] = useState<AgentRunExecutionMode>('stage_committee')
   const [agentCheckpointResume, setAgentCheckpointResume] = useState<AgentCheckpointResumeRequest | null>(null)
+  const skipNextAgentRunRef = useRef(false)
   const [thresholdPolicy, setThresholdPolicy] = useState<ThresholdPolicy>(DEFAULT_THRESHOLD_POLICY)
   const [teamCostWorkItems, setTeamCostWorkItems] = useState<WorkCatalogItem[]>(() => (
     DEFAULT_TEAM_COST_WORK_ITEMS.map(item => ({ ...item }))
@@ -3398,6 +3399,10 @@ function App() {
   }, [showTeamCostSimulator, teamCostAgents, teamCostCompanyProfile])
 
   useEffect(() => {
+    if (skipNextAgentRunRef.current) {
+      skipNextAgentRunRef.current = false
+      return
+    }
     let cancelled = false
     const checkpointNamespace = 'agentpayroll'
     const checkpointThreadId = agentCheckpointResume?.checkpointThreadId
@@ -3446,7 +3451,13 @@ function App() {
       resumeCheckpoint: Boolean(agentCheckpointResume),
       resumePayload: agentCheckpointResume?.resumePayload ?? {},
     }).then(result => {
-      if (!cancelled) setAgentRun(result)
+      if (!cancelled) {
+        setAgentRun(result)
+        if (agentCheckpointResume && result.runtime.status === 'resumed') {
+          skipNextAgentRunRef.current = true
+          setAgentCheckpointResume(null)
+        }
+      }
     })
     return () => {
       cancelled = true
