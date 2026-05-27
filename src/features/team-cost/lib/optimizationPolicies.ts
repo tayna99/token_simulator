@@ -54,9 +54,18 @@ export interface OptimizationPolicyDelta {
   changedFields: string[]
 }
 
+export interface OptimizationModelPerformanceMatrixRow {
+  taskType: string
+  modelId: string
+  decisionAuthority: 'routing_allowed' | 'validation_required' | 'review_only'
+  evidenceStatus: string
+  evidenceRefs: string[]
+}
+
 export interface OptimizationRecommendationInput {
   agents: AgentSpec[]
   models?: Model[]
+  modelPerformanceMatrix?: OptimizationModelPerformanceMatrixRow[]
 }
 
 const POLICY_BY_FINDING: Partial<Record<BottleneckFinding['kind'], OptimizationPolicy[]>> = {
@@ -111,6 +120,9 @@ export function recommendationFromCandidate(
   const impact = typeof inputOrMonthlySavings === 'number'
     ? legacyImpact(candidate, inputOrMonthlySavings, legacyCostAfterUsd)
     : calculateOptimizationImpact(candidate, inputOrMonthlySavings)
+  const routingGate = typeof inputOrMonthlySavings === 'number'
+    ? null
+    : routingMatrixGate(candidate, impact.after.modelId, inputOrMonthlySavings.modelPerformanceMatrix)
 
   return {
     ...candidate,
@@ -126,15 +138,76 @@ export function recommendationFromCandidate(
       `tool:optimization.${candidate.id}.costAfterUsd`,
       `tool:optimization.${candidate.id}.affectedAgentIds`,
     ] as ToolResultRef[],
-    decisionMode: candidate.policy === 'route_low_risk_to_cheaper_model' ? 'what_if' : 'deterministic',
-    qualityCaveat: candidate.policy === 'route_low_risk_to_cheaper_model'
-      ? 'Potential savings are deterministic, but accuracy impact requires validation before adoption.'
-      : null,
+    decisionMode: decisionModeFor(candidate, routingGate),
+    qualityCaveat: qualityCaveatFor(candidate, routingGate),
     isDefinitiveWaste: candidate.policy !== 'route_low_risk_to_cheaper_model',
-    requiredValidation: candidate.policy === 'route_low_risk_to_cheaper_model'
-      ? ['Run quality evaluation on representative low-risk tasks before routing production traffic.']
-      : [],
+    requiredValidation: requiredValidationFor(candidate, routingGate),
   }
+}
+
+interface RoutingMatrixGate {
+  allowed: boolean
+  evidenceStatus: string
+  evidenceRefs: string[]
+  missing: boolean
+}
+
+const ROUTING_QUALITY_VALIDATION = 'Run quality evaluation on representative low-risk tasks before routing production traffic.'
+const MATRIX_VALIDATION = 'Model performance matrix evidence is not verified for production routing.'
+
+function routingMatrixGate(
+  candidate: OptimizationCandidate,
+  modelId: string,
+  matrix: OptimizationModelPerformanceMatrixRow[] | undefined,
+): RoutingMatrixGate | null {
+  if (candidate.policy !== 'route_low_risk_to_cheaper_model') return null
+  const rows = matrix?.filter(row => row.modelId === modelId) ?? []
+  const allowed = rows.find(row => row.decisionAuthority === 'routing_allowed')
+  const selected = allowed ?? rows[0]
+  if (!selected) {
+    return {
+      allowed: false,
+      evidenceStatus: 'baseline_unavailable',
+      evidenceRefs: [],
+      missing: true,
+    }
+  }
+  return {
+    allowed: selected.decisionAuthority === 'routing_allowed',
+    evidenceStatus: selected.evidenceStatus,
+    evidenceRefs: selected.evidenceRefs,
+    missing: false,
+  }
+}
+
+function decisionModeFor(
+  candidate: OptimizationCandidate,
+  routingGate: RoutingMatrixGate | null,
+): OptimizationRecommendation['decisionMode'] {
+  if (candidate.policy !== 'route_low_risk_to_cheaper_model') return 'deterministic'
+  return routingGate?.allowed ? 'deterministic' : 'what_if'
+}
+
+function qualityCaveatFor(
+  candidate: OptimizationCandidate,
+  routingGate: RoutingMatrixGate | null,
+): string | null {
+  if (candidate.policy !== 'route_low_risk_to_cheaper_model') return null
+  if (routingGate?.allowed) {
+    return 'Potential savings are deterministic and the model performance matrix has verified routing evidence; monitor production quality after adoption.'
+  }
+  if (routingGate?.missing) {
+    return 'Potential savings are deterministic, but model performance matrix baseline is unavailable and accuracy impact requires validation before adoption.'
+  }
+  return `Potential savings are deterministic, but model performance matrix evidence is ${routingGate?.evidenceStatus ?? 'unavailable'} and accuracy impact requires validation before adoption.`
+}
+
+function requiredValidationFor(
+  candidate: OptimizationCandidate,
+  routingGate: RoutingMatrixGate | null,
+): string[] {
+  if (candidate.policy !== 'route_low_risk_to_cheaper_model') return []
+  return routingGate?.allowed ? [] : [ROUTING_QUALITY_VALIDATION, MATRIX_VALIDATION]
 }
 
 function legacyImpact(

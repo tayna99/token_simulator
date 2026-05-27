@@ -74,4 +74,48 @@ describe('proposeOptimizationCandidates', () => {
     expect(recommendation.qualityCaveat).toContain('accuracy impact requires validation')
     expect(recommendation.isDefinitiveWaste).toBe(false)
   })
+
+  it('keeps cheaper-model routing validation-gated when matrix evidence is not verified', () => {
+    const [candidate] = proposeOptimizationCandidates({
+      findings: [
+        { id: 'finding-route', kind: 'top_agent_concentration', agentId: 'agent-engineering', severity: 'high', message: 'route lower risk work' },
+      ],
+    })
+
+    const recommendation = recommendationFromCandidate(candidate, {
+      agents: AI_TEAM_AGENT_CATALOG,
+      modelPerformanceMatrix: [{
+        taskType: 'classification',
+        modelId: 'gpt-5.4-nano',
+        decisionAuthority: 'validation_required',
+        evidenceStatus: 'needs_review',
+        evidenceRefs: ['evidence:artificial-analysis-models'],
+      }],
+    })
+
+    expect(recommendation.decisionMode).toBe('what_if')
+    expect(recommendation.requiredValidation).toEqual(expect.arrayContaining([
+      expect.stringMatching(/model performance matrix/i),
+    ]))
+    expect(recommendation.toolResultRefs).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^tool:optimization\..*\.affectedAgentIds$/),
+    ]))
+  })
+
+  it('does not present routing as allowed when matrix evidence is baseline unavailable', () => {
+    const [candidate] = proposeOptimizationCandidates({
+      findings: [
+        { id: 'finding-route', kind: 'top_agent_concentration', agentId: 'agent-engineering', severity: 'high', message: 'route lower risk work' },
+      ],
+    })
+
+    const recommendation = recommendationFromCandidate(candidate, {
+      agents: AI_TEAM_AGENT_CATALOG,
+      modelPerformanceMatrix: [],
+    })
+
+    expect(recommendation.decisionMode).toBe('what_if')
+    expect(recommendation.isDefinitiveWaste).toBe(false)
+    expect(recommendation.qualityCaveat).toMatch(/baseline|validation|matrix/i)
+  })
 })
