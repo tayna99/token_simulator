@@ -1,3 +1,5 @@
+// Legacy Vite-only component. Do not use for AgentPayroll model routing decisions;
+// quality and reliability values in this component are assumption-only display values.
 import { useMemo } from 'react'
 import { MODELS } from '../../data/models'
 import { calculateCost } from '../../lib/calculator'
