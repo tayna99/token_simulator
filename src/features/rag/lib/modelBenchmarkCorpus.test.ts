@@ -75,5 +75,17 @@ describe('modelBenchmarkCorpus', () => {
       'third_party_benchmark',
       'assumption',
     ]))
+    expect(MODEL_PERF_MATRIX.length).toBeGreaterThan(2)
+    expect(MODEL_PERF_MATRIX[0]).toEqual(expect.objectContaining({
+      evidenceStatus: expect.any(String),
+      decisionAuthority: expect.any(String),
+      normalizedQualityScore: null,
+      taskFit: expect.objectContaining({
+        contextWindowOk: expect.any(Boolean),
+        inputModalitiesOk: expect.any(Boolean),
+        outputModalitiesOk: expect.any(Boolean),
+      }),
+    }))
+    expect(MODEL_PERF_MATRIX.some(row => row.evidenceStatus === 'baseline_unavailable')).toBe(true)
   })
 })

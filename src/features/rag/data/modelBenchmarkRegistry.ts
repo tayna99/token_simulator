@@ -1,4 +1,7 @@
 import benchmarkRegistryJson from '../../research/data/modelBenchmarkRegistry.json'
+import { MODELS } from '../../alternatives/data/models'
+import { buildModelPerformanceMatrix } from '../../research/lib/modelPerformanceMatrix'
+import type { ModelPerformanceMatrixRow } from '../../research/lib/modelPerformanceMatrix'
 import { normalizeCorpusSource, type CorpusSource, type CorpusSourceInput } from '../lib/corpusTypes'
 
 export type BenchmarkQualityBasis = 'assumption' | 'third_party_benchmark' | 'official_model_card' | 'internal_eval'
@@ -19,13 +22,7 @@ export interface ModelBenchmarkRecord {
   qualityBasis: BenchmarkQualityBasis
 }
 
-export interface ModelPerfMatrixRow {
-  taskType: string
-  modelId: string
-  qualityBasis: BenchmarkQualityBasis
-  evidenceRefs: string[]
-  risk: string
-}
+export type ModelPerfMatrixRow = ModelPerformanceMatrixRow
 
 export const MODEL_BENCHMARK_SOURCES: CorpusSource[] = (benchmarkRegistryJson as CorpusSourceInput[])
   .filter(source => source.active)
@@ -76,19 +73,8 @@ export const MODEL_BENCHMARK_RECORDS: ModelBenchmarkRecord[] = [
   },
 ]
 
-export const MODEL_PERF_MATRIX: ModelPerfMatrixRow[] = [
-  {
-    taskType: 'classification',
-    modelId: 'gemini-3.1-flash',
-    qualityBasis: 'third_party_benchmark',
-    evidenceRefs: ['evidence:lmarena-leaderboard', 'evidence:artificial-analysis-models'],
-    risk: 'Low-risk classification can be routed only after sample quality checks.',
-  },
-  {
-    taskType: 'report_generation',
-    modelId: 'claude-sonnet-4.6',
-    qualityBasis: 'assumption',
-    evidenceRefs: [],
-    risk: 'Executive-facing reports need review before cheaper-model routing.',
-  },
-]
+export const MODEL_PERF_MATRIX = buildModelPerformanceMatrix({
+  models: MODELS,
+  benchmarkRecords: MODEL_BENCHMARK_RECORDS,
+  capturedAt: '2026-05-28T00:00:00.000Z',
+})
