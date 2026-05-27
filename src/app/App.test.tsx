@@ -537,6 +537,14 @@ describe('App AI team operations workspace', () => {
     expect(allHandsBody.corpusRegistryVersion).toBe('corpus_registry_v0.1')
     expect(allHandsBody).toHaveProperty('ragEvidenceCoverage')
     expect(allHandsBody.benchmarkEvidenceRefs).toContain('evidence:artificial-analysis-models')
+    expect(allHandsBody.modelPerfMatrix[0]).toEqual(expect.objectContaining({
+      modelId: expect.any(String),
+      taskType: expect.any(String),
+      evidenceStatus: expect.any(String),
+      decisionAuthority: expect.any(String),
+      evidenceRefs: expect.any(Array),
+    }))
+    expect(JSON.stringify(allHandsBody.modelPerfMatrix)).not.toMatch(/peerAverage|fakeScore|typical production measurements/i)
   }, 60000)
 
   it('resumes a HITL checkpoint after an explicit Adopt decision', async () => {

@@ -2939,6 +2939,7 @@ function App() {
   const teamCostRecommendations = useMemo(() => proposeOptimizationCandidates({ findings: teamCostBottlenecks })
     .map(candidate => recommendationFromCandidate(candidate, {
       agents: teamCostAgents,
+      modelPerformanceMatrix: MODEL_PERF_MATRIX,
     })), [teamCostAgents, teamCostBottlenecks])
   const teamCostRiskCards = useMemo(() => {
     const firstRecommendation = teamCostRecommendations[0]
