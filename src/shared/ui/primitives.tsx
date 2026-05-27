@@ -36,7 +36,7 @@ export function Surface({
 }: SurfaceProps) {
   return (
     <section
-      className={`apple-utility-surface rounded-wds-lg border border-line-neutral bg-surface-normal p-4 md:p-6 ${className}`}
+      className={`apple-utility-surface rounded-wds border border-line-neutral bg-surface-normal p-4 md:p-6 ${className}`}
       {...props}
     >
       {(eyebrow || title || description || action) && (

@@ -11,6 +11,6 @@ describe('Next root layout', () => {
 
     expect(element.type).toBe('html')
     expect(element.props.translate).toBe('no')
-    expect(element.props.lang).toBe('en')
+    expect(element.props.lang).toBe('ko')
   })
 })

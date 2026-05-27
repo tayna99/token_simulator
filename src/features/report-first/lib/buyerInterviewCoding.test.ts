@@ -61,7 +61,7 @@ describe('codeBuyerInterviewNotes', () => {
         kind: 'product_copy',
         source: 'repeated_exact_quote',
         exactQuoteCount: 2,
-        promotedText: expect.stringContaining('AI Token Leakage Report'),
+        promotedText: expect.stringContaining('AI 비용 누수 리포트'),
       }),
     ]))
   })

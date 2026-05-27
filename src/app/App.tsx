@@ -13,7 +13,7 @@ import type { UsageImportSummary } from '../features/usage/lib/usageImport'
 import { UsageImportPanel } from '../features/usage/components/UsageImportPanel'
 import { rollupUsageByAxis, type AttributionAxis, type AttributionResult } from '../features/usage/lib/attribution'
 import { hasRevenueBasis, type AnalysisReadinessReport } from '../features/usage/lib/analysisReadiness'
-import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../features/usage/data/sparkClawSample'
+import { CUSTOMER_MONTHLY_REVENUE, PLAN_MONTHLY_REVENUE } from '../features/usage/data/agentPayrollSample'
 import { customerProfitability, heavyUserDetection, marginByPlan, type CustomerMarginRow, type MarginRow } from '../features/unit-economics/lib/margin'
 import { calculatePricingScenario, type ScenarioResult } from '../features/pricing/lib/pricingScenario'
 import { buildRateCardDraft, buildRateCardExecutionReadiness, type RateCardDraft } from '../features/pricing/lib/rateCardDraft'
@@ -425,7 +425,7 @@ const PROVIDER_REGISTRY_VERSION = 'provider_registry_v0.4'
 const EMPTY_AGENT_RUN_RESPONSE: AgentRunResponse = {
   events: [],
   answer: 'Agentic RAG is waiting for a deterministic snapshot.',
-  report: 'One-page report will be generated after the SparkClaw demo or a real import.',
+  report: 'One-page report will be generated after the AgentPayroll demo or a real import.',
   llmMode: 'deterministic-fallback',
   runtime: {
     status: 'deterministic_preview',
@@ -1176,7 +1176,7 @@ function OnePageReportPanel({
     completedAt: agentRun.runtime.completedAt,
   }
   const onePageReport = buildOnePageReportArtifact({
-    title: 'SparkClaw AI Cost Snapshot',
+    title: 'AgentPayroll AI Cost Snapshot',
     executiveSummary: 'AI COGS is concentrated in the highest-volume AI team work and requires a human operating decision.',
     metrics: [
       { label: 'Monthly AI team cost', value: fmtCurrency(teamEstimate.monthlyCostUsd) },
@@ -1716,7 +1716,7 @@ function CustomerDashboardEntryPanel({
             <Button
               key={cta.id}
               size="sm"
-              variant={cta.id === 'run_sparkclaw_sample' ? 'primary' : 'secondary'}
+              variant={cta.id === 'run_agentpayroll_sample' ? 'primary' : 'secondary'}
               onClick={handlers[cta.action]}
             >
               {cta.label}
@@ -2947,7 +2947,7 @@ function App() {
   const aiTeamConfiguration = useMemo<AITeamConfiguration>(() => ({
     companyProfile: {
       companyType: 'AI report generation SaaS',
-      stage: 'SparkClaw P0 demo',
+      stage: 'AgentPayroll P0 demo',
       budgetLabel: 'monthly AI team budget',
       locale: i18n.language === 'ko' ? 'ko' : 'en',
     },
@@ -3077,7 +3077,7 @@ function App() {
   }), [])
   const customerDashboard = useMemo(() => buildCustomerWorkspaceDashboard({
     workspaceId,
-    organizationName: 'SparkClaw',
+    organizationName: 'AgentPayroll',
     uploadCount: importedUsage ? 1 : 0,
     decisionCount: decisions.length,
     monthlyReviewCount: weeklyReportRun ? 1 : 0,
@@ -3685,7 +3685,7 @@ function App() {
       apiKey: '',
       mode: activeDecisionStage === 'decision-log' ? 'decision_support' : 'report',
       activeStage: activeDecisionStage,
-      question: `Explain the ${activeDecisionStage} decision for the SparkClaw AI team cost workspace.`,
+      question: `Explain the ${activeDecisionStage} decision for the AgentPayroll AI team cost workspace.`,
       requestedAgentId: requestedOperatingAgentId,
       executionMode: agentExecutionMode,
       snapshotVersion: agentSnapshot.snapshotVersion,
@@ -3841,7 +3841,7 @@ function App() {
     }
   }
 
-  const handleSparkClawDemoLoaded = async (summary: UsageImportSummary) => {
+  const handleAgentPayrollSampleLoaded = async (summary: UsageImportSummary) => {
     setShowTeamCostSimulator(true)
     setActiveDecisionStage('decision-log')
     const existingDemo = decisions.some(decision => decision.assumptions.demo === 'sample/demo')
@@ -3878,7 +3878,7 @@ function App() {
       createOperatingLedgerEntry({
         kind: 'attribution',
         what: 'Usage Schema Mapping sample import',
-        why: 'SparkClaw usage rows must preserve customer, plan, session, and agent-run attribution.',
+        why: 'AgentPayroll usage rows must preserve customer, plan, session, and agent-run attribution.',
         assumptions: { demo: 'sample/demo', asset: 'usage_schema_mapping' },
         toolResultRefs: ['asset:usage_schema_mapping', 'tool:monthlyAiCogs'],
         riskCards: ['risk-agent-loop-runaway'],
@@ -3889,11 +3889,11 @@ function App() {
         ...reviewMetadata,
         operatingLedger: {
           workstream: 'Usage Data Ingestion',
-          source: 'SparkClaw sample CSV',
+          source: 'AgentPayroll sample CSV',
           agentUsed: 'Usage Data Ingestion Agent',
           proposedChange: 'Normalize CSV into normalized_usage_table and report missing dimensions explicitly.',
           humanDecision: 'Approve sample import after preserving attribution dimensions.',
-          artifactUpdated: 'usage_schema_mapping sparkclaw',
+          artifactUpdated: 'usage_schema_mapping agentpayroll',
           impact: 'Cost attribution can roll up by customer, feature, model, plan, session, and agent run.',
           followUp: 'Add customer-specific mapping memory when real uploads arrive.',
         },
@@ -3912,7 +3912,7 @@ function App() {
         ...reviewMetadata,
         operatingLedger: {
           workstream: 'Model Routing',
-          source: 'SparkClaw optimization recommendation',
+          source: 'AgentPayroll optimization recommendation',
           agentUsed: 'Model & Inference Research Agent, Optimization & Routing Agent',
           proposedChange: 'Keep model downgrade as eval-needed what-if instead of definitive waste.',
           humanDecision: 'Hold production routing until quality sample passes.',
@@ -3924,13 +3924,13 @@ function App() {
     ]
     const decision = createDecision({
       kind: 'approve',
-      what: 'SparkClaw sample/demo decision',
+      what: 'AgentPayroll sample/demo decision',
       why: 'This customer is unprofitable until AI COGS, routing, and pricing policy are corrected.',
       assumptions: {
         demo: 'sample/demo',
         importedRequests: summary.requestCount,
         importedCostUsd: summary.totalCostUsd,
-        recommendationId: recommendation?.id ?? 'sparkclaw-demo',
+        recommendationId: recommendation?.id ?? 'agentpayroll-demo',
       },
       toolResultRefs: [
         'tool:team.monthlyCostUsd',
@@ -4152,7 +4152,7 @@ function App() {
       ? decisions.find(decision => decision.id === exportGate.decisionId)
       : undefined
     const report = buildOnePageReportArtifact({
-      title: 'SparkClaw AI Team Cost Decision Report',
+      title: 'AgentPayroll AI Team Cost Decision Report',
       executiveSummary: agentRun.supervisorSummary || agentRun.report,
       metrics: [
         { label: 'Monthly AI team cost', value: fmtCurrency(teamCostEstimate.monthlyCostUsd) },
@@ -4183,7 +4183,7 @@ function App() {
     const blob = new Blob([content], { type: 'text/markdown' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = 'sparkclaw-ai-team-cost-decision-report.md'
+    link.download = 'agentpayroll-ai-team-cost-decision-report.md'
     link.click()
     URL.revokeObjectURL(link.href)
   }
@@ -4495,13 +4495,13 @@ function App() {
                 id="import"
                 eyebrow="Usage log entry point"
                 title="1. Import"
-                description="Start from CSV logs or the SparkClaw sample. Token fields come from logs; business denominators stay explicit."
+                description="Start from CSV logs or the AgentPayroll sample. Token fields come from logs; business denominators stay explicit."
               >
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
                   <UsageImportPanel
                     importedSummary={importedUsage}
                     onImport={handleUsageImport}
-                    onSparkClawDemo={handleSparkClawDemoLoaded}
+                    onAgentPayrollSample={handleAgentPayrollSampleLoaded}
                   />
                   <TeamDesignerPanel config={aiTeamConfiguration} />
                 </div>

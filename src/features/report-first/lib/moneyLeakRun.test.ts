@@ -21,6 +21,14 @@ describe('deriveMoneyLeakStepStates', () => {
       'decision_choice',
       'pdf',
     ])
+    expect(MONEY_LEAK_STEPS.map(step => step.label)).toEqual([
+      '데이터 준비',
+      '리포트 준비 확인',
+      '비용 누수',
+      '정책 후보',
+      '결정하기',
+      '리포트',
+    ])
     expect(states.input).toBe('current')
     expect(states.trust).toBe('locked')
     expect(states.pdf).toBe('locked')

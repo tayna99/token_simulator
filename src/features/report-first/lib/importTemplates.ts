@@ -14,7 +14,7 @@ export const REPORT_FIRST_IMPORT_TEMPLATES: ImportTemplateProfile[] = [
   {
     id: 'helicone_usage',
     kind: 'usage',
-    label: 'Helicone usage',
+    label: 'Helicone 사용량',
     source: 'Helicone',
     requiredColumns: ['customer_id', 'feature', 'model', 'input_tokens', 'output_tokens'],
     optionalColumns: ['request_id', 'total_cost', 'latency_ms', 'status'],
@@ -28,7 +28,7 @@ export const REPORT_FIRST_IMPORT_TEMPLATES: ImportTemplateProfile[] = [
   {
     id: 'langfuse_usage',
     kind: 'usage',
-    label: 'Langfuse usage',
+    label: 'Langfuse 사용량',
     source: 'Langfuse',
     requiredColumns: ['user_id', 'use_case', 'model_id', 'prompt_tokens', 'completion_tokens'],
     optionalColumns: ['id', 'cost_usd', 'latency', 'result'],
@@ -41,7 +41,7 @@ export const REPORT_FIRST_IMPORT_TEMPLATES: ImportTemplateProfile[] = [
   {
     id: 'openai_usage',
     kind: 'usage',
-    label: 'OpenAI usage',
+    label: 'OpenAI 사용량',
     source: 'OpenAI',
     requiredColumns: ['customer_id', 'route', 'model', 'prompt_tokens', 'completion_tokens'],
     optionalColumns: ['request_id', 'cost_usd'],
@@ -54,7 +54,7 @@ export const REPORT_FIRST_IMPORT_TEMPLATES: ImportTemplateProfile[] = [
   {
     id: 'stripe_allowance',
     kind: 'allowance',
-    label: 'Stripe allowance',
+    label: 'Stripe 요금제/매출',
     source: 'Stripe',
     requiredColumns: ['customer_id', 'revenue_collected', 'included_tokens'],
     optionalColumns: ['plan_id', 'overage_rate_usd_per_1k_tokens'],

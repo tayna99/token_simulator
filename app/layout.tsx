@@ -6,7 +6,7 @@ import { PRODUCT_NAME } from '../src/lib/productBrand'
 
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
-  description: 'Production demo workspace for AI SaaS cost and agent operations.',
+  description: 'AI SaaS 사용량 CSV로 손해 고객, 마진을 깨는 기능, 토큰 정책 후보를 찾는 데모 workspace.',
   other: {
     google: 'notranslate',
   },
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" translate="no">
+    <html lang="ko" translate="no">
       <body>{children}</body>
     </html>
   )

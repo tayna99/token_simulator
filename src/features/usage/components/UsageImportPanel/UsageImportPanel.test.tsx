@@ -46,8 +46,9 @@ describe('UsageImportPanel', () => {
 
     expect(onImport).not.toHaveBeenCalled()
     expect(screen.getByText(/trust pipeline blocked/i)).toBeInTheDocument()
-    expect(screen.getByText('raw prompt는 수집하지 않았습니다.')).toBeInTheDocument()
-    expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
+    expect(screen.getAllByText('리포트 생성 불가').length).toBeGreaterThan(0)
+    expect(screen.getByText('원문 프롬프트 감지됨')).toBeInTheDocument()
+    expect(screen.getByText('API 키 없음')).toBeInTheDocument()
     expect(screen.getByText(/raw_prompt_detected/i)).toBeInTheDocument()
   })
 

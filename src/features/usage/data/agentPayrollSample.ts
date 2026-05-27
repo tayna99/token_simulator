@@ -1,4 +1,4 @@
-export const SPARK_CLAW_SAMPLE_CSV = [
+export const AGENT_PAYROLL_SAMPLE_CSV = [
   'timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,input_tokens,output_tokens,total_cost,latency_ms,status',
   '2026-05-01T10:00:00Z,req_001,cust_001,pro,report_generation,claude-sonnet-4.6,sess_001,run_001,180000,90000,82,1400,success',
   '2026-05-01T10:03:00Z,req_002,cust_001,pro,agent_workflow,claude-sonnet-4.6,sess_001,run_001,240000,120000,96,2200,success',
@@ -26,7 +26,7 @@ export const CUSTOMER_MONTHLY_REVENUE: Record<string, number> = {
   cust_007: 99,
 }
 
-export const SPARK_CLAW_TOKEN_ALLOWANCE_CSV = [
+export const AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV = [
   'customer_id,plan_id,revenue_collected,included_tokens,overage_rate_usd_per_1k_tokens',
   'cust_001,pro,29,185000,0.18',
   'cust_002,pro,29,185000,0.18',

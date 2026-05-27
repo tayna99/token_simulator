@@ -137,26 +137,51 @@ export default async function WorkspacePage({
     store: client ? createSupabaseProductionDemoStatusStore(client) : createUnavailableProductionDemoStatusStore(),
   })
 
+  const serviceNav = [
+    { label: '진단하기', href: `/w/${workspaceId}`, active: true },
+    { label: '리포트 보기', href: `/reports/demo?workspaceId=${workspaceId}`, active: false },
+    { label: '결정 기록', href: `/w/${workspaceId}#decision`, active: false },
+    { label: '데이터 설정', href: `/w/${workspaceId}#data`, active: false },
+    { label: '다음 달 검산', href: `/w/${workspaceId}#review`, active: false },
+  ]
+
   return (
     <main className="min-h-screen bg-surface-normal px-6 py-10 text-label-normal">
       <section className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase text-primary-normal" translate="no">AI SaaS Margin Diagnosis</p>
-            <h1 className="mt-2 text-3xl font-semibold">분석 완료까지 5분</h1>
+            <p className="text-sm font-semibold text-primary-normal">AgentPayroll</p>
+            <h1 className="mt-2 text-3xl font-semibold">샘플 클릭 한 번으로 리포트까지 확인합니다</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-label-neutral">
-              손해 보는 고객, 마진을 깨는 기능, 추천 결정을 먼저 보여주고 세부 감사 기록은 전문가 모드에 둡니다.
+              손해 고객, 마진을 깨는 기능, 토큰 정책 후보를 먼저 보여주고 세부 감사 기록은 전문가 모드에 둡니다.
             </p>
           </div>
           <div className="flex gap-2">
             <Link className="rounded-wds border border-line-neutral px-3 py-2 text-sm font-semibold" href={`/w/${workspaceId}/admin`}>
-              Admin
+              관리자
             </Link>
             <Link className="rounded-wds border border-line-neutral px-3 py-2 text-sm font-semibold" href="/login">
-              Login
+              로그인
             </Link>
           </div>
         </div>
+
+        <nav className="mt-6 flex gap-2 overflow-x-auto rounded-wds border border-line-neutral bg-surface-alternative p-2" aria-label="데모 메뉴">
+          {serviceNav.map(item => (
+            <Link
+              key={item.label}
+              href={item.href}
+              aria-current={item.active ? 'page' : undefined}
+              className={`shrink-0 rounded-wds px-3 py-2 text-sm font-semibold ${
+                item.active
+                  ? 'bg-surface-normal text-primary-normal'
+                  : 'text-label-neutral hover:bg-surface-normal'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
 
         <div className="mt-6">
           <ReportFirstDiagnosisWorkspace

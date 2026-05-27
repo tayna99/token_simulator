@@ -21,13 +21,13 @@
 //     are demo-friendly but unverified.
 //
 // What stays mostly stable regardless of interviews:
-//   • Schema (13-column CSV matching sparkClawSample.ts).
+//   • Schema (13-column CSV matching agentPayrollSample.ts).
 //   • Deterministic generator (mulberry32, same CSV every run).
 //   • Realistic OpenAI 2026-05 prices.
 //   • Prompt-free analytics: no `prompt` column. Privacy posture preserved.
 //   • Per-team budget ($75 ≈ ₩100,000) — this IS a real bootcamp fact.
 //
-// Schema matches sparkClawSample.ts and src/features/usage/lib/usageImport.ts.
+// Schema matches agentPayrollSample.ts and src/features/usage/lib/usageImport.ts.
 
 interface PriceTable {
   inputPerMillion: number

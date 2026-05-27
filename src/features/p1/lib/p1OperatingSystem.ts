@@ -2,7 +2,7 @@ import { inspectUsageImportSecurity, type TrustInspectionResult } from '../../tr
 import { schemaEvidenceRefsForAdapter } from '../../rag/data/usageSchemaRegistry'
 
 export type CustomerDashboardCtaId =
-  | 'run_sparkclaw_sample'
+  | 'run_agentpayroll_sample'
   | 'upload_usage_export'
   | 'open_existing_workspace'
 
@@ -654,7 +654,7 @@ export function buildCustomerWorkspaceDashboard(input: CustomerWorkspaceDashboar
     ctas: [
       { id: 'upload_usage_export', label: '사용량 CSV 업로드', action: 'upload_usage' },
       { id: 'open_existing_workspace', label: 'Stripe/매출 CSV 업로드', action: 'open_workspace' },
-      { id: 'run_sparkclaw_sample', label: '샘플로 보기', action: 'load_sample' },
+      { id: 'run_agentpayroll_sample', label: '샘플로 보기', action: 'load_sample' },
     ],
     sections: [
       {

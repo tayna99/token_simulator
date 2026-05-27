@@ -1,4 +1,4 @@
-﻿import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { fireEvent } from '@testing-library/react'
 import { within } from '@testing-library/react'
@@ -871,12 +871,12 @@ describe('App AI team operations workspace', () => {
     expect(panel).not.toHaveTextContent(/snapshot:/i)
   }, 60000)
 
-  it('loads the SparkClaw demo into every stage, creates a sample decision, and exposes report export', async () => {
+  it('loads the AgentPayroll demo into every stage, creates a sample decision, and exposes report export', async () => {
     const user = userEvent.setup()
     window.history.pushState({}, '', '/token_simulator/?debug=1')
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
+    await user.click(screen.getByRole('button', { name: /Load AgentPayroll sample/i }))
 
     expect(screen.getByText(/Snapshot allowed:/i)).toBeInTheDocument()
     expect(screen.getByText(/Analysis available/i)).toBeInTheDocument()
@@ -1094,11 +1094,11 @@ describe('App AI team operations workspace', () => {
     expect(screen.getAllByText(/Claude Sonnet 4.6/).length).toBeGreaterThan(0)
   })
 
-  it('loads SparkClaw sample usage and updates attribution, margin, pricing, and agent report surfaces', async () => {
+  it('loads AgentPayroll sample usage and updates attribution, margin, pricing, and agent report surfaces', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
+    await user.click(screen.getByRole('button', { name: /Load AgentPayroll sample/i }))
 
     await user.click(lifecycleButton(/Design/i))
     expect(screen.getByText(/Team org chart/i)).toBeInTheDocument()
@@ -1122,7 +1122,7 @@ describe('App AI team operations workspace', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /Load SparkClaw sample/i }))
+    await user.click(screen.getByRole('button', { name: /Load AgentPayroll sample/i }))
     await user.click(lifecycleButton(/Optimize \+ Risk/i))
     await user.click(screen.getByRole('button', { name: /Adopt credit scenario/i }))
     await user.click(lifecycleButton(/Decision Log/i))
@@ -1506,7 +1506,7 @@ describe('App AI team operations workspace', () => {
 
     render(<App />)
     fireEvent.click(screen.getByText(/AI Team Cost Simulator/i))
-    fireEvent.click(screen.getByText(/Load SparkClaw sample/i))
+    fireEvent.click(screen.getByText(/Load AgentPayroll sample/i))
     fireEvent.click(lifecycleButton(/Design/i))
     fireEvent.click(buttonByText(/Generate calibration proposal/i))
 

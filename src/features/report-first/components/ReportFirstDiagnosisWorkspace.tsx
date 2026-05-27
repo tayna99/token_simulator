@@ -10,13 +10,13 @@ import {
   CUSTOMER_MONTHLY_REVENUE,
   CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS,
   CUSTOMER_TOKEN_ALLOWANCE,
+  AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV,
+  AGENT_PAYROLL_SAMPLE_CSV,
   PLAN_MONTHLY_REVENUE,
   PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
   PLAN_TOKEN_ALLOWANCE,
-  SPARK_CLAW_TOKEN_ALLOWANCE_CSV,
-  SPARK_CLAW_SAMPLE_CSV,
-} from '../../usage/data/sparkClawSample'
-import { TrustAssurancePanel } from '../../trust/components/TrustAssurancePanel'
+} from '../../usage/data/agentPayrollSample'
+import { TrustAssurancePanel, type ReportMappingStatus } from '../../trust/components/TrustAssurancePanel'
 import type { TrustInspectionResult } from '../../trust/lib/securityMiddleware'
 import { parseUsageCsv, type UsageImportSummary } from '../../usage/lib/usageImport'
 import {
@@ -126,8 +126,17 @@ function customerReportGateReason(reason: string): string {
   if (/token_allowance|mapping|customer|plan|revenue|profitability|loss/i.test(reason)) {
     return 'customer_id, included_tokens, revenue_collected 매핑을 확인해야 PDF 리포트를 만들 수 있습니다.'
   }
-  if (/summary|json|inspection/i.test(reason)) return 'Trust Gate를 통과한 safe summary가 필요합니다.'
+  if (/summary|json|inspection/i.test(reason)) return '리포트 준비 확인을 통과한 안전 요약이 필요합니다.'
   return '데이터 준비 상태를 확인해야 PDF 리포트를 만들 수 있습니다.'
+}
+
+function reportMappingStatusFor(snapshot: DiagnosisSnapshot | null): ReportMappingStatus {
+  if (!snapshot) return 'unknown'
+  if (snapshot.reportGate.canCreateArtifact) return 'ready'
+  if (/token_allowance|mapping|customer|plan|revenue|profitability|loss/i.test(snapshot.reportGate.reason)) {
+    return 'required'
+  }
+  return 'unknown'
 }
 
 function numericInput(value: string): number {
@@ -219,6 +228,21 @@ function statusTone(status: string): 'positive' | 'caution' | 'neutral' {
   return status === 'within_target' ? 'positive' : status === 'exceeded' ? 'caution' : 'neutral'
 }
 
+function icpRouteLabel(route: IcpTimingGateAssessment['route']): string {
+  if (route === 'diagnosis_report') return '유료 진단 후보'
+  if (route === 'data_readiness_first') return '데이터 준비 먼저'
+  return '샘플 먼저 보기'
+}
+
+function icpMissingLabel(reason: string): string {
+  if (reason === 'monthly_ai_spend_too_low') return '월 AI 비용'
+  if (reason === 'customer_revenue_mapping_missing') return '고객별 매출 매핑'
+  if (reason === 'heavy_user_signal_missing') return '과다 사용 고객 신호'
+  if (reason === 'pricing_decision_not_urgent') return '가격/제한 결정 시점'
+  if (reason === 'ceo_finance_report_not_needed') return '대표/재무 보고 대상'
+  return reason
+}
+
 function UnitEconomicsPdcaPanel({
   instrumentation,
   monthlyLlmSpendKrw,
@@ -298,14 +322,14 @@ function UnitEconomicsPdcaPanel({
             className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
           />
         </Field>
-        <Field label="token 정책 결정 긴급도" htmlFor="pdca-decision-urgency" help="overage, cap, credit 결정을 당장 해야 할수록 A급 ICP에 가깝습니다.">
+        <Field label="토큰 정책 결정 긴급도" htmlFor="pdca-decision-urgency" help="초과 과금, cap, credit 결정을 당장 해야 할수록 A급 ICP에 가깝습니다.">
           <select
             id="pdca-decision-urgency"
             value={decisionUrgency}
             onChange={event => onDecisionUrgencyChange(event.currentTarget.value as DecisionUrgency)}
             className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
           >
-            <option value="pricing_or_margin_now">지금 overage/cap 결정을 해야 함</option>
+            <option value="pricing_or_margin_now">지금 초과 과금/cap 결정을 해야 함</option>
             <option value="exploratory">샘플 진단으로 확인</option>
             <option value="none">아직 결정 예정 없음</option>
           </select>
@@ -387,19 +411,19 @@ function ServiceMvpOfferPanel() {
     <div data-testid="customer-service-offer" className="mb-4 rounded-wds border border-line-neutral bg-fill-alternative p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-sm font-semibold text-label-normal" translate="no">API Token Leakage Snapshot</p>
+          <p className="text-sm font-semibold text-label-normal">AI 비용 누수 진단</p>
           <p className="mt-1 text-xs leading-5 text-label-neutral">
-            prompt-free, PII-safe CSV로 포함 token, 초과 token, 미회수 AI 원가를 먼저 보여주는 1회 진단 리포트를 만듭니다.
+            프롬프트와 개인정보 없이 포함 토큰, 초과 사용량, 미회수 AI 원가를 먼저 보여주는 1회 진단 리포트를 만듭니다.
           </p>
         </div>
         <Badge tone="primary" translate="no">
           {fmtKrwRange(offer.minPriceKrw, offer.maxPriceKrw)}
         </Badge>
       </div>
-      <div className="mt-3 grid gap-2 text-xs text-label-neutral md:grid-cols-3" lang="en">
-        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">safe data request</p>
-        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">sample report preview</p>
-        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">review call decision</p>
+      <div className="mt-3 grid gap-2 text-xs text-label-neutral md:grid-cols-3">
+        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">안전한 데이터 요청</p>
+        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">샘플 리포트 미리보기</p>
+        <p className="rounded-wds border border-line-neutral bg-surface-normal p-2">리뷰콜에서 결정 확인</p>
       </div>
     </div>
   )
@@ -417,8 +441,8 @@ function CustomerEvidenceSummary({
       <p className="text-sm font-semibold">고객용 근거 요약</p>
       <ul className="mt-2 grid gap-2 text-xs text-label-neutral">
         <li>
-          <strong className="text-label-normal">고객별 token allowance와 매출 매핑</strong>
-          <p className="mt-1">업로드된 safe field 범위에서만 사용 token, 포함 token, revenue_collected를 연결했습니다.</p>
+          <strong className="text-label-normal">고객별 포함 토큰과 매출 매핑</strong>
+          <p className="mt-1">업로드된 안전 필드 범위에서만 사용 토큰, 포함 토큰, revenue_collected를 연결했습니다.</p>
         </li>
         <li>
           <strong className="text-label-normal">결정 후보 계산</strong>
@@ -434,9 +458,9 @@ function CustomerEvidenceSummary({
 }
 
 const DECISION_CHOICE_LABELS: Record<MoneyLeakDecisionChoice, string> = {
-  adopt: 'Adopt',
-  reject: 'Reject',
-  hold: 'Hold',
+  adopt: '채택',
+  reject: '거절',
+  hold: '보류',
 }
 
 function stepTone(state: MoneyLeakStepState): string {
@@ -447,7 +471,7 @@ function stepTone(state: MoneyLeakStepState): string {
 
 function MoneyLeakStepRail({ states }: { states: Record<MoneyLeakStepId, MoneyLeakStepState> }) {
   return (
-    <ol className="grid gap-2 md:grid-cols-6" aria-label="Money Leak Run steps">
+    <ol className="grid gap-2 md:grid-cols-6" aria-label="AI 비용 누수 진단 단계">
       {MONEY_LEAK_STEPS.map(step => (
         <li key={step.id} className={`rounded-wds border px-3 py-2 ${stepTone(states[step.id])}`}>
           <p className="text-xs font-semibold">{step.label}</p>
@@ -513,19 +537,19 @@ function IcpTimingGatePanel({
     <div data-testid="icp-timing-gate" className="mb-4 rounded-wds border border-line-neutral bg-surface-normal p-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-sm font-semibold" lang="en">ICP timing gate</p>
+          <p className="text-sm font-semibold">진단 적합도 확인</p>
           <p className="mt-1 text-xs leading-5 text-label-neutral">
-            지금 유료 진단으로 갈지, 샘플 Snapshot으로 먼저 볼지 5문항으로 가릅니다.
+            지금 유료 진단으로 갈지, 샘플 진단으로 먼저 볼지 5문항으로 가릅니다.
           </p>
         </div>
-        <div className="flex flex-wrap gap-1 text-xs" lang="en">
+        <div className="flex flex-wrap gap-1 text-xs">
           <Badge tone={assessment.grade === 'A' ? 'positive' : assessment.grade === 'B' ? 'caution' : 'neutral'}>
-            ICP grade: {assessment.grade}
+            진단 등급 {assessment.grade}
           </Badge>
           <Badge tone={assessment.route === 'diagnosis_report' ? 'positive' : assessment.route === 'data_readiness_first' ? 'caution' : 'neutral'}>
-            route: {assessment.route}
+            {icpRouteLabel(assessment.route)}
           </Badge>
-          <Badge tone="neutral">score: {scoreLabel}</Badge>
+          <Badge tone="neutral">점수: {scoreLabel}</Badge>
         </div>
       </div>
 
@@ -540,14 +564,14 @@ function IcpTimingGatePanel({
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
             />
           </Field>
-          <Field label="token 누수 결정 긴급도" htmlFor="icp-decision-urgency">
+          <Field label="토큰 누수 결정 긴급도" htmlFor="icp-decision-urgency">
             <select
               id="icp-decision-urgency"
               value={decisionUrgency}
               onChange={event => onDecisionUrgencyChange(event.currentTarget.value as DecisionUrgency)}
               className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
             >
-              <option value="pricing_or_margin_now">지금 overage/cap 결정을 해야 함</option>
+              <option value="pricing_or_margin_now">지금 초과 과금/cap 결정을 해야 함</option>
               <option value="exploratory">샘플 진단으로 확인</option>
               <option value="none">아직 결정 예정 없음</option>
             </select>
@@ -566,7 +590,7 @@ function IcpTimingGatePanel({
               checked={hasHeavyUserSuspicion}
               onChange={event => onHasHeavyUserSuspicionChange(event.currentTarget.checked)}
             />
-            <span>heavy user가 포함 token을 넘기는 것 같음</span>
+            <span>과다 사용 고객이 포함 토큰을 넘기는 것 같음</span>
           </label>
           <label className="flex items-center gap-2 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs font-semibold text-label-neutral md:col-span-2">
             <input
@@ -574,15 +598,15 @@ function IcpTimingGatePanel({
               checked={needsCeoFinanceReport}
               onChange={event => onNeedsCeoFinanceReportChange(event.currentTarget.checked)}
             />
-            <span>CEO/Finance 보고 필요</span>
+            <span>대표/재무 보고 필요</span>
           </label>
         </div>
         <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs">
           <p className="font-semibold text-label-normal">{assessment.headline}</p>
           <p className="mt-2 text-label-neutral">현재 입력 비용: <span translate="no">{fmtKrw(monthlySpend)}</span></p>
           <p className="mt-2 font-semibold text-primary-normal">{assessment.primaryCta}</p>
-          <p className="mt-2 text-label-alternative" lang="en">
-            missing: {assessment.missing.join(', ') || 'none'}
+          <p className="mt-2 text-label-alternative">
+            추가 확인: {assessment.missing.map(icpMissingLabel).join(', ') || '없음'}
           </p>
         </div>
       </div>
@@ -869,7 +893,7 @@ function LocalReportPreview({
           <p className="text-sm font-semibold" translate="no">{payload.title}</p>
           <p className="mt-1 text-xs leading-5 text-label-neutral">{payload.executiveSummary}</p>
         </div>
-        <Badge tone="primary">preview</Badge>
+        <Badge tone="primary">미리보기</Badge>
       </div>
       <div className="mt-3 grid gap-2 md:grid-cols-3">
         {payload.metrics.slice(0, 6).map(metric => (
@@ -1193,10 +1217,10 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   }
 
   function handleSample() {
-    setRawCsv(SPARK_CLAW_SAMPLE_CSV)
-    setRevenueCsv(SPARK_CLAW_TOKEN_ALLOWANCE_CSV)
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
-    const revenueMapping = parseRevenueCsv(SPARK_CLAW_TOKEN_ALLOWANCE_CSV)
+    setRawCsv(AGENT_PAYROLL_SAMPLE_CSV)
+    setRevenueCsv(AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV)
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
+    const revenueMapping = parseRevenueCsv(AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV)
     const importGeneration = applySnapshot(summary, null, {
       customerRevenueUsd: revenueMapping.customerRevenueUsd,
       planRevenueUsd: revenueMapping.planRevenueUsd,
@@ -1205,7 +1229,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       customerOverageRateUsdPer1kTokens: revenueMapping.customerOverageRateUsdPer1kTokens,
       planOverageRateUsdPer1kTokens: revenueMapping.planOverageRateUsdPer1kTokens,
     })
-    attachRemoteSnapshotRef(SPARK_CLAW_SAMPLE_CSV, importGeneration)
+    attachRemoteSnapshotRef(AGENT_PAYROLL_SAMPLE_CSV, importGeneration)
   }
 
   function handleSummary() {
@@ -1271,12 +1295,13 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       : !selectedDecisionId
         ? '결정 후보를 먼저 선택하세요.'
         : !decisionChoice
-          ? 'Adopt/Reject/Hold 선택이 필요합니다.'
+          ? '채택/보류/거절 선택이 필요합니다.'
           : !request
             ? 'production_report_unavailable'
             : ''
   const canCreatePdf = pdfDisabledReason === ''
   const visibleMessage = audience === 'expert' ? message : message ? customerReportGateReason(message) : ''
+  const reportMappingStatus = reportMappingStatusFor(snapshot)
   const stepStates = deriveMoneyLeakStepStates({
     hasInput: Boolean(rawCsv.trim() || revenueCsv.trim() || summaryJson.trim()),
     trustStatus: trustResult?.status ?? (snapshot?.reportGate.status === 'blocked' ? 'blocked' : 'waiting_for_upload'),
@@ -1288,14 +1313,14 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
   return (
     <section className="grid gap-6" data-testid="report-first-diagnosis">
-      <div className="rounded-wds border border-line-neutral bg-surface-alternative p-5">
-        <p className="text-sm font-semibold uppercase text-primary-normal" translate="no">AgentPayroll</p>
-        <h1 className="mt-2 text-3xl font-semibold">API Token Leakage Snapshot</h1>
+      <div className="rounded-wds border border-line-neutral bg-surface-normal p-5">
+        <p className="text-sm font-semibold text-primary-normal">AI 비용 누수 진단</p>
+        <h1 className="mt-2 text-3xl font-semibold">이번 달 AI 비용이 새는 곳을 찾습니다</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-label-neutral">
-          usage CSV와 token allowance/revenue summary를 넣으면 포함 token을 초과한 고객, token allowance를 가장 빨리 소진시키는 기능, 지금 검토할 overage 정책 후보를 한 번에 찾습니다.
+          사용량 CSV와 요금제/매출 CSV만 넣으면 손해 고객, 마진을 깨는 기능, 지금 검토할 토큰 정책 후보를 한 번에 보여줍니다.
         </p>
-        <p className="mt-4 text-xs font-semibold text-label-alternative" lang="en">
-          usage CSV + allowance CSV -&gt; Trust Gate -&gt; Token Leak -&gt; Token Policy -&gt; Adopt/Reject/Hold -&gt; Report Preview
+        <p className="mt-4 text-xs font-semibold text-label-alternative">
+          사용량 CSV + 요금제/매출 CSV -&gt; 리포트 준비 확인 -&gt; 손해 고객 -&gt; 마진을 깨는 기능 -&gt; 토큰 정책 후보 -&gt; 채택/보류/거절 -&gt; 리포트 미리보기
         </p>
         <div className="mt-4">
           <MoneyLeakStepRail states={stepStates} />
@@ -1304,18 +1329,18 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           <Badge tone={productionStatus === 'connected' ? 'positive' : 'caution'} translate={audience === 'expert' ? 'no' : undefined}>
             {audience === 'expert' ? productionStatus : customerProductionStatusLabel(productionStatus)}
           </Badge>
-          <Badge tone="primary">token leak 진단</Badge>
-          <Badge tone="neutral">preview는 즉시, PDF는 저장 후 표시</Badge>
+          <Badge tone="primary">비용 누수 진단</Badge>
+          <Badge tone="neutral">미리보기는 즉시, PDF는 저장 후 표시</Badge>
         </div>
       </div>
 
       <Surface
         eyebrow="데이터 준비"
-        title="usage CSV + token allowance CSV"
-        description="사용량, 포함 token, 회수된 매출을 연결해 초과 사용분과 미회수 원가를 먼저 보여줍니다."
+        title="사용량 CSV와 요금제/매출 CSV"
+        description="사용량, 포함 토큰, 회수된 매출을 연결해 초과 사용분과 미회수 원가를 먼저 보여줍니다."
         action={!snapshot ? <Button variant="primary" disabled>PDF 리포트 생성</Button> : undefined}
       >
-        <TrustAssurancePanel result={trustResult} audience={audience} />
+        <TrustAssurancePanel result={trustResult} audience={audience} mappingStatus={reportMappingStatus} />
         <ServiceMvpOfferPanel />
         <IcpTimingGatePanel
           assessment={icpTimingAssessment}
@@ -1387,14 +1412,14 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Button variant={inputMode === 'csv' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('csv')}>
-            사용량 CSV 업로드
+            사용량 CSV 올리기
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setInputMode('csv')}>
-            allowance/revenue CSV 업로드
+            요금제/매출 CSV 올리기
           </Button>
           {audience === 'expert' && (
             <Button variant={inputMode === 'summary' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('summary')}>
-              Summary JSON
+              요약 JSON
             </Button>
           )}
         </div>
@@ -1403,12 +1428,12 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           <div className="grid gap-3">
             <div className="grid gap-3 md:grid-cols-2">
               <ImportTemplateButtons
-                title="usage CSV templates"
+                title="사용량 CSV 템플릿"
                 templates={usageTemplates}
                 onSelect={applyUsageTemplate}
               />
               <ImportTemplateButtons
-                title="allowance/revenue templates"
+                title="요금제/매출 CSV 템플릿"
                 templates={allowanceTemplates}
                 onSelect={applyAllowanceTemplate}
               />
@@ -1422,7 +1447,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
                 className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
               />
             </Field>
-            <Field label="token allowance/revenue CSV" htmlFor="report-first-revenue-csv" help="필수 컬럼: customer_id, revenue_collected, included_tokens. 권장: overage_rate_usd_per_1k_tokens. plan_id는 선택입니다.">
+            <Field label="요금제/매출 CSV" htmlFor="report-first-revenue-csv" help="필수 컬럼: customer_id, revenue_collected, included_tokens. 권장: overage_rate_usd_per_1k_tokens. plan_id는 선택입니다.">
               <textarea
                 id="report-first-revenue-csv"
                 value={revenueCsv}
@@ -1433,7 +1458,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             </Field>
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" onClick={handleStartCsv}>분석 시작</Button>
-              <Button variant="secondary" onClick={handleSample}>SparkClaw token leak 샘플로 보기</Button>
+              <Button variant="secondary" onClick={handleSample}>샘플 데이터로 진단하기</Button>
             </div>
           </div>
         ) : (
@@ -1447,7 +1472,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
                 className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
               />
             </Field>
-            <Button variant="primary" onClick={handleSummary}>summary 진단</Button>
+            <Button variant="primary" onClick={handleSummary}>요약 진단</Button>
           </div>
         )}
         {visibleMessage && (
@@ -1459,9 +1484,9 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
       {snapshot && (
         <Surface
-          eyebrow="Diagnosis preview"
-          title="Token leak 분석 완료"
-          description="포함 token을 초과한 고객, token을 가장 많이 태우는 기능, token policy 후보를 한 화면에서 확인합니다."
+          eyebrow="진단 결과"
+          title="비용 누수 분석 완료"
+          description="포함 토큰을 초과한 고객, 토큰을 가장 많이 태우는 기능, 토큰 정책 후보를 한 화면에서 확인합니다."
           action={(
             <Button
               variant="primary"
@@ -1481,7 +1506,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             data-testid="diagnosis-calculation-basis"
             className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative px-3 py-2 text-xs font-semibold text-label-neutral"
           >
-            계산 기준: 현재 입력 CSV + allowance/revenue CSV
+            계산 기준: 현재 입력 CSV + 요금제/매출 CSV
           </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -1520,9 +1545,9 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
                 ))}
               </div>
               <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-                <p className="text-sm font-semibold">Adopt/Reject/Hold</p>
+                <p className="text-sm font-semibold">결정 남기기</p>
                 <p className="mt-1 text-xs text-label-neutral">
-                  사용자가 직접 선택하기 전까지 PDF는 decision-backed 상태가 아닙니다.
+                  사람이 채택, 보류, 거절 중 하나를 선택해야 리포트에 판단 근거가 고정됩니다.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(['adopt', 'reject', 'hold'] as const).map(choice => (
@@ -1543,7 +1568,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
                 </div>
                 {!decisionChoice && (
                   <p className="mt-2 text-xs font-semibold text-status-cautionary">
-                    Adopt/Reject/Hold 선택이 필요합니다.
+                    채택/보류/거절 선택이 필요합니다.
                   </p>
                 )}
               </div>
@@ -1567,7 +1592,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           </div>
 
           <div className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-            <p className="text-sm font-semibold">{audience === 'expert' ? 'PDF artifact gate' : '리포트 preview / PDF 준비'}</p>
+            <p className="text-sm font-semibold">{audience === 'expert' ? 'PDF 저장 관문' : '리포트 미리보기 / PDF 준비'}</p>
             <p className="mt-1 text-xs text-label-neutral">
               {diagnosis ? `근거 상태: ${diagnosis.evidenceState}` : '근거 상태: 검토 필요'}
               {selectedDecision ? ` / ${selectedDecision.title}` : ''}

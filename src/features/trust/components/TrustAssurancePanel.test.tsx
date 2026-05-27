@@ -6,13 +6,17 @@ describe('TrustAssurancePanel', () => {
   it('shows reassurance copy before any upload result exists', () => {
     render(<TrustAssurancePanel result={null} />)
 
-    expect(screen.getByText('raw prompt는 수집하지 않았습니다.')).toBeInTheDocument()
-    expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
-    expect(screen.getByText('이 데이터는 원가/마진 분석에 필요한 범위로만 사용됩니다.')).toBeInTheDocument()
+    expect(screen.getByText('리포트 준비 상태')).toBeInTheDocument()
+    expect(screen.getAllByText('업로드 대기').length).toBeGreaterThan(0)
+    expect(screen.getByText('원문 프롬프트 없음')).toBeInTheDocument()
+    expect(screen.getByText('API 키 없음')).toBeInTheDocument()
+    expect(screen.getByText('개인정보 후보 없음')).toBeInTheDocument()
+    expect(screen.getByText('매출/포함 토큰 매핑 대기')).toBeInTheDocument()
+    expect(screen.getByText('프롬프트 원문과 비밀키는 리포트 입력에서 제외됩니다.')).toBeInTheDocument()
     expect(screen.queryByText(/waiting_for_upload|raw_upload_delete/i)).not.toBeInTheDocument()
   })
 
-  it('turns PII findings into a mapping next action instead of fake success', () => {
+  it('turns PII findings into report-readiness mapping instead of fake success', () => {
     render(<TrustAssurancePanel result={{
       status: 'needs_mapping',
       warnings: ['pii_candidate_detected'],
@@ -28,8 +32,10 @@ describe('TrustAssurancePanel', () => {
       },
     }} />)
 
-    expect(screen.getByText('PII 후보가 있어 매핑 검토가 필요합니다.')).toBeInTheDocument()
-    expect(screen.getByText(/매핑을 확인한 뒤 원가\/마진 분석을 확정하세요/)).toBeInTheDocument()
+    expect(screen.getAllByText('매핑 확인 필요').length).toBeGreaterThan(0)
+    expect(screen.getByText('개인정보 후보 확인 필요')).toBeInTheDocument()
+    expect(screen.getByText('매출/포함 토큰 매핑 대기')).toBeInTheDocument()
+    expect(screen.getByText(/개인정보 후보 또는 매핑을 확인하면 리포트 작성 가능 상태/)).toBeInTheDocument()
   })
 
   it('explains that blocked data cannot become a snapshot or report', () => {
@@ -48,8 +54,30 @@ describe('TrustAssurancePanel', () => {
       },
     }} />)
 
-    expect(screen.getByText('API key 후보는 차단했습니다.')).toBeInTheDocument()
-    expect(screen.getByText(/차단된 데이터는 분석, 리포트, 결정 기록으로 넘어가지 않습니다/)).toBeInTheDocument()
+    expect(screen.getAllByText('리포트 생성 불가').length).toBeGreaterThan(0)
+    expect(screen.getByText('원문 프롬프트 감지됨')).toBeInTheDocument()
+    expect(screen.getByText('API 키 감지됨')).toBeInTheDocument()
+    expect(screen.getByText(/prompt, api_key 같은 차단 컬럼은 분석, 리포트, 결정 기록으로 넘어가지 않습니다/)).toBeInTheDocument()
+  })
+  it('marks a clean upload with allowance mapping as report-ready', () => {
+    render(<TrustAssurancePanel mappingStatus="ready" result={{
+      status: 'ready',
+      warnings: [],
+      allowedForSnapshot: true,
+      anonymizationStatus: 'clear',
+      retentionNote: 'Raw upload should be deleted or re-confirmed after 30 days.',
+      retentionAction: 'raw_upload_delete_or_reconfirm_after_30_days',
+      blockedColumns: [],
+      snapshotColumns: ['customer_id', 'feature', 'model', 'total_cost'],
+      analysisScope: {
+        available: ['loss_customer', 'plan_margin'],
+        blocked: [],
+      },
+    }} />)
+
+    expect(screen.getAllByText('리포트 작성 가능').length).toBeGreaterThan(0)
+    expect(screen.getByText('매출/포함 토큰 매핑 확인됨')).toBeInTheDocument()
+    expect(screen.getByText('고객·기능·모델·토큰·원가·매출 필드만 사용합니다.')).toBeInTheDocument()
   })
   it('renders expert proof for snapshot fields, blocked fields, and retention action', () => {
     render(<TrustAssurancePanel audience="expert" result={{

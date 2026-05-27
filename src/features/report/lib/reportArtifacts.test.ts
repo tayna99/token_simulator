@@ -50,7 +50,7 @@ describe('buildReportArtifact', () => {
 
   it('formats the one-page report as a Money Leak Run artifact with trust and provenance', () => {
     const report = buildOnePageReportArtifact({
-      title: 'SparkClaw AI Cost Snapshot',
+      title: 'AgentPayroll AI Cost Snapshot',
       executiveSummary: 'AI COGS is concentrated in summarization.',
       metrics: [{ label: 'AI COGS', value: '$612' }],
       recommendations: ['Route short summaries to a cheaper model after A/B validation.'],
@@ -79,7 +79,7 @@ describe('buildReportArtifact', () => {
 
   it('includes decision choice, rate-card readiness, and pricing freshness in the one-page report', () => {
     const report = buildOnePageReportArtifact({
-      title: 'SparkClaw AI Cost Snapshot',
+      title: 'AgentPayroll AI Cost Snapshot',
       executiveSummary: 'The operating team reviewed the recommendation.',
       metrics: [{ label: 'AI COGS', value: '$612' }],
       recommendations: ['Hold until pricing source is rechecked.'],

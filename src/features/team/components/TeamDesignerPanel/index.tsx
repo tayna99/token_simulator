@@ -37,10 +37,10 @@ export function TeamDesignerPanel({ config }: Props) {
             <select
               id="team-scenario"
               className="rounded-wds border border-line-neutral bg-surface-normal px-2 py-1 text-xs"
-              value="sparkclaw-report-saas"
+              value="agentpayroll-report-saas"
               onChange={() => undefined}
             >
-              <option value="sparkclaw-report-saas">AI report generation SaaS</option>
+              <option value="agentpayroll-report-saas">AI report generation SaaS</option>
             </select>
           </div>
         </div>

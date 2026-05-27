@@ -5,17 +5,17 @@ import {
   CUSTOMER_MONTHLY_REVENUE,
   CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS,
   CUSTOMER_TOKEN_ALLOWANCE,
+  AGENT_PAYROLL_SAMPLE_CSV,
   PLAN_MONTHLY_REVENUE,
   PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
   PLAN_TOKEN_ALLOWANCE,
-  SPARK_CLAW_SAMPLE_CSV,
-} from '../../usage/data/sparkClawSample'
+} from '../../usage/data/agentPayrollSample'
 import { parseUsageCsv } from '../../usage/lib/usageImport'
 import { buildDiagnosisSnapshot, buildMarginDiagnosisSummary, reportFirstPayloadFromDiagnosis } from './diagnosis'
 
 describe('buildDiagnosisSnapshot', () => {
   it('summarizes the token leakage diagnosis as customer-safe findings and actions', () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
       summary,
@@ -31,19 +31,19 @@ describe('buildDiagnosisSnapshot', () => {
     const diagnosis = buildMarginDiagnosisSummary(snapshot)
 
     expect(diagnosis.status).toBe('complete')
-    expect(diagnosis.topLeak.title).toBe('토큰 누수 고객')
+    expect(diagnosis.topLeak.title).toBe('손해 고객')
     expect(diagnosis.topLeak.plainLanguageSummary).toMatch(/tokens|미회수|고객/)
-    expect(diagnosis.marginBreakingFeature.title).toBe('token allowance 소진 기능')
-    expect(diagnosis.recommendedDecision.title).toBe('Token policy 후보')
-    expect(diagnosis.recommendedDecision.plainLanguageSummary).toMatch(/credit|cap|overage|routing|token/)
+    expect(diagnosis.marginBreakingFeature.title).toBe('마진을 깨는 기능')
+    expect(diagnosis.recommendedDecision.title).toBe('토큰 정책 후보')
+    expect(diagnosis.recommendedDecision.plainLanguageSummary).toMatch(/포함 토큰|초과 과금|정책/)
     expect(diagnosis.evidenceState).toBe('근거 있음')
     expect(diagnosis.availableActions).toEqual(['view_evidence', 'draft_rate_card', 'export_pdf'])
     expect(diagnosis.topLeak.customerSafeEvidenceLabel).toBe('근거 있음')
     expect(diagnosis.topLeak.internalRefs).toEqual(expect.arrayContaining(['tool:diagnosis.token_leak_customer']))
   })
 
-  it('builds the three report-first insights from SparkClaw usage without inventing numbers', () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+  it('builds the three report-first insights from AgentPayroll sample usage without inventing numbers', () => {
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
       summary,
@@ -66,15 +66,15 @@ describe('buildDiagnosisSnapshot', () => {
       'margin_breaking_feature',
       'policy_candidate',
     ])
-    expect(snapshot.insights[0].title).toBe('토큰 누수 고객')
+    expect(snapshot.insights[0].title).toBe('손해 고객')
     expect(snapshot.insights[0].body).toContain('회수된 매출은 $29')
-    expect(snapshot.insights[0].body).toContain('AI token 원가는 $178')
+    expect(snapshot.insights[0].body).toContain('AI 토큰 원가는 $178')
     expect(snapshot.insights[0].body).toContain('미회수 AI 원가 $149')
-    expect(snapshot.insights[1].title).toBe('token allowance 소진 기능')
+    expect(snapshot.insights[1].title).toBe('마진을 깨는 기능')
     expect(snapshot.insights[1].body).toContain('report_generation')
     expect(snapshot.insights[1].body).toContain('전체 AI 비용의 51%')
-    expect(snapshot.insights[1].body).toContain('Pro allowance tier 매출 대비 259%')
-    expect(snapshot.insights[2].title).toBe('Token policy 후보')
+    expect(snapshot.insights[1].body).toContain('Pro 요금제 매출 대비 259%')
+    expect(snapshot.insights[2].title).toBe('토큰 정책 후보')
     expect(snapshot.insights[2].body).toContain('예상 회수 후보: $149')
     expect(snapshot.metrics.map(metric => metric.value).join(' ')).toContain('$')
     expect(snapshot.refs).toEqual(expect.arrayContaining([
@@ -140,7 +140,7 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.roiProof.paybackHint).toContain('이번 달 미회수 AI 원가')
     expect(snapshot.metrics).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'monthly_loss', label: '미회수 AI 원가', value: '$70' }),
-      expect.objectContaining({ id: 'policy_margin_delta', label: 'overage 회수 후보' }),
+      expect.objectContaining({ id: 'policy_margin_delta', label: '초과 과금 회수 후보' }),
     ]))
   })
 
@@ -182,8 +182,8 @@ describe('buildDiagnosisSnapshot', () => {
     expect(snapshot.tokenLeakProof.topCustomer?.customerId).toBe('cus_heavy')
   })
 
-  it('does not preselect Adopt Reject or Hold on decision candidates', () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+  it('does not preselect 채택 거절 or 보류 on decision candidates', () => {
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
       summary,
@@ -201,7 +201,7 @@ describe('buildDiagnosisSnapshot', () => {
   })
 
   it('requires an explicit user decision choice when building the report-first payload', () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({
       workspaceId: 'workspace-demo',
       summary,
@@ -233,12 +233,12 @@ describe('buildDiagnosisSnapshot', () => {
       fallbackReason: 'money_leak_run_deterministic_snapshot_only',
       agentInvocationProof: [],
     })
-    expect(payload.title).toBe('AgentPayroll API Token Leakage Report')
-    expect(payload.recommendations[0]).toMatch(/token|overage|정책/)
+    expect(payload.title).toBe('AI 비용 누수 리포트')
+    expect(payload.recommendations[0]).toMatch(/토큰|초과 과금|정책/)
   })
 
   it('throws a clear error when the selected decision candidate is missing', () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS)
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const snapshot = buildDiagnosisSnapshot({ workspaceId: 'workspace-demo', summary })
 
     expect(() => reportFirstPayloadFromDiagnosis(

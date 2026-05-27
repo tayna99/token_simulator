@@ -1,10 +1,10 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MODELS } from '../../../../data/models'
 import { parseUsageCsv, type UsageImportSummary } from '../../../../lib/usageImport'
 import { Button, Field, MetricTile } from '../../../../shared/ui/primitives'
 import { fmtCurrency, fmtTokens } from '../../../../lib/format'
-import { SPARK_CLAW_SAMPLE_CSV } from '../../data/sparkClawSample'
+import { AGENT_PAYROLL_SAMPLE_CSV } from '../../data/agentPayrollSample'
 import { ImportTrustCheckPanel } from '../../../trust/components/ImportTrustCheckPanel'
 import { TrustAssurancePanel } from '../../../trust/components/TrustAssurancePanel'
 import type { AnalysisReadinessReport } from '../../lib/analysisReadiness'
@@ -21,10 +21,10 @@ const SAMPLE_USAGE_CSV = [
 interface Props {
   importedSummary?: UsageImportSummary | null
   onImport: (summary: UsageImportSummary) => void
-  onSparkClawDemo?: (summary: UsageImportSummary) => void
+  onAgentPayrollSample?: (summary: UsageImportSummary) => void
 }
 
-export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }: Props) {
+export function UsageImportPanel({ importedSummary, onImport, onAgentPayrollSample }: Props) {
   const { t } = useTranslation()
   const [rawCsv, setRawCsv] = useState(SAMPLE_USAGE_CSV)
   const [error, setError] = useState('')
@@ -48,14 +48,14 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
     onImport(summary)
   }
 
-  const applySparkClawSample = () => {
-    const summary = parseUsageCsv(SPARK_CLAW_SAMPLE_CSV, MODELS, { revenueBasis: 'sample_fixture' })
-    setRawCsv(SPARK_CLAW_SAMPLE_CSV)
+  const applyAgentPayrollSample = () => {
+    const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS, { revenueBasis: 'sample_fixture' })
+    setRawCsv(AGENT_PAYROLL_SAMPLE_CSV)
     setLocalTrustInspection(summary.trustInspection ?? null)
     setLocalReadiness(summary.analysisReadiness ?? null)
     setError('')
     onImport(summary)
-    onSparkClawDemo?.(summary)
+    onAgentPayrollSample?.(summary)
   }
 
   const loadFile = async (file: File | undefined) => {
@@ -92,8 +92,8 @@ export function UsageImportPanel({ importedSummary, onImport, onSparkClawDemo }:
             <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={() => setRawCsv(SAMPLE_USAGE_CSV)}>
               {t('usageImport.sample')}
             </Button>
-            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={applySparkClawSample}>
-              Load SparkClaw sample
+            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={applyAgentPayrollSample}>
+              Load AgentPayroll sample
             </Button>
             <label className="inline-flex h-8 cursor-pointer items-center justify-center whitespace-nowrap rounded-wds border border-line-solid bg-surface-normal px-3 text-xs font-semibold text-label-normal hover:bg-fill-alternative">
               {t('usageImport.upload')}

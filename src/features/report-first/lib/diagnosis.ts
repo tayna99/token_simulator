@@ -9,7 +9,7 @@ import {
   PLAN_MONTHLY_REVENUE,
   PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
   PLAN_TOKEN_ALLOWANCE,
-} from '../../usage/data/sparkClawSample'
+} from '../../usage/data/agentPayrollSample'
 import { customerProfitability, heavyUserDetection, marginByPlan } from '../../unit-economics/lib/margin'
 import { calculatePricingScenario, type PricingPolicy, type ScenarioResult } from '../../pricing/lib/pricingScenario'
 import type { OnePageReportArtifactInput } from '../../report/lib/reportArtifacts'
@@ -268,8 +268,8 @@ function featureDisplayName(feature: string): string {
 }
 
 function allowanceTierLabel(planId: string | null): string {
-  if (!planId) return 'mapped allowance tier'
-  return `${planId.charAt(0).toUpperCase()}${planId.slice(1)} allowance tier`
+  if (!planId) return '매핑된 요금제'
+  return `${planId.charAt(0).toUpperCase()}${planId.slice(1)} 요금제`
 }
 
 function revenueForPlanFromCustomers(
@@ -447,8 +447,8 @@ function tokenLeakProofFrom(input: {
     ? (() => {
         const expectedRecoveredUsd = Math.max(topCustomer.unrecoveredCostUsd, topCustomer.potentialOverageRevenueUsd)
         return {
-          title: 'Token allowance + overage 정책 후보',
-          body: `${topCustomer.customerId} 기준으로 월 ${fmtTokens(topCustomer.includedTokens)} tokens 포함 + 초과 1K tokens당 ${fmtCurrency(topCustomer.overageRateUsdPer1kTokens, 2)} overage를 검토하세요. 초과 사용량은 ${fmtTokens(topCustomer.overageTokens)} tokens이고 예상 회수 후보: ${fmtCurrency(expectedRecoveredUsd)}.`,
+          title: '포함 토큰 + 초과 과금 정책 후보',
+          body: `${topCustomer.customerId} 기준으로 월 ${fmtTokens(topCustomer.includedTokens)} 토큰 포함 + 초과 1K 토큰당 ${fmtCurrency(topCustomer.overageRateUsdPer1kTokens, 2)} 과금을 검토하세요. 초과 사용량은 ${fmtTokens(topCustomer.overageTokens)} 토큰이고 예상 회수 후보: ${fmtCurrency(expectedRecoveredUsd)}.`,
           expectedRecoveredUsd,
           includedTokens: topCustomer.includedTokens,
           overageRateUsdPer1kTokens: topCustomer.overageRateUsdPer1kTokens,
@@ -629,29 +629,29 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const insights: DiagnosisInsight[] = [
     {
       kind: 'loss_customers',
-      title: '토큰 누수 고객',
+      title: '손해 고객',
       value: topTokenCustomer ? fmtCurrency(topTokenCustomer.unrecoveredCostUsd) : fmtCurrency(0),
       body: topTokenCustomer
-        ? `${topTokenCustomer.customerId}은 이번 달 ${fmtTokens(topTokenCustomer.usedTokens)} tokens를 사용해 포함 ${fmtTokens(topTokenCustomer.includedTokens)} tokens의 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배를 썼습니다. 회수된 매출은 ${fmtCurrency(topTokenCustomer.revenueCollectedUsd)}인데 AI token 원가는 ${fmtCurrency(topTokenCustomer.aiCogsUsd)}이라 미회수 AI 원가 ${fmtCurrency(topTokenCustomer.unrecoveredCostUsd)}가 보입니다.`
-        : 'customer_id와 token allowance 매핑이 있으면 누수 고객을 계산할 수 있습니다.',
+        ? `${topTokenCustomer.customerId}은 이번 달 ${fmtTokens(topTokenCustomer.usedTokens)} 토큰을 사용해 포함 ${fmtTokens(topTokenCustomer.includedTokens)} 토큰의 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배를 썼습니다. 회수된 매출은 ${fmtCurrency(topTokenCustomer.revenueCollectedUsd)}인데 AI 토큰 원가는 ${fmtCurrency(topTokenCustomer.aiCogsUsd)}이라 미회수 AI 원가 ${fmtCurrency(topTokenCustomer.unrecoveredCostUsd)}가 보입니다.`
+        : 'customer_id와 포함 토큰 매핑이 있으면 손해 고객을 계산할 수 있습니다.',
       refs: ['tool:diagnosis.token_leak_customer'],
     },
     {
       kind: 'margin_breaking_feature',
-      title: 'token allowance 소진 기능',
+      title: '마진을 깨는 기능',
       value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtTokens(0),
       body: topTokenFeature
         ? `${featureDisplayName(topTokenFeature.feature)}(${topTokenFeature.feature}) 기능이 전체 AI 비용의 ${fmtPercent(topTokenFeature.featureCostShare)}를 만들고, ${allowanceTierLabel(topTokenFeature.affectedPlanId)} 매출 대비 ${fmtPercent(topTokenFeature.featureCostToPlanRevenuePct)}를 태워 마진을 깎고 있습니다.`
-        : '기능별 token 원가를 계산할 수 없습니다.',
+        : '기능별 토큰 원가를 계산할 수 없습니다.',
       refs: ['tool:diagnosis.token_burning_feature'],
     },
     {
       kind: 'policy_candidate',
-      title: 'Token policy 후보',
+      title: '토큰 정책 후보',
       value: tokenPolicy ? fmtCurrency(tokenPolicy.expectedRecoveredUsd) : '—',
       body: tokenPolicy
         ? tokenPolicy.body
-        : 'token allowance와 revenue 매핑이 있어야 정책 후보를 계산할 수 있습니다.',
+        : '포함 토큰과 매출 매핑이 있어야 정책 후보를 계산할 수 있습니다.',
       refs: ['tool:diagnosis.token_policy_candidate'],
     },
   ]
@@ -660,39 +660,39 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
     {
       id: 'decision:diagnosis:usage-limit',
       kind: 'usage_limit',
-      title: '고객별 token cap 검토',
+      title: '고객별 토큰 cap 검토',
       body: topTokenCustomer
-        ? `${topTokenCustomer.customerId} 고객이 포함 token을 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배 사용했습니다. cap, credit 전환, enterprise bundle 중 하나를 검토합니다.`
+        ? `${topTokenCustomer.customerId} 고객이 포함 토큰을 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배 사용했습니다. cap, credit 전환, enterprise bundle 중 하나를 검토합니다.`
         : `${fmtTokens(lossCustomers.length)} 손해 고객과 top-decile 비용 share ${fmtPercent(heavyUsers.topDecileShare)}를 기준으로 제한 정책을 검토합니다.`,
       refs: ['tool:diagnosis.token_leak_customer'],
     },
     {
       id: 'decision:diagnosis:pricing-policy',
       kind: 'pricing_policy',
-      title: 'Token allowance + overage 정책 후보',
+      title: '포함 토큰 + 초과 과금 정책 후보',
       body: tokenPolicy
         ? tokenPolicy.body
         : selectedScenario
-          ? `${selectedScenario.policy} 정책 후보 적용 시 revenue_collected 대비 AI token COGS를 줄일 여지가 있습니다.`
-          : 'token policy 후보를 계산할 수 없습니다.',
+          ? `${selectedScenario.policy} 정책 후보 적용 시 revenue_collected 대비 AI 토큰 원가를 줄일 여지가 있습니다.`
+          : '토큰 정책 후보를 계산할 수 없습니다.',
       refs: ['tool:diagnosis.token_policy_candidate'],
     },
     {
       id: 'decision:diagnosis:model-routing',
       kind: 'model_routing',
-      title: '고비용 token 라우팅 재검토',
+      title: '고비용 토큰 라우팅 재검토',
       body: topModel
-        ? `${topModel.label} 모델이 ${fmtCurrency(topModel.totalCostUsd)}의 token 원가를 만들고 있습니다. 품질/latency 검증 후 cheaper model A/B test를 Hold로 검토합니다.`
+        ? `${topModel.label} 모델이 ${fmtCurrency(topModel.totalCostUsd)}의 토큰 원가를 만들고 있습니다. 품질/지연 시간 검증 후 더 저렴한 모델 A/B 테스트를 보류로 검토합니다.`
         : '모델별 비용을 계산할 수 없습니다.',
       refs: ['tool:diagnosis.model_routing'],
     },
   ]
 
   const metrics: DiagnosisMetric[] = [
-    { id: 'monthly_loss', label: '미회수 AI 원가', value: fmtCurrency(topTokenCustomer?.unrecoveredCostUsd ?? roiProof.monthlyLossUsd), help: 'revenue_collected 대비 AI token COGS 초과분' },
-    { id: 'ai_cogs', label: 'AI token 원가', value: fmtCurrency(input.summary.totalCostUsd) },
-    { id: 'loss_customers', label: '토큰 누수 고객', value: topTokenCustomer ? topTokenCustomer.customerId : fmtTokens(lossCustomers.length) },
-    { id: 'policy_margin_delta', label: 'overage 회수 후보', value: fmtCurrency(tokenPolicy?.expectedRecoveredUsd ?? roiProof.bestPolicyMarginDeltaUsd), help: tokenPolicy?.title },
+    { id: 'monthly_loss', label: '미회수 AI 원가', value: fmtCurrency(topTokenCustomer?.unrecoveredCostUsd ?? roiProof.monthlyLossUsd), help: '회수된 매출 대비 AI 토큰 원가 초과분' },
+    { id: 'ai_cogs', label: 'AI 토큰 원가', value: fmtCurrency(input.summary.totalCostUsd) },
+    { id: 'loss_customers', label: '손해 고객', value: topTokenCustomer ? topTokenCustomer.customerId : fmtTokens(lossCustomers.length) },
+    { id: 'policy_margin_delta', label: '초과 과금 회수 후보', value: fmtCurrency(tokenPolicy?.expectedRecoveredUsd ?? roiProof.bestPolicyMarginDeltaUsd), help: tokenPolicy?.title },
     { id: 'top_feature_cost', label: '최고 token 기능', value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtCurrency(topFeature?.totalCostUsd ?? 0), help: topTokenFeature?.feature ?? topFeature?.label },
     { id: 'weakest_margin', label: 'COGS/매출 비율', value: fmtPercent(topTokenCustomer?.cogsToRevenuePct ?? grossMarginPct), help: topTokenCustomer?.customerId ?? 'customer allowance / revenue_collected 기준' },
   ]
@@ -728,7 +728,7 @@ export function reportFirstPayloadFromDiagnosis(
   }
 
   return {
-    title: 'AgentPayroll API Token Leakage Report',
+    title: 'AI 비용 누수 리포트',
     executiveSummary: snapshot.insights.map(insight => `${insight.title}: ${insight.body}`).join(' '),
     metrics: snapshot.metrics.map(metric => ({ label: metric.label, value: metric.value })),
     recommendations: [candidate.body, snapshot.roiProof.paybackHint],
@@ -764,7 +764,7 @@ export function buildMarginDiagnosisSummary(snapshot: DiagnosisSnapshot): Margin
   return {
     status,
     topLeak: {
-      title: '토큰 누수 고객',
+      title: '손해 고객',
       plainLanguageSummary: lossInsight
         ? lossInsight.body
         : 'customer_id, included_tokens, revenue_collected 매핑이 있어야 누수 고객을 확인할 수 있습니다.',
@@ -774,19 +774,19 @@ export function buildMarginDiagnosisSummary(snapshot: DiagnosisSnapshot): Margin
       internalRefs: lossInsight?.refs ?? [],
     },
     marginBreakingFeature: {
-      title: 'token allowance 소진 기능',
+      title: '마진을 깨는 기능',
       plainLanguageSummary: featureInsight
         ? featureInsight.body
-        : '기능별 token 원가 근거가 아직 준비되지 않았습니다.',
+        : '기능별 토큰 원가 근거가 아직 준비되지 않았습니다.',
       metricLabel: featureInsight?.value ?? '—',
       severity: featureInsight && featureInsight.value !== fmtCurrency(0) ? 'caution' : 'watch',
       customerSafeEvidenceLabel: evidenceState,
       internalRefs: featureInsight?.refs ?? [],
     },
     recommendedDecision: {
-      title: 'Token policy 후보',
+      title: '토큰 정책 후보',
       plainLanguageSummary: selectedDecision
-        ? `${selectedDecision.body} credit, cap, overage, routing 중 어떤 token policy를 바꿀지 검토합니다.`
+        ? `${selectedDecision.body} 포함 토큰, 초과 과금, cap 중 어떤 정책을 바꿀지 검토합니다.`
         : (policyInsight?.body ?? '결정 후보를 만들 수 없습니다.'),
       metricLabel: policyInsight?.value ?? '검토 필요',
       severity: status === 'complete' ? 'caution' : 'watch',

@@ -25,14 +25,14 @@ import {
 describe('p1OperatingSystem', () => {
   it('builds a shared P1 operating contract for workspace, snapshot, agent run, approval, and ledger identity', () => {
     const contract = buildP1OperatingContract({
-      workspaceId: ' SparkClaw/May ',
+      workspaceId: ' AgentPayroll/May ',
       snapshotVersion: 'snapshot:cost:abc123',
       agentRunId: 'agent-run-1',
       approvalStatus: 'draft',
       ledgerEntryId: 'ledger-1',
     })
 
-    expect(contract.workspaceId).toBe('SparkClaw-May')
+    expect(contract.workspaceId).toBe('AgentPayroll-May')
     expect(contract.snapshotVersion).toBe('snapshot:cost:abc123')
     expect(contract.agentRunId).toBe('agent-run-1')
     expect(contract.approvalStatus).toBe('draft')
@@ -46,7 +46,7 @@ describe('p1OperatingSystem', () => {
   it('builds a customer-facing dashboard shell with sample, upload, workspace, and monthly review entrypoints', () => {
     const dashboard = buildCustomerWorkspaceDashboard({
       workspaceId: 'workspace-demo',
-      organizationName: 'SparkClaw',
+      organizationName: 'AgentPayroll',
       uploadCount: 2,
       decisionCount: 3,
       monthlyReviewCount: 1,
@@ -57,7 +57,7 @@ describe('p1OperatingSystem', () => {
     expect(dashboard.ctas.map(cta => cta.id)).toEqual([
       'upload_usage_export',
       'open_existing_workspace',
-      'run_sparkclaw_sample',
+      'run_agentpayroll_sample',
     ])
     expect(dashboard.ctas[0].label).toBe('사용량 CSV 업로드')
     expect(dashboard.sections.map(section => section.id)).toEqual([

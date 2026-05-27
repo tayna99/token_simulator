@@ -66,7 +66,7 @@ export const BUYER_OBJECTION_BUCKETS: BuyerObjectionBucket[] = [
     id: 'objection_data_trust',
     label: '데이터 불안',
     representativeQuote: 'prompt나 고객 데이터가 들어가는 것 아닌가요?',
-    nextAction: 'Trust Gate, blocked columns, snapshot fields, retention/delete proof 강화',
+    nextAction: '리포트 준비 확인, 차단 필드, 진단 필드, 보관/삭제 근거 강화',
     promotionKind: 'requirement',
     promotedText: '업로드 전 blocked columns, snapshot fields, retention/delete proof를 보여준다.',
     keywords: ['prompt', '프롬프트', 'api key', '고객 데이터', 'pii', '개인정보', '유출', '보안', '외부'],
@@ -104,7 +104,7 @@ export const BUYER_OBJECTION_BUCKETS: BuyerObjectionBucket[] = [
     representativeQuote: 'Payroll이면 HR 도구인가요?',
     nextAction: 'AgentPayroll보다 AI 비용 진단/손해 고객 찾기/AI 기능 마진 분석 문구 우선',
     promotionKind: 'product_copy',
-    promotedText: 'AI Token Leakage Report: 손해 고객과 미회수 token 원가를 5분 안에 보여드립니다.',
+    promotedText: 'AI 비용 누수 리포트: 손해 고객과 미회수 토큰 원가를 5분 안에 보여드립니다.',
     keywords: ['payroll', 'hr', '급여', '이름', '무슨 뜻', '뭐 하는', '운영체제', '복잡'],
   },
 ]

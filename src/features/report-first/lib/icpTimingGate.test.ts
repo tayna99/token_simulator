@@ -17,7 +17,7 @@ describe('assessIcpTimingGate', () => {
       maxScore: 5,
       grade: 'A',
       route: 'diagnosis_report',
-      primaryCta: 'AI Token Leakage Report 진단 시작',
+      primaryCta: 'AI 비용 누수 리포트 진단 시작',
     })
     expect(assessment.reasons).toEqual(expect.arrayContaining([
       'monthly_ai_spend_ready',
@@ -42,7 +42,7 @@ describe('assessIcpTimingGate', () => {
       maxScore: 5,
       grade: 'C',
       route: 'free_calculator',
-      primaryCta: '샘플 Snapshot으로 먼저 보기',
+      primaryCta: '샘플 진단으로 먼저 보기',
     })
     expect(assessment.missing).toEqual(expect.arrayContaining([
       'monthly_ai_spend_too_low',

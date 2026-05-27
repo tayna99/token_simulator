@@ -8,21 +8,21 @@
 }
 
 :root {
-  --apple-action-blue: #0066cc;
-  --apple-focus-blue: #0071e3;
-  --apple-sky-link-blue: #2997ff;
+  --apple-action-blue: #0066FF;
+  --apple-focus-blue: #0066FF;
+  --apple-sky-link-blue: #0066FF;
   --apple-canvas: #ffffff;
-  --apple-parchment: #f5f5f7;
-  --apple-pearl: #fafafc;
+  --apple-parchment: #F7F7F8;
+  --apple-pearl: #ffffff;
   --apple-tile-dark: #272729;
   --apple-tile-dark-2: #2a2a2c;
-  --apple-ink: #1d1d1f;
-  --apple-muted: #7a7a7a;
-  --apple-hairline: #e0e0e0;
+  --apple-ink: #171719;
+  --apple-muted: rgba(55, 56, 60, 0.61);
+  --apple-hairline: rgba(112, 115, 124, 0.16);
   --apple-product-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0;
   --semantic-primary-normal: var(--apple-action-blue);
-  --semantic-primary-strong: #005bb8;
-  --semantic-primary-heavy: #004f9f;
+  --semantic-primary-strong: #005BE6;
+  --semantic-primary-heavy: #004FCC;
   --semantic-label-normal: var(--apple-ink);
   --semantic-label-neutral: rgba(46, 47, 51, 0.88);
   --semantic-label-alternative: rgba(55, 56, 60, 0.61);
@@ -35,9 +35,9 @@
   --semantic-fill-normal: rgba(112, 115, 124, 0.08);
   --semantic-fill-strong: rgba(112, 115, 124, 0.16);
   --semantic-fill-alternative: rgba(112, 115, 124, 0.05);
-  --semantic-status-positive: #00BF40;
-  --semantic-status-cautionary: #FF9200;
-  --semantic-status-negative: #FF4242;
+  --semantic-status-positive: #00B97C;
+  --semantic-status-cautionary: #FFAB00;
+  --semantic-status-negative: #F0483C;
   --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --radius-sm: 6px;
   --radius-md: 8px;

@@ -87,7 +87,7 @@ function headlineFor(route: IcpTimingRoute): string {
     case 'data_readiness_first':
       return '데이터 매핑부터 확인'
     case 'sample_snapshot':
-      return '샘플 Snapshot으로 검증'
+      return '샘플 진단으로 검증'
     case 'free_calculator':
       return '아직은 무료 샘플이 적합'
   }
@@ -96,12 +96,12 @@ function headlineFor(route: IcpTimingRoute): string {
 function primaryCtaFor(route: IcpTimingRoute): string {
   switch (route) {
     case 'diagnosis_report':
-      return 'AI Token Leakage Report 진단 시작'
+      return 'AI 비용 누수 리포트 진단 시작'
     case 'data_readiness_first':
       return 'customer_id + revenue 매핑부터 확인'
     case 'sample_snapshot':
-      return '샘플 Snapshot으로 먼저 보기'
+      return '샘플 진단으로 먼저 보기'
     case 'free_calculator':
-      return '샘플 Snapshot으로 먼저 보기'
+      return '샘플 진단으로 먼저 보기'
   }
 }

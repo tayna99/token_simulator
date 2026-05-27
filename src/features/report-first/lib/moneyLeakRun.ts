@@ -18,12 +18,12 @@ export interface MoneyLeakStepStateInput {
 }
 
 export const MONEY_LEAK_STEPS: MoneyLeakStep[] = [
-  { id: 'input', label: 'usage + allowance', description: '사용량과 포함 token을 입력합니다.' },
-  { id: 'trust', label: 'Trust Gate', description: '수집하지 않는 데이터와 차단 상태를 확인합니다.' },
-  { id: 'money_leak', label: 'Token Leak', description: '초과 token 고객과 기능을 찾습니다.' },
-  { id: 'candidate', label: 'Token Policy', description: 'credit, cap, overage 후보를 고릅니다.' },
-  { id: 'decision_choice', label: 'Adopt/Reject/Hold', description: '사람의 결정을 기록합니다.' },
-  { id: 'pdf', label: 'Report Preview', description: '공유 초안과 PDF 상태를 봅니다.' },
+  { id: 'input', label: '데이터 준비', description: '사용량과 요금제/매출 CSV를 입력합니다.' },
+  { id: 'trust', label: '리포트 준비 확인', description: '운영 로그가 리포트로 넘어갈 수 있는지 확인합니다.' },
+  { id: 'money_leak', label: '비용 누수', description: '손해 고객과 마진을 깨는 기능을 찾습니다.' },
+  { id: 'candidate', label: '정책 후보', description: '포함 토큰, 초과 과금, cap 후보를 고릅니다.' },
+  { id: 'decision_choice', label: '결정하기', description: '사람의 채택/보류/거절을 기록합니다.' },
+  { id: 'pdf', label: '리포트', description: '공유 리포트와 PDF 상태를 봅니다.' },
 ]
 
 export function deriveMoneyLeakStepStates(input: MoneyLeakStepStateInput): Record<MoneyLeakStepId, MoneyLeakStepState> {
