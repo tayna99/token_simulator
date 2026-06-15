@@ -287,7 +287,7 @@ describe('P1 API handlers', () => {
           },
         },
       },
-    }, { store })
+    }, { store, now: () => new Date('2026-05-25T00:00:00.000Z') })
 
     expect(response.status).toBe(202)
     expect(response.body.trustGate).toBe('allowed')

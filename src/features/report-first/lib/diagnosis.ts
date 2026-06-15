@@ -1,6 +1,7 @@
 import { fmtCurrency, fmtNumber, fmtPercent, fmtTokens } from '../../../lib/format'
+import { isCostCalculableModel, MODELS } from '../../../data/models'
 import { projectSnapshotForRole, type RoleProjectionRole, type RoleViewModel } from '../../role-projection/lib/projectSnapshotForRole'
-import { rollupUsageByAxis } from '../../usage/lib/attribution'
+import { rollupUsageByAxis, type AttributionRow } from '../../usage/lib/attribution'
 import type { UsageImportSummary } from '../../usage/lib/usageImport'
 import {
   CUSTOMER_MONTHLY_REVENUE,
@@ -17,11 +18,24 @@ import {
   deterministicPreviewRuntimeProof,
   humanApprovalFromDecisionChoice,
 } from '../../provenance/lib/runtimeApprovalMetadata'
+import {
+  buildConnectorReadinessReport,
+  connectorReadinessStatusLabel,
+  type ConnectorReadinessReport,
+} from './connectorContracts'
+import {
+  outcomeVerificationStatusLabel,
+  verifyFeatureOutcomeMeasurements,
+  type FeatureMeasurementContract,
+  type FeatureOutcomeMeasurement,
+  type OutcomeEventRow,
+} from './outcomeMeasurement'
 
 export type MoneyLeakDecisionChoice = 'adopt' | 'reject' | 'hold'
-export type DiagnosisInsightKind = 'loss_customers' | 'margin_breaking_feature' | 'policy_candidate'
+export type DiagnosisInsightKind = 'loss_customers' | 'margin_breaking_feature' | 'policy_candidate' | 'outcome_leak'
 export type ReportGateStatus = 'preview_ready' | 'needs_mapping' | 'blocked'
 export type DiagnosisDecisionKind = 'usage_limit' | 'pricing_policy' | 'model_routing'
+export type LeakBreakdownStatus = 'detected' | 'not_detected' | 'needs_data'
 
 export interface DiagnosisMetric {
   id: string
@@ -63,6 +77,7 @@ export interface DiagnosisRoiProof {
 
 export interface TokenLeakCustomer {
   customerId: string
+  customerName?: string | null
   usedTokens: number
   includedTokens: number
   overageTokens: number
@@ -103,12 +118,28 @@ export interface TokenLeakProof {
   recommendedPolicy: TokenPolicyRecommendation | null
 }
 
+export interface LeakBreakdownItem {
+  status: LeakBreakdownStatus
+  label: string
+  detail: string
+}
+
+export interface DiagnosisLeakBreakdown {
+  policyLeak: LeakBreakdownItem
+  operationalLeak: LeakBreakdownItem
+  outcomeLeak: LeakBreakdownItem
+}
+
 export interface DiagnosisSnapshot {
   workspaceId: string
   snapshotRef: string | null
   reportGate: ReportGate
   roiProof: DiagnosisRoiProof
   tokenLeakProof: TokenLeakProof
+  measurementContracts: FeatureMeasurementContract[]
+  outcomeVerification: FeatureOutcomeMeasurement[]
+  leakBreakdown: DiagnosisLeakBreakdown
+  sourceCoverage: ConnectorReadinessReport
   metrics: DiagnosisMetric[]
   insights: DiagnosisInsight[]
   decisionCandidates: DiagnosisDecisionCandidate[]
@@ -125,6 +156,8 @@ export interface DiagnosisSnapshotInput {
   planIncludedTokens?: Record<string, number>
   customerOverageRateUsdPer1kTokens?: Record<string, number>
   planOverageRateUsdPer1kTokens?: Record<string, number>
+  measurementContracts?: FeatureMeasurementContract[]
+  outcomeEvents?: OutcomeEventRow[]
   snapshotRef?: string | null
 }
 
@@ -153,6 +186,10 @@ export interface MarginDiagnosisSummary {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)))
+}
+
+function customerDisplayName(customer: Pick<TokenLeakCustomer, 'customerId' | 'customerName'>): string {
+  return customer.customerName?.trim() || customer.customerId
 }
 
 function hasUsageIdentityMappingGap(summary: UsageImportSummary): boolean {
@@ -353,6 +390,7 @@ function tokenLeakProofFrom(input: {
 }): TokenLeakProof {
   const customerRows = input.summary.rows.reduce<Map<string, {
     customerId: string
+    customerName: string | null
     planId: string | null
     usedTokens: number
     aiCogsUsd: number
@@ -360,10 +398,12 @@ function tokenLeakProofFrom(input: {
     if (!row.customerId) return map
     const existing = map.get(row.customerId) ?? {
       customerId: row.customerId,
+      customerName: row.customerName ?? null,
       planId: row.planId,
       usedTokens: 0,
       aiCogsUsd: 0,
     }
+    existing.customerName = existing.customerName ?? row.customerName ?? null
     existing.planId = existing.planId ?? row.planId
     existing.usedTokens += usageTokens(row)
     existing.aiCogsUsd += Math.max(0, row.totalCostUsd)
@@ -397,6 +437,7 @@ function tokenLeakProofFrom(input: {
 
     return {
       customerId: customer.customerId,
+      customerName: customer.customerName,
       usedTokens: customer.usedTokens,
       includedTokens,
       overageTokens,
@@ -446,9 +487,10 @@ function tokenLeakProofFrom(input: {
   const recommendedPolicy = topCustomer
     ? (() => {
         const expectedRecoveredUsd = Math.max(topCustomer.unrecoveredCostUsd, topCustomer.potentialOverageRevenueUsd)
+        const customerName = customerDisplayName(topCustomer)
         return {
           title: '포함 토큰 + 초과 과금 정책 후보',
-          body: `${topCustomer.customerId} 기준으로 월 ${fmtTokens(topCustomer.includedTokens)} 토큰 포함 + 초과 1K 토큰당 ${fmtCurrency(topCustomer.overageRateUsdPer1kTokens, 2)} 과금을 검토하세요. 초과 사용량은 ${fmtTokens(topCustomer.overageTokens)} 토큰이고 예상 회수 후보: ${fmtCurrency(expectedRecoveredUsd)}.`,
+          body: `${customerName} 기준으로 월 ${fmtTokens(topCustomer.includedTokens)} 토큰 포함 + 초과 1K 토큰당 ${fmtCurrency(topCustomer.overageRateUsdPer1kTokens, 2)} 과금을 검토하세요. 초과 사용량은 ${fmtTokens(topCustomer.overageTokens)} 토큰이고 예상 회수 후보: ${fmtCurrency(expectedRecoveredUsd)}.`,
           expectedRecoveredUsd,
           includedTokens: topCustomer.includedTokens,
           overageRateUsdPer1kTokens: topCustomer.overageRateUsdPer1kTokens,
@@ -519,12 +561,156 @@ function roiProofFrom(input: {
   }
 }
 
+function modelCatalogPrice(modelId: string): number | null {
+  const model = MODELS.find(item => item.id === modelId)
+  if (!model || !isCostCalculableModel(model)) return null
+  const totalPrice = model.inputPrice + model.outputPrice
+  return Number.isFinite(totalPrice) && totalPrice > 0 ? totalPrice : null
+}
+
+function cheaperModelCandidateFor(modelId: string | undefined | null): {
+  sourceModelId: string
+  candidateModelId: string
+  priceReductionPct: number
+} | null {
+  if (!modelId) return null
+  const sourcePrice = modelCatalogPrice(modelId)
+  if (!sourcePrice) return null
+  const candidate = MODELS
+    .filter(model => model.id !== modelId && isCostCalculableModel(model))
+    .map(model => ({
+      model,
+      totalPrice: model.inputPrice + model.outputPrice,
+    }))
+    .filter(item => Number.isFinite(item.totalPrice) && item.totalPrice > 0 && item.totalPrice < sourcePrice)
+    .sort((a, b) => a.totalPrice - b.totalPrice)[0]
+  if (!candidate) return null
+  return {
+    sourceModelId: modelId,
+    candidateModelId: candidate.model.id,
+    priceReductionPct: (sourcePrice - candidate.totalPrice) / sourcePrice,
+  }
+}
+
+function emptyLeakBreakdown(): DiagnosisLeakBreakdown {
+  return {
+    policyLeak: {
+      status: 'needs_data',
+      label: '정책 누수',
+      detail: '매출, 포함량, 초과 과금 기준이 필요합니다.',
+    },
+    operationalLeak: {
+      status: 'needs_data',
+      label: '운영 누수',
+      detail: '실패, 재시도, 지연, 모델 사용 패턴이 필요합니다.',
+    },
+    outcomeLeak: {
+      status: 'needs_data',
+      label: '성과 누수',
+      detail: '성과 기준과 outcome CSV가 필요합니다.',
+    },
+  }
+}
+
+function primaryOutcomeVerification(verifications: FeatureOutcomeMeasurement[]): FeatureOutcomeMeasurement | null {
+  return verifications.find(item => item.leakStatus === 'outcome_leak')
+    ?? verifications.find(item => item.verificationStatus === 'partial')
+    ?? verifications[0]
+    ?? null
+}
+
+function outcomeVerificationOverallStatus(verifications: FeatureOutcomeMeasurement[]): string {
+  if (verifications.length === 0) return '성과 기준 미설정'
+  if (verifications.some(item => item.verificationStatus === 'verifiable')) return '검증 가능'
+  if (verifications.some(item => item.verificationStatus === 'partial')) return '부분 검증'
+  return '성과 기준 미설정'
+}
+
+function buildLeakBreakdown(input: {
+  topTokenCustomer: TokenLeakCustomer | null
+  failedOrRetryCount: number
+  failedOrRetryCostUsd: number
+  outcomeVerification: FeatureOutcomeMeasurement[]
+}): DiagnosisLeakBreakdown {
+  const outcome = primaryOutcomeVerification(input.outcomeVerification)
+  return {
+    policyLeak: input.topTokenCustomer && (input.topTokenCustomer.unrecoveredCostUsd > 0 || input.topTokenCustomer.potentialOverageRevenueUsd > 0)
+      ? {
+          status: 'detected',
+          label: '정책 누수',
+          detail: '고객 매출, 포함량, 초과 과금 기준에서 회수되지 않은 비용이 있습니다.',
+        }
+      : {
+          status: input.topTokenCustomer ? 'not_detected' : 'needs_data',
+          label: '정책 누수',
+          detail: input.topTokenCustomer ? '현재 입력 기준 회수되지 않은 정책 누수가 뚜렷하지 않습니다.' : '고객별 매출과 포함량 매핑이 필요합니다.',
+        },
+    operationalLeak: input.failedOrRetryCount > 0
+      ? {
+          status: 'detected',
+          label: '운영 누수',
+          detail: `실패/재시도 ${fmtNumber(input.failedOrRetryCount)}건, 비용 ${fmtCurrency(input.failedOrRetryCostUsd)}가 보입니다.`,
+        }
+      : {
+          status: 'not_detected',
+          label: '운영 누수',
+          detail: '현재 CSV에서는 실패/재시도 비용이 뚜렷하지 않습니다.',
+        },
+    outcomeLeak: outcome
+      ? {
+          status: outcome.leakStatus === 'outcome_leak'
+            ? 'detected'
+            : outcome.leakStatus === 'needs_outcome_data'
+              ? 'needs_data'
+              : 'not_detected',
+          label: '성과 누수',
+          detail: outcome.summary,
+        }
+      : {
+          status: 'needs_data',
+          label: '성과 누수',
+          detail: '성과 기준 미설정 상태입니다.',
+        },
+  }
+}
+
+function sourceCoverageRecommendation(report: ConnectorReadinessReport): string {
+  const sections = report.sections
+    .map(section => `${section.label}: ${connectorReadinessStatusLabel(section.status)}`)
+    .join(' / ')
+  const usageSection = report.sections.find(section => section.kind === 'llm_usage')
+  const usageSummary = usageSection?.status === 'csv_contract_ready' ? '사용량 CSV 계약 준비' : '사용량 샘플 지원'
+  const columns = report.verifiedColumns.length > 0
+    ? `확인 컬럼: ${report.verifiedColumns.slice(0, 10).join(', ')}`
+    : '확인 컬럼: 샘플 또는 매핑 필요'
+  return `데이터 출처 검증: ${usageSummary}. ${sections}. ${columns}. Live API는 ${connectorReadinessStatusLabel(report.liveConnectorStatus)}입니다.`
+}
+
 function roleViewsFor(input: {
   monthlyCostUsd: number
   grossMarginPct: number
   topFeature: string
   lossCustomerCount: number
   refs: string[]
+  topTokenCustomer?: TokenLeakCustomer | null
+  topTokenFeature?: TokenLeakFeature | null
+  tokenPolicy?: TokenPolicyRecommendation | null
+  topModel?: AttributionRow | null
+  topSession?: AttributionRow | null
+  topAgentRun?: AttributionRow | null
+  p95OutputTokens?: number
+  slowestRequest?: {
+    requestId: string
+    latencyMs: number
+    status: string
+  } | null
+  failedOrRetryCount?: number
+  failedOrRetryCostUsd?: number
+  cheaperModelCandidate?: {
+    sourceModelId: string
+    candidateModelId: string
+    priceReductionPct: number
+  } | null
 }): Record<RoleProjectionRole, RoleViewModel> {
   const base = {
     monthlyCostUsd: input.monthlyCostUsd,
@@ -534,10 +720,156 @@ function roleViewsFor(input: {
     lossCustomerCount: input.lossCustomerCount,
     refs: input.refs,
   }
+  const developer = projectSnapshotForRole(base, 'developer', 'customer')
+  const pm = projectSnapshotForRole(base, 'pm', 'customer')
+  const ceo = projectSnapshotForRole(base, 'ceo', 'customer')
+  const topCustomer = input.topTokenCustomer
+  const topFeature = input.topTokenFeature
+  const tokenPolicy = input.tokenPolicy
+  const topModel = input.topModel
+  const topSession = input.topSession
+  const topAgentRun = input.topAgentRun
+  const slowestRequest = input.slowestRequest
+  const cheaperModelCandidate = input.cheaperModelCandidate
+  const topCustomerName = topCustomer ? customerDisplayName(topCustomer) : ''
+
   return {
-    developer: projectSnapshotForRole(base, 'developer', 'customer'),
-    pm: projectSnapshotForRole(base, 'pm', 'customer'),
-    ceo: projectSnapshotForRole(base, 'ceo', 'customer'),
+    developer: {
+      ...developer,
+      assistant: {
+        ...developer.assistant,
+        focus: '모델, 토큰, 재시도, 캐시, 지연 시간을 먼저 보면서 비용 급증 원인을 찾습니다.',
+      },
+      cards: [
+        {
+          id: 'top_model',
+          title: '고비용 모델',
+          value: topModel?.label ?? '모델 매핑 필요',
+          body: topModel
+            ? `${fmtCurrency(topModel.totalCostUsd)} 비용, 전체 비용의 ${fmtPercent(topModel.shareOfCost)}입니다.`
+            : 'model 컬럼이 있어야 모델별 비용을 볼 수 있습니다.',
+        },
+        {
+          id: 'top_session',
+          title: '비용이 튄 세션',
+          value: topSession?.label ?? '세션 매핑 필요',
+          body: topSession
+            ? `${fmtCurrency(topSession.totalCostUsd)} 비용, 요청 ${fmtNumber(topSession.requestCount)}건이 묶였습니다.`
+            : 'session_id 컬럼이 있어야 세션 단위 비용을 볼 수 있습니다.',
+        },
+        {
+          id: 'top_agent_run',
+          title: '비용이 튄 실행 기록',
+          value: topAgentRun?.label ?? '실행 기록 매핑 필요',
+          body: topAgentRun
+            ? `${fmtCurrency(topAgentRun.totalCostUsd)} 비용, 출력 토큰 평균 ${fmtTokens(topAgentRun.avgOutputTokensPerRequest)}입니다.`
+            : 'agent_run_id 컬럼이 있어야 실행 기록 단위 비용을 볼 수 있습니다.',
+        },
+        {
+          id: 'token_latency_status',
+          title: '출력 토큰/지연/상태',
+          value: input.p95OutputTokens !== undefined ? `${fmtTokens(input.p95OutputTokens)} p95 출력` : '검토 필요',
+          body: slowestRequest
+            ? `가장 느린 요청은 ${slowestRequest.requestId}, ${fmtNumber(slowestRequest.latencyMs)}ms, 상태 ${slowestRequest.status}입니다. 실패/재시도 ${fmtNumber(input.failedOrRetryCount ?? 0)}건을 함께 봅니다.`
+            : `실패/재시도 ${fmtNumber(input.failedOrRetryCount ?? 0)}건을 함께 봅니다.`,
+        },
+        {
+          id: 'retry_waste',
+          title: '실패/재시도 낭비 비용',
+          value: `${fmtCurrency(input.failedOrRetryCostUsd ?? 0)} / ${fmtNumber(input.failedOrRetryCount ?? 0)}건`,
+          body: input.failedOrRetryCount
+            ? '실패/재시도 행을 세션과 실행 기록에 묶어 재호출 원인을 먼저 확인합니다.'
+            : '현재 CSV에서는 실패/재시도 status가 보이지 않습니다.',
+        },
+        {
+          id: 'cheaper_model_candidate',
+          title: '저렴한 모델 후보',
+          value: cheaperModelCandidate?.candidateModelId ?? '후보 검토 필요',
+          body: cheaperModelCandidate
+            ? `${cheaperModelCandidate.sourceModelId} 대신 ${cheaperModelCandidate.candidateModelId}를 같은 기능에서 품질 검증 후보로 비교합니다. 가격표 기준 단가가 ${fmtPercent(cheaperModelCandidate.priceReductionPct)} 낮습니다.`
+            : '현재 고비용 모델보다 낮은 가격표 단가 후보를 찾지 못했습니다.',
+        },
+      ],
+      actions: ['출력 길이 제한', '캐시 검토', '모델 교체 검토', '특정 기능의 호출 횟수 제한'],
+    },
+    pm: {
+      ...pm,
+      assistant: {
+        ...pm.assistant,
+        focus: '기능, 고객, 요금제 기준으로 제공 방식과 가격 정책을 다시 판단합니다.',
+      },
+      cards: [
+        {
+          id: 'feature_cost',
+          title: '비용을 태우는 기능',
+          value: topFeature ? topFeature.feature : input.topFeature,
+          body: topFeature
+            ? `전체 AI 비용의 ${fmtPercent(topFeature.featureCostShare)}를 만들고 있습니다.`
+            : 'feature 컬럼 기준으로 비용을 다시 확인합니다.',
+        },
+        {
+          id: 'customer_plan_impact',
+          title: '영향 고객/요금제',
+          value: topCustomer ? `${topCustomerName} / ${allowanceTierLabel(topFeature?.affectedPlanId ?? null)}` : '매핑 필요',
+          body: topCustomer
+            ? `회수된 매출 ${fmtCurrency(topCustomer.revenueCollectedUsd)} 대비 AI 원가 ${fmtCurrency(topCustomer.aiCogsUsd)}입니다.`
+            : 'customer_id와 revenue_collected 매핑이 필요합니다.',
+        },
+        {
+          id: 'packaging_choice',
+          title: '제공 방식 판단',
+          value: '기본 제공/유료화/제한/초과 과금',
+          body: tokenPolicy?.body ?? '포함 토큰과 초과 과금 정책 후보를 먼저 계산합니다.',
+        },
+        {
+          id: 'customer_copy',
+          title: '고객에게 설명할 문장',
+          value: '포함 사용량을 넘는 AI 작업은 별도 정책으로 안내',
+          body: topFeature
+            ? `${featureDisplayName(topFeature.feature)} 사용량이 포함 토큰을 빠르게 소진하므로, 기본 제공 범위와 초과 사용 기준을 분리해 안내합니다.`
+            : '기능별 사용량을 확인한 뒤 고객 안내 문장을 확정합니다.',
+        },
+      ],
+      actions: ['기능 기본 제공 유지 여부 검토', '유료 기능 분리', '사용량 제한', '초과 과금 문구 정리'],
+    },
+    ceo: {
+      ...ceo,
+      assistant: {
+        ...ceo.assistant,
+        focus: '확정 손실, 회수 후보, 검증 부족, 다음 달 필요한 데이터를 먼저 봅니다.',
+      },
+      cards: [
+        {
+          id: 'unrecovered_cost',
+          title: '이번 달 미회수 AI 비용',
+          value: fmtCurrency(topCustomer?.unrecoveredCostUsd ?? 0),
+          body: topCustomer
+            ? `${topCustomerName}에서 회수되지 않은 AI 원가가 가장 큽니다.`
+            : '손해 고객 매핑이 준비되면 미회수 원가를 확정합니다.',
+        },
+        {
+          id: 'loss_customer',
+          title: '가장 손해 보는 고객',
+          value: topCustomerName || '매핑 필요',
+          body: topCustomer
+            ? `포함 토큰의 ${fmtNumber(topCustomer.allowanceMultiple, 1)}배를 사용했습니다.`
+            : 'customer_id, revenue_collected, included_tokens 연결이 필요합니다.',
+        },
+        {
+          id: 'recommended_policy',
+          title: '추천 정책',
+          value: tokenPolicy?.title ?? '정책 후보 필요',
+          body: tokenPolicy?.body ?? '포함 사용량 조정, 초과 사용 요금, 사용량 제한 중 하나를 검토합니다.',
+        },
+        {
+          id: 'report_review',
+          title: '리포트 생성과 다음 달 검산',
+          value: '결정 기록 후 리포트 생성',
+          body: '채택/보류/거절을 남기고 다음 달 같은 사용량, 매출, 성과 이벤트 CSV로 회수 여부와 검증 부족 항목을 다시 확인합니다.',
+        },
+      ],
+      actions: ['정책 후보 선택', '채택/보류/거절 기록', '리포트 생성', '다음 달 검산일 지정'],
+    },
   }
 }
 
@@ -556,11 +888,18 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
     hasTokenAllowance: hasTokenAllowanceCoverage,
     tokenAllowanceMappingGap: Boolean(input.customerIncludedTokens || input.planIncludedTokens) && !hasTokenAllowanceCoverage,
   })
+  const sourceCoverage = buildConnectorReadinessReport({
+    usageColumns: input.summary.schemaMappingProfile?.sourceColumns ?? [],
+    hasRevenueMapping: hasExternalRevenueCoverage,
+    hasOutcomeEvents: (input.outcomeEvents?.length ?? 0) > 0,
+    hasPolicyDecision: false,
+  })
   const refs = unique([
     'tool:usage.import',
     'tool:diagnosis.token_leak_customer',
     'tool:diagnosis.token_burning_feature',
     'tool:diagnosis.token_policy_candidate',
+    'connector:source_coverage',
     input.snapshotRef ?? 'diagnosis_preview',
   ])
 
@@ -580,6 +919,10 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
         topFeature: null,
         recommendedPolicy: null,
       },
+      measurementContracts: input.measurementContracts ?? [],
+      outcomeVerification: [],
+      leakBreakdown: emptyLeakBreakdown(),
+      sourceCoverage,
       metrics: [],
       insights: [],
       decisionCandidates: [],
@@ -602,8 +945,22 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const planOverageRateUsdPer1kTokens = input.planOverageRateUsdPer1kTokens ?? PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS
   const featureRollup = rollupUsageByAxis(input.summary.rows, 'feature')
   const modelRollup = rollupUsageByAxis(input.summary.rows, 'model')
+  const sessionRollup = rollupUsageByAxis(input.summary.rows, 'session')
+  const agentRunRollup = rollupUsageByAxis(input.summary.rows, 'agent_run')
   const topFeature = featureRollup.rows[0]
   const topModel = modelRollup.rows[0]
+  const topSession = sessionRollup.rows[0]
+  const topAgentRun = agentRunRollup.rows[0]
+  const slowestRow = [...input.summary.rows]
+    .filter(row => typeof row.latencyMs === 'number' && Number.isFinite(row.latencyMs))
+    .sort((a, b) => (b.latencyMs ?? 0) - (a.latencyMs ?? 0))[0]
+  const failedOrRetryRows = input.summary.rows.filter(row => {
+    const status = row.status?.toLowerCase() ?? ''
+    return status.includes('fail') || status.includes('retry') || status.includes('error')
+  })
+  const failedOrRetryCount = failedOrRetryRows.length
+  const failedOrRetryCostUsd = failedOrRetryRows.reduce((total, row) => total + (Number.isFinite(row.totalCostUsd) ? Math.max(0, row.totalCostUsd) : 0), 0)
+  const cheaperModelCandidate = cheaperModelCandidateFor(topModel?.label)
   const customers = customerProfitability(input.summary.rows, customerRevenueUsd)
   const heavyUsers = heavyUserDetection(input.summary.rows, customerRevenueUsd)
   const planMargins = marginByPlan(input.summary.rows, planRevenueUsd)
@@ -625,6 +982,22 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const topTokenCustomer = tokenLeakProof.topCustomer
   const topTokenFeature = tokenLeakProof.topFeature
   const tokenPolicy = tokenLeakProof.recommendedPolicy
+  const topTokenCustomerName = topTokenCustomer ? customerDisplayName(topTokenCustomer) : ''
+  const measurementContracts = input.measurementContracts ?? []
+  const outcomeVerification = measurementContracts.length > 0
+    ? verifyFeatureOutcomeMeasurements({
+        summary: input.summary,
+        contracts: measurementContracts,
+        outcomeEvents: input.outcomeEvents ?? [],
+      })
+    : []
+  const primaryOutcome = primaryOutcomeVerification(outcomeVerification)
+  const leakBreakdown = buildLeakBreakdown({
+    topTokenCustomer,
+    failedOrRetryCount,
+    failedOrRetryCostUsd,
+    outcomeVerification,
+  })
 
   const insights: DiagnosisInsight[] = [
     {
@@ -632,7 +1005,7 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       title: '손해 고객',
       value: topTokenCustomer ? fmtCurrency(topTokenCustomer.unrecoveredCostUsd) : fmtCurrency(0),
       body: topTokenCustomer
-        ? `${topTokenCustomer.customerId}은 이번 달 ${fmtTokens(topTokenCustomer.usedTokens)} 토큰을 사용해 포함 ${fmtTokens(topTokenCustomer.includedTokens)} 토큰의 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배를 썼습니다. 회수된 매출은 ${fmtCurrency(topTokenCustomer.revenueCollectedUsd)}인데 AI 토큰 원가는 ${fmtCurrency(topTokenCustomer.aiCogsUsd)}이라 미회수 AI 원가 ${fmtCurrency(topTokenCustomer.unrecoveredCostUsd)}가 보입니다.`
+        ? `${topTokenCustomerName} 고객은 이번 달 ${fmtTokens(topTokenCustomer.usedTokens)} 토큰을 사용해 포함 ${fmtTokens(topTokenCustomer.includedTokens)} 토큰의 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배를 썼습니다. 회수된 매출은 ${fmtCurrency(topTokenCustomer.revenueCollectedUsd)}인데 AI 토큰 원가는 ${fmtCurrency(topTokenCustomer.aiCogsUsd)}이라 미회수 AI 원가 ${fmtCurrency(topTokenCustomer.unrecoveredCostUsd)}가 보입니다.`
         : 'customer_id와 포함 토큰 매핑이 있으면 손해 고객을 계산할 수 있습니다.',
       refs: ['tool:diagnosis.token_leak_customer'],
     },
@@ -656,13 +1029,25 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
     },
   ]
 
+  if (measurementContracts.length > 0) {
+    insights.push({
+      kind: 'outcome_leak',
+      title: '성과 누수',
+      value: primaryOutcome ? outcomeVerificationStatusLabel(primaryOutcome.verificationStatus) : '성과 기준 미설정',
+      body: primaryOutcome
+        ? `${primaryOutcome.feature} 기능은 ${primaryOutcome.outcomeCriteriaLabel} 기준으로 봅니다. ${primaryOutcome.summary}`
+        : '성과 기준이 선택되지 않아 성과 누수는 확정하지 않습니다.',
+      refs: ['tool:diagnosis.outcome_measurement_contract'],
+    })
+  }
+
   const decisionCandidates: DiagnosisDecisionCandidate[] = [
     {
       id: 'decision:diagnosis:usage-limit',
       kind: 'usage_limit',
       title: '고객별 토큰 cap 검토',
       body: topTokenCustomer
-        ? `${topTokenCustomer.customerId} 고객이 포함 토큰을 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배 사용했습니다. cap, credit 전환, enterprise bundle 중 하나를 검토합니다.`
+        ? `${topTokenCustomerName} 고객이 포함 토큰을 ${fmtNumber(topTokenCustomer.allowanceMultiple, 1)}배 사용했습니다. cap, credit 전환, enterprise bundle 중 하나를 검토합니다.`
         : `${fmtTokens(lossCustomers.length)} 손해 고객과 top-decile 비용 share ${fmtPercent(heavyUsers.topDecileShare)}를 기준으로 제한 정책을 검토합니다.`,
       refs: ['tool:diagnosis.token_leak_customer'],
     },
@@ -691,11 +1076,28 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
   const metrics: DiagnosisMetric[] = [
     { id: 'monthly_loss', label: '미회수 AI 원가', value: fmtCurrency(topTokenCustomer?.unrecoveredCostUsd ?? roiProof.monthlyLossUsd), help: '회수된 매출 대비 AI 토큰 원가 초과분' },
     { id: 'ai_cogs', label: 'AI 토큰 원가', value: fmtCurrency(input.summary.totalCostUsd) },
-    { id: 'loss_customers', label: '손해 고객', value: topTokenCustomer ? topTokenCustomer.customerId : fmtTokens(lossCustomers.length) },
+    { id: 'loss_customers', label: '손해 고객', value: topTokenCustomer ? topTokenCustomerName : fmtTokens(lossCustomers.length) },
     { id: 'policy_margin_delta', label: '초과 과금 회수 후보', value: fmtCurrency(tokenPolicy?.expectedRecoveredUsd ?? roiProof.bestPolicyMarginDeltaUsd), help: tokenPolicy?.title },
     { id: 'top_feature_cost', label: '최고 token 기능', value: topTokenFeature ? fmtTokens(topTokenFeature.usedTokens) : fmtCurrency(topFeature?.totalCostUsd ?? 0), help: topTokenFeature?.feature ?? topFeature?.label },
-    { id: 'weakest_margin', label: 'COGS/매출 비율', value: fmtPercent(topTokenCustomer?.cogsToRevenuePct ?? grossMarginPct), help: topTokenCustomer?.customerId ?? 'customer allowance / revenue_collected 기준' },
+    { id: 'weakest_margin', label: 'COGS/매출 비율', value: fmtPercent(topTokenCustomer?.cogsToRevenuePct ?? grossMarginPct), help: topTokenCustomerName || 'customer allowance / revenue_collected 기준' },
   ]
+
+  if (measurementContracts.length > 0) {
+    metrics.push({
+      id: 'outcome_verification',
+      label: '성과 검증 등급',
+      value: outcomeVerificationOverallStatus(outcomeVerification),
+      help: primaryOutcome?.summary,
+    })
+    metrics.push({
+      id: 'outcome_unit_cost',
+      label: '성과 1건당 AI 원가',
+      value: primaryOutcome?.costPerSuccessfulOutcomeUsd !== null && primaryOutcome?.costPerSuccessfulOutcomeUsd !== undefined
+        ? fmtCurrency(primaryOutcome.costPerSuccessfulOutcomeUsd)
+        : '검증 필요',
+      help: primaryOutcome?.outcomeCriteriaLabel,
+    })
+  }
 
   return {
       workspaceId: input.workspaceId,
@@ -703,6 +1105,10 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       reportGate: gate,
       roiProof,
       tokenLeakProof,
+      measurementContracts,
+      outcomeVerification,
+      leakBreakdown,
+      sourceCoverage,
       metrics,
       insights,
       decisionCandidates,
@@ -712,6 +1118,23 @@ export function buildDiagnosisSnapshot(input: DiagnosisSnapshotInput): Diagnosis
       topFeature: topFeature?.label ?? 'unknown',
       lossCustomerCount: lossCustomers.length,
       refs,
+      topTokenCustomer,
+      topTokenFeature,
+      tokenPolicy,
+      topModel,
+      topSession,
+      topAgentRun,
+      p95OutputTokens: input.summary.p95OutputTokens,
+      slowestRequest: slowestRow
+        ? {
+            requestId: slowestRow.requestId ?? 'request_id 없음',
+            latencyMs: slowestRow.latencyMs ?? 0,
+            status: slowestRow.status ?? 'unknown',
+          }
+        : null,
+      failedOrRetryCount,
+      failedOrRetryCostUsd,
+      cheaperModelCandidate,
     }),
     refs,
   }
@@ -726,13 +1149,22 @@ export function reportFirstPayloadFromDiagnosis(
   if (!candidate) {
     throw new Error('money_leak_decision_candidate_missing')
   }
+  const outcome = primaryOutcomeVerification(snapshot.outcomeVerification)
+  const outcomeRecommendation = outcome
+    ? `성과 기준: ${outcome.outcomeCriteriaLabel} / 원가 기준: ${outcome.costCriteriaLabel} / 누수 기준: ${outcome.leakCriteriaLabel} / 검증 등급: ${outcomeVerificationStatusLabel(outcome.verificationStatus)}`
+    : '성과 기준 미설정: 기능별 성과 기준을 선택하지 않아 성과 누수는 확정하지 않습니다.'
+  const sourceCoverage = sourceCoverageRecommendation(snapshot.sourceCoverage)
+  const risks = [
+    ...(snapshot.reportGate.warnings.length > 0 ? snapshot.reportGate.warnings : ['저장된 artifact 생성 전에는 PDF 공유를 완료로 표시하지 않습니다.']),
+    ...(outcome?.verificationStatus === 'partial' ? ['성과 이벤트 CSV가 없어 성과 누수로 확정하지 않습니다.'] : []),
+  ]
 
   return {
     title: 'AI 비용 누수 리포트',
     executiveSummary: snapshot.insights.map(insight => `${insight.title}: ${insight.body}`).join(' '),
     metrics: snapshot.metrics.map(metric => ({ label: metric.label, value: metric.value })),
-    recommendations: [candidate.body, snapshot.roiProof.paybackHint],
-    risks: snapshot.reportGate.warnings.length > 0 ? snapshot.reportGate.warnings : ['저장된 artifact 생성 전에는 PDF 공유를 완료로 표시하지 않습니다.'],
+    recommendations: [candidate.body, outcomeRecommendation, sourceCoverage, snapshot.roiProof.paybackHint],
+    risks,
     refs: snapshot.refs,
     trust: {
       status: snapshot.reportGate.status,

@@ -11,6 +11,7 @@ import {
   PLAN_TOKEN_ALLOWANCE,
 } from '../../usage/data/agentPayrollSample'
 import { parseUsageCsv } from '../../usage/lib/usageImport'
+import { buildDefaultFeatureMeasurementContracts, parseOutcomeCsv } from './outcomeMeasurement'
 import { buildDiagnosisSnapshot, buildMarginDiagnosisSummary, reportFirstPayloadFromDiagnosis } from './diagnosis'
 
 describe('buildDiagnosisSnapshot', () => {
@@ -84,7 +85,8 @@ describe('buildDiagnosisSnapshot', () => {
     ]))
     expect(snapshot.decisionCandidates.length).toBeGreaterThanOrEqual(3)
     expect(snapshot.tokenLeakProof.topCustomer).toMatchObject({
-      customerId: 'cust_001',
+      customerId: 'northstar_health',
+      customerName: 'Northstar Health',
       usedTokens: 630000,
       includedTokens: 185000,
       overageTokens: 445000,
@@ -100,7 +102,7 @@ describe('buildDiagnosisSnapshot', () => {
       planFeatureCostUsd: 225,
       planRevenueUsd: 87,
     })
-    expect(snapshot.tokenLeakProof.topFeature?.shareOfTokens).toBeCloseTo(730000 / 1644000)
+    expect(snapshot.tokenLeakProof.topFeature?.shareOfTokens).toBeCloseTo(730000 / 1695000)
     expect(snapshot.tokenLeakProof.topFeature?.shareOfCost).toBeCloseTo(225 / 444)
     expect(snapshot.tokenLeakProof.topFeature?.featureCostShare).toBeCloseTo(225 / 444)
     expect(snapshot.tokenLeakProof.topFeature?.featureCostToPlanRevenuePct).toBeCloseTo(225 / 87)
@@ -142,6 +144,49 @@ describe('buildDiagnosisSnapshot', () => {
       expect.objectContaining({ id: 'monthly_loss', label: '미회수 AI 원가', value: '$70' }),
       expect.objectContaining({ id: 'policy_margin_delta', label: '초과 과금 회수 후보' }),
     ]))
+  })
+
+  it('separates policy, operational, and outcome leakage with explicit verification status', () => {
+    const summary = parseUsageCsv([
+      'timestamp,request_id,customer_id,plan_id,feature,model,session_id,agent_run_id,input_tokens,output_tokens,total_cost,latency_ms,status',
+      '2026-05-01,req_1,cus_a,pro,report_generation,claude-sonnet-4.6,sess_1,run_1,1000,500,20,1200,success',
+      '2026-05-01,req_2,cus_a,pro,report_generation,claude-sonnet-4.6,sess_2,run_2,1000,500,20,1200,success',
+      '2026-05-01,req_3,cus_a,pro,report_generation,claude-sonnet-4.6,sess_3,run_3,1000,500,20,1200,success',
+      '2026-05-01,req_4,cus_a,pro,report_generation,claude-sonnet-4.6,sess_4,run_4,1000,500,20,1200,retry',
+    ].join('\n'), MODELS, { revenueBasis: 'manual_map' })
+    const contracts = buildDefaultFeatureMeasurementContracts(summary)
+    const outcomeCsv = parseOutcomeCsv([
+      'timestamp,customer_id,feature,agent_run_id,outcome_type,outcome_count,accepted',
+      '2026-05-01,cus_a,report_generation,run_1,report_downloaded,1,true',
+    ].join('\n'))
+
+    const snapshot = buildDiagnosisSnapshot({
+      workspaceId: 'workspace-demo',
+      summary,
+      customerRevenueUsd: { cus_a: 49 },
+      customerIncludedTokens: { cus_a: 1000 },
+      customerOverageRateUsdPer1kTokens: { cus_a: 0.18 },
+      measurementContracts: contracts,
+      outcomeEvents: outcomeCsv.rows,
+      snapshotRef: 'usage:p1:workspace-demo:2026-05',
+    })
+
+    expect(snapshot.leakBreakdown).toMatchObject({
+      policyLeak: expect.objectContaining({ status: 'detected' }),
+      operationalLeak: expect.objectContaining({ status: 'detected' }),
+      outcomeLeak: expect.objectContaining({ status: 'detected' }),
+    })
+    expect(snapshot.outcomeVerification[0]).toMatchObject({
+      feature: 'report_generation',
+      verificationStatus: 'verifiable',
+      leakStatus: 'outcome_leak',
+      successfulOutcomeCount: 1,
+    })
+    expect(snapshot.metrics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'outcome_verification', label: '성과 검증 등급', value: '검증 가능' }),
+      expect.objectContaining({ id: 'outcome_unit_cost', label: '성과 1건당 AI 원가', value: '$80' }),
+    ]))
+    expect(snapshot.insights.map(insight => insight.title)).toContain('성과 누수')
   })
 
   it('lets customer-level token economics unlock the report even when plan_id is absent', () => {
@@ -235,6 +280,10 @@ describe('buildDiagnosisSnapshot', () => {
     })
     expect(payload.title).toBe('AI 비용 누수 리포트')
     expect(payload.recommendations[0]).toMatch(/토큰|초과 과금|정책/)
+    expect(payload.recommendations.join(' ')).toContain('성과 기준 미설정')
+    expect(payload.recommendations.join(' ')).toContain('데이터 출처 검증')
+    expect(payload.recommendations.join(' ')).toContain('사용량 CSV 계약 준비')
+    expect(payload.refs).toContain('connector:source_coverage')
   })
 
   it('throws a clear error when the selected decision candidate is missing', () => {

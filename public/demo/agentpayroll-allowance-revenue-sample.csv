@@ -1,0 +1,8 @@
+customer_id,customer_name,plan_id,revenue_collected,included_tokens,overage_rate_usd_per_1k_tokens
+northstar_health,Northstar Health,pro,29,185000,0.18
+atlas_legal,Atlas Legal,pro,29,185000,0.18
+bluebird_support,Bluebird Support,team,99,320000,0.12
+orbit_finance,Orbit Finance,team,99,320000,0.12
+indie_ops,IndieOps,free,0,50000,0.25
+brightdesk_ai,BrightDesk AI,pro,29,185000,0.18
+cobalt_sales,Cobalt Sales,team,99,320000,0.12

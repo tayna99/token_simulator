@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MODELS } from '../../../data/models'
 import { fmtKrw, fmtKrwRange, fmtNumber } from '../../../lib/format'
@@ -11,6 +11,7 @@ import {
   CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS,
   CUSTOMER_TOKEN_ALLOWANCE,
   AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV,
+  AGENT_PAYROLL_OUTCOME_SAMPLE_CSV,
   AGENT_PAYROLL_SAMPLE_CSV,
   PLAN_MONTHLY_REVENUE,
   PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS,
@@ -31,6 +32,11 @@ import {
   type DiagnosisSnapshot,
   type MoneyLeakDecisionChoice,
 } from '../lib/diagnosis'
+import {
+  buildConnectorReadinessReport,
+  connectorReadinessStatusLabel,
+  type ConnectorReadinessReport,
+} from '../lib/connectorContracts'
 import {
   assessIcpTimingGate,
   type IcpTimingDecisionUrgency,
@@ -58,11 +64,19 @@ import {
   type MoneyLeakStepId,
   type MoneyLeakStepState,
 } from '../lib/moneyLeakRun'
+import {
+  buildDefaultFeatureMeasurementContracts,
+  outcomeVerificationStatusLabel,
+  parseOutcomeCsv,
+  type FeatureMeasurementContract,
+  type OutcomeEventRow,
+} from '../lib/outcomeMeasurement'
 import { parseRevenueCsv } from '../lib/revenueMapping'
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 type InputMode = 'csv' | 'summary'
 type RoleTab = 'developer' | 'pm' | 'ceo'
+type DemoScene = 'data' | 'diagnosis' | 'roles' | 'decision' | 'report' | 'review' | 'process'
 type EvidenceAudience = 'customer' | 'expert'
 type DecisionUrgency = IcpTimingDecisionUrgency
 
@@ -144,10 +158,91 @@ function numericInput(value: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
+async function readCsvFile(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text()
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(reader.error ?? new Error('csv_file_read_failed'))
+    reader.readAsText(file)
+  })
+}
+
 const SERVICE_VALIDATION_LEDGER_STORAGE_PREFIX = 'agentpayroll:service-validation-ledger:v1:'
 const SERVICE_VALIDATION_INTENTS: ServiceValidationIntent[] = ['yes', 'conditional', 'no']
 const SERVICE_VALIDATION_REPEAT_SIGNALS: RepeatReportRequestSignal[] = ['monthly', 'quarterly', 'one_more_after_change', 'no']
 const SERVICE_VALIDATION_REQUEST_TYPES: DominantRequestType[] = ['service_report', 'broad_saas_feature', 'data_readiness', 'sample_only']
+const DEMO_SCENES: Array<{
+  id: DemoScene
+  label: string
+  needsSnapshot: boolean
+}> = [
+  { id: 'data', label: '진단하기', needsSnapshot: false },
+  { id: 'diagnosis', label: '진단 결과', needsSnapshot: true },
+  { id: 'roles', label: '역할별 판단', needsSnapshot: true },
+  { id: 'decision', label: '결정 기록', needsSnapshot: true },
+  { id: 'report', label: '리포트 보기', needsSnapshot: true },
+  { id: 'review', label: '다음 달 검산', needsSnapshot: true },
+  { id: 'process', label: 'AI 팀 작업 과정', needsSnapshot: true },
+]
+
+const SCENE_SURFACE_COPY: Record<DemoScene, { eyebrow: string; title: string; description: string }> = {
+  data: {
+    eyebrow: '데이터 준비',
+    title: '사용량 CSV와 요금제/매출 CSV',
+    description: '사용량, 포함 토큰, 회수된 매출을 연결해 초과 사용분과 미회수 원가를 먼저 보여줍니다.',
+  },
+  diagnosis: {
+    eyebrow: '진단 결과',
+    title: '비용 누수 분석 완료',
+    description: '손해 고객, 비용을 많이 태우는 기능, 지금 검토할 정책 후보만 먼저 확인합니다.',
+  },
+  roles: {
+    eyebrow: '역할별 판단',
+    title: 'CEO / PM / 개발자 판단 화면',
+    description: '같은 진단 결과를 각 역할이 바로 결정해야 할 업무 기준으로 다시 봅니다.',
+  },
+  decision: {
+    eyebrow: '결정 기록',
+    title: '정책 후보 결정',
+    description: '정책 후보를 고르고 사람이 채택, 보류, 거절 중 하나를 남깁니다.',
+  },
+  report: {
+    eyebrow: '리포트 보기',
+    title: '리포트 미리보기 / PDF 준비',
+    description: '결정 기록이 있어야 리포트 미리보기와 PDF 생성 상태가 열립니다.',
+  },
+  review: {
+    eyebrow: '다음 달 검산',
+    title: '다음 달 검산',
+    description: '다음 달 같은 CSV 기준으로 정책이 실제 비용을 회수했는지 확인합니다.',
+  },
+  process: {
+    eyebrow: 'AI 팀 작업 과정',
+    title: '결정론 미리보기 작업 과정',
+    description: '운영 연결 없이 같은 진단 snapshot을 어떤 순서로 해석했는지 보여줍니다.',
+  },
+}
+
+const LOCKED_SCENE_COPY: Record<Exclude<DemoScene, 'data'>, string> = {
+  diagnosis: '공통 진단 결과는 샘플 또는 CSV 분석 후 열립니다.',
+  roles: 'CEO / PM / 개발자 탭은 샘플 또는 CSV 분석 후 열립니다.',
+  decision: '정책 후보, 채택/보류/거절, 결정 이유 입력은 샘플 또는 CSV 분석 후 열립니다.',
+  report: '리포트 미리보기와 PDF 생성 상태는 결정 후보를 고른 뒤 열립니다.',
+  review: '다음 확인일, 다시 볼 지표, 필요한 CSV 안내는 샘플 또는 CSV 분석 후 열립니다.',
+  process: 'AI 팀 작업 과정은 같은 진단 snapshot이 생긴 뒤 결정론 미리보기로 열립니다.',
+}
+
+function sceneFromHash(hash: string): DemoScene | null {
+  const normalized = hash.replace(/^#/, '')
+  if (normalized === 'ai-team-process') return 'process'
+  return DEMO_SCENES.some(scene => scene.id === normalized) ? normalized as DemoScene : null
+}
+
+function hashForScene(scene: DemoScene): string {
+  return `#${scene}`
+}
 
 function serviceValidationLedgerStorageKey(workspaceId: string): string {
   return `${SERVICE_VALIDATION_LEDGER_STORAGE_PREFIX}${workspaceId}`
@@ -906,6 +1001,431 @@ function LocalReportPreview({
       <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-2 text-xs">
         <p className="font-semibold text-label-normal">선택된 결정</p>
         <p className="mt-1 text-label-neutral">{DECISION_CHOICE_LABELS[decisionChoice]} / {payload.recommendations[0]}</p>
+        <div className="mt-2 grid gap-1 text-label-neutral">
+          {payload.recommendations.slice(1).map(recommendation => (
+            <p key={recommendation}>{recommendation}</p>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ROLE_TAB_LABELS: Record<RoleTab, string> = {
+  developer: '개발자',
+  pm: 'PM',
+  ceo: 'CEO',
+}
+
+const ROLE_KPI_LABELS: Record<string, string> = {
+  top_agent_share: '상위 실행 비중',
+  monthly_cost: '월 AI 원가',
+  debug_refs: '저장된 근거',
+  margin: '마진',
+  customer: '위험 고객',
+  feature: '핵심 기능',
+}
+
+function RoleWorkspacePanel({
+  roleView,
+}: {
+  roleView: DiagnosisSnapshot['roleViews'][RoleTab]
+}) {
+  return (
+    <div data-testid="role-workspace-panel" className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold">{ROLE_TAB_LABELS[roleView.role]} 업무 화면</p>
+          <p className="mt-1 text-lg font-semibold text-label-normal">{roleView.question}</p>
+          <p className="mt-2 max-w-3xl text-xs leading-5 text-label-neutral">{roleView.assistant.focus}</p>
+        </div>
+        <Badge tone="neutral">같은 진단 snapshot</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {roleView.primaryKpis.map(kpi => (
+          <div key={kpi.id} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="text-xs font-semibold text-label-alternative">{ROLE_KPI_LABELS[kpi.id] ?? kpi.label}</p>
+            <p className="mt-1 text-lg font-semibold text-label-normal" translate="no">{kpi.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {roleView.cards.map(card => (
+          <div key={card.id} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="text-sm font-semibold">{card.title}</p>
+            <p className="mt-1 text-base font-semibold text-primary-normal" translate="no">{card.value}</p>
+            <p className="mt-2 text-xs leading-5 text-label-neutral">{card.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-wds border border-line-neutral bg-surface-normal p-3">
+        <p className="text-sm font-semibold">바로 할 일</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {roleView.actions.map(action => (
+            <Badge key={action} tone="primary">{action}</Badge>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-5 text-label-neutral">{roleView.nextStep}</p>
+      </div>
+    </div>
+  )
+}
+
+function AiTeamProcessView({
+  snapshot,
+  selectedDecisionTitle,
+  decisionChoice,
+}: {
+  snapshot: DiagnosisSnapshot
+  selectedDecisionTitle?: string
+  decisionChoice: MoneyLeakDecisionChoice | ''
+}) {
+  const topCustomer = snapshot.tokenLeakProof.topCustomer
+    ? snapshot.tokenLeakProof.topCustomer.customerName?.trim() || snapshot.tokenLeakProof.topCustomer.customerId
+    : '손해 고객 매핑 필요'
+  const topFeature = snapshot.tokenLeakProof.topFeature?.feature ?? '기능 매핑 필요'
+  const policy = snapshot.tokenLeakProof.recommendedPolicy?.title ?? '정책 후보 계산 필요'
+  const stages = [
+    {
+      title: '설계',
+      body: `사용량 CSV와 요금제/매출 CSV를 같은 진단 snapshot으로 묶고 ${topCustomer}와 ${topFeature}를 볼 대상으로 정합니다.`,
+    },
+    {
+      title: '비용 계산',
+      body: '토큰 사용량과 명시된 total_cost를 AI 원가로 정리하고, 고객/기능/모델/세션/실행 단위로 같은 원장을 읽습니다.',
+    },
+    {
+      title: '병목 찾기',
+      body: `${topCustomer}, ${topFeature}, 고비용 모델, 비용이 튄 세션과 실행 기록을 같은 입력에서 찾습니다.`,
+    },
+    {
+      title: '개선안과 위험 검토',
+      body: `${policy}, 사용량 제한, 초과 과금, 모델 교체는 실제 외부 실행 없이 결정론 미리보기로만 비교합니다.`,
+    },
+    {
+      title: '결정 기록',
+      body: decisionChoice
+        ? `${DECISION_CHOICE_LABELS[decisionChoice]} 결정이 리포트 미리보기의 기준이 됩니다.`
+        : `${selectedDecisionTitle ?? '정책 후보'}를 선택한 뒤 채택/보류/거절을 남겨야 리포트가 열립니다.`,
+    },
+  ]
+
+  return (
+    <div data-testid="ai-team-process-view" className="mt-4 rounded-wds border border-line-neutral bg-surface-normal p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-semibold">AI 팀 작업 과정</p>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-label-neutral">
+            같은 진단 snapshot을 기준으로 내부 AI 팀이 어떤 순서로 일을 나눠 보는지 보여줍니다.
+          </p>
+        </div>
+        <Badge tone="caution">결정론 미리보기</Badge>
+      </div>
+      <p className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative px-3 py-2 text-xs font-semibold text-label-neutral">
+        같은 진단 snapshot: <span translate="no">{snapshot.snapshotRef ?? 'diagnosis_preview'}</span>
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-5">
+        {stages.map((stage, index) => (
+          <div key={stage.title} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+            <p className="text-xs font-semibold text-primary-normal">{index + 1}. {stage.title}</p>
+            <p className="mt-2 text-xs leading-5 text-label-neutral">{stage.body}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-label-alternative">
+        실제 provider 실행이나 외부 connector 실행 완료로 표시하지 않습니다. 운영 연결 전에는 미리보기 상태만 보여줍니다.
+      </p>
+    </div>
+  )
+}
+
+function NextMonthReviewPanel({
+  nextReviewDate,
+  onNextReviewDateChange,
+}: {
+  nextReviewDate: string
+  onNextReviewDateChange: (value: string) => void
+}) {
+  return (
+    <div id="review" className="mt-4 rounded-wds border border-line-neutral bg-surface-normal p-3">
+      <p className="text-sm font-semibold">다음 달 검산</p>
+      <p className="mt-1 text-xs text-label-neutral">
+        다음 달 같은 사용량 CSV와 요금제/매출 CSV를 다시 넣어 정책 결정이 실제로 비용을 회수했는지 확인합니다.
+      </p>
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <Field label="다음 검산일" htmlFor="next-month-review-date" help="예: 2026-06-28">
+          <input
+            id="next-month-review-date"
+            type="date"
+            value={nextReviewDate}
+            onChange={event => onNextReviewDateChange(event.currentTarget.value)}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-sm text-label-normal"
+          />
+        </Field>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-xs font-semibold text-label-normal">다시 볼 지표</p>
+          <p className="mt-2 text-xs text-label-neutral">미회수 AI 원가, 손해 고객, 기능별 비용, 초과 과금 회수 후보</p>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+          <p className="text-xs font-semibold text-label-normal">필요한 CSV</p>
+          <p className="mt-2 text-xs text-label-neutral">사용량 CSV와 요금제/매출 CSV를 같은 customer_id 기준으로 다시 준비합니다.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DemoWorkflowTabs({
+  activeScene,
+  hasSnapshot,
+  onSelectScene,
+}: {
+  activeScene: DemoScene
+  hasSnapshot: boolean
+  onSelectScene: (scene: DemoScene) => void
+}) {
+  return (
+    <nav
+      data-testid="demo-workflow-tabs"
+      aria-label="데모 업무 탭"
+      className="rounded-wds border border-line-neutral bg-surface-alternative p-2"
+    >
+      <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="데모 장면">
+        {DEMO_SCENES.map(scene => {
+          const locked = scene.needsSnapshot && !hasSnapshot
+          return (
+          <Button
+            key={scene.id}
+            type="button"
+            size="sm"
+            role="tab"
+            aria-selected={activeScene === scene.id}
+            aria-disabled={locked ? 'true' : undefined}
+            variant={activeScene === scene.id ? 'primary' : 'secondary'}
+            className={locked ? 'shrink-0 text-label-alternative' : 'shrink-0'}
+            onClick={() => onSelectScene(scene.id)}
+          >
+            {scene.label}
+          </Button>
+          )
+        })}
+      </div>
+      {!hasSnapshot && (
+        <p className="mt-2 px-2 text-xs text-label-alternative">
+          역할별 판단은 CEO / PM / 개발자 탭으로 나뉩니다. 진단 결과, 결정 기록, 리포트 보기, 다음 달 검산, AI 팀 작업 과정은 샘플 또는 CSV 분석 후 열립니다.
+        </p>
+      )}
+    </nav>
+  )
+}
+
+function LockedScenePanel({ scene }: { scene: Exclude<DemoScene, 'data'> }) {
+  const label = DEMO_SCENES.find(item => item.id === scene)?.label ?? SCENE_SURFACE_COPY[scene].title
+  return (
+    <section
+      id={scene}
+      data-testid="locked-scene-panel"
+      className="rounded-wds border border-line-neutral bg-fill-alternative p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold">{label}</h3>
+        <Badge tone="neutral">샘플 또는 CSV 분석 후 열립니다</Badge>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-label-neutral">{LOCKED_SCENE_COPY[scene]}</p>
+    </section>
+  )
+}
+
+function CsvSourceGuide() {
+  return (
+    <div data-testid="csv-source-guide" className="mb-4 rounded-wds border border-line-neutral bg-fill-alternative p-4">
+      <p className="text-sm font-semibold text-label-normal">이 CSV는 어디서 가져오나요?</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+          <p className="text-xs font-semibold text-label-normal">사용량 CSV</p>
+          <p className="mt-2 text-xs leading-5 text-label-neutral">
+            Helicone, Langfuse, OpenAI export, 내부 API 서버 로그, LLM gateway 로그에서 뽑습니다.
+            보통 개발자 또는 데이터 담당자가 월별 사용량을 export합니다.
+          </p>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+          <p className="text-xs font-semibold text-label-normal">요금제/매출 CSV</p>
+          <p className="mt-2 text-xs leading-5 text-label-neutral">
+            Stripe, billing DB, CRM, 재무 스프레드시트에서 뽑습니다.
+            보통 운영 또는 재무 담당자가 고객별 매출과 포함 토큰을 export합니다.
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-label-alternative">
+        처음에는 두 파일을 수동으로 올리고, 반복 운영 단계에서는 provider나 billing connector로 자동 연결합니다.
+      </p>
+    </div>
+  )
+}
+
+function ConnectorReadinessPanel({ report }: { report: ConnectorReadinessReport }) {
+  return (
+    <div data-testid="connector-readiness-panel" className="mb-4 rounded-wds border border-line-neutral bg-fill-alternative p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-label-normal">지원되는 데이터 출처</p>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-label-neutral">
+            실제 외부 API를 호출하지 않습니다. 지금은 CSV 계약과 샘플로 Langfuse, Helicone, OpenAI, Anthropic, Gemini, Vercel AI Gateway, Stripe, billing DB 데이터를 받을 준비 상태만 보여줍니다.
+          </p>
+        </div>
+        <Badge tone="caution">{connectorReadinessStatusLabel(report.liveConnectorStatus)}</Badge>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
+        {report.sections.map(section => (
+          <div key={section.kind} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+            <p className="text-xs font-semibold text-label-normal">{section.label}</p>
+            <p className="mt-1 text-xs font-semibold text-primary-normal">{connectorReadinessStatusLabel(section.status)}</p>
+            <p className="mt-2 text-xs leading-5 text-label-neutral">{section.detail}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-label-alternative">
+        API 미연결 상태에서는 connector_not_configured로만 표시하고, 실제 과금/제한/동기화는 실행하지 않습니다.
+      </p>
+    </div>
+  )
+}
+
+function MeasurementContractPanel({
+  contracts,
+  outcomeCsv,
+  onContractChange,
+  onOutcomeCsvChange,
+  onLoadOutcomeSample,
+}: {
+  contracts: FeatureMeasurementContract[]
+  outcomeCsv: string
+  onContractChange: (feature: string, updates: Partial<FeatureMeasurementContract>) => void
+  onOutcomeCsvChange: (value: string) => void
+  onLoadOutcomeSample: () => void
+}) {
+  const visibleContracts = contracts.slice(0, 4)
+  return (
+    <div data-testid="measurement-contract-panel" className="mb-4 rounded-wds border border-line-neutral bg-fill-alternative p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-label-normal">성과 기준 만들기</p>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-label-neutral">
+            AI는 후보만 제안하고 사람이 기준을 선택합니다. outcome CSV가 없으면 성과 누수로 확정하지 않고 부분 검증으로 표시합니다.
+          </p>
+        </div>
+        <Badge tone="neutral">deterministic preview</Badge>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {visibleContracts.map(contract => (
+          <div key={contract.feature} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+            <p className="text-sm font-semibold" translate="no">{contract.feature}</p>
+            <p className="mt-1 text-xs text-label-alternative">기능 유형: {contract.featureType}</p>
+            <div className="mt-3 grid gap-2">
+              <Field label="성과 기준" htmlFor={`outcome-criteria-${contract.feature}`}>
+                <select
+                  id={`outcome-criteria-${contract.feature}`}
+                  value={contract.outcomeCriteriaLabel}
+                  onChange={event => onContractChange(contract.feature, {
+                    outcomeCriteriaLabel: event.currentTarget.value,
+                    outcomeCriteria: event.currentTarget.value.includes('채택')
+                      ? ['accepted', 'user_approved', 'answer_accepted']
+                      : contract.outcomeCriteria,
+                  })}
+                  className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs"
+                >
+                  <option>{contract.outcomeCriteriaLabel}</option>
+                  <option>사용자가 채택한 결과</option>
+                </select>
+              </Field>
+              <Field label="원가 기준" htmlFor={`cost-criteria-${contract.feature}`}>
+                <select
+                  id={`cost-criteria-${contract.feature}`}
+                  value={contract.costCriteriaLabel}
+                  onChange={event => onContractChange(contract.feature, { costCriteriaLabel: event.currentTarget.value })}
+                  className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs"
+                >
+                  <option>{contract.costCriteriaLabel}</option>
+                  <option>실패/재시도 비용 포함</option>
+                  <option>고급 모델 사용 비용 포함</option>
+                </select>
+              </Field>
+              <Field label="누수 기준" htmlFor={`leak-criteria-${contract.feature}`}>
+                <select
+                  id={`leak-criteria-${contract.feature}`}
+                  value={contract.leakCriteriaLabel}
+                  onChange={event => onContractChange(contract.feature, {
+                    leakCriteriaLabel: event.currentTarget.value,
+                    outcomeRateThreshold: event.currentTarget.value.includes('50%') ? 0.5 : 0.3,
+                  })}
+                  className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs"
+                >
+                  <option>{contract.leakCriteriaLabel}</option>
+                  <option>실제 사용률 50% 미만</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        <Field label="성과 이벤트 CSV" htmlFor="report-first-outcome-csv" help="선택 컬럼입니다. 없으면 성과 누수 확정 대신 부분 검증으로 표시합니다.">
+          <textarea
+            id="report-first-outcome-csv"
+            value={outcomeCsv}
+            onChange={event => onOutcomeCsvChange(event.currentTarget.value)}
+            rows={4}
+            className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
+          />
+        </Field>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={onLoadOutcomeSample}>
+            성과 이벤트 샘플
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OutcomeVerificationPanel({ snapshot }: { snapshot: DiagnosisSnapshot }) {
+  const primary = snapshot.outcomeVerification.find(item => item.leakStatus === 'outcome_leak')
+    ?? snapshot.outcomeVerification.find(item => item.verificationStatus === 'partial')
+    ?? snapshot.outcomeVerification[0]
+  if (!primary) {
+    return (
+      <div data-testid="outcome-verification-panel" className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3 text-xs text-label-neutral">
+        성과 검증: 성과 기준 미설정. 기능별 성과 기준을 먼저 선택해야 성과 누수를 검증합니다.
+      </div>
+    )
+  }
+
+  return (
+    <div data-testid="outcome-verification-panel" className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-label-normal">
+          성과 검증: {outcomeVerificationStatusLabel(primary.verificationStatus)}
+        </p>
+        <Badge tone={primary.leakStatus === 'outcome_leak' ? 'caution' : primary.verificationStatus === 'verifiable' ? 'positive' : 'neutral'}>
+          {snapshot.leakBreakdown.outcomeLeak.label}: {snapshot.leakBreakdown.outcomeLeak.status}
+        </Badge>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-label-neutral">{primary.summary}</p>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <div className="rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs">
+          <p className="font-semibold">성과 기준</p>
+          <p className="mt-1 text-label-neutral">{primary.outcomeCriteriaLabel}</p>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs">
+          <p className="font-semibold">원가 기준</p>
+          <p className="mt-1 text-label-neutral">{primary.costCriteriaLabel}</p>
+        </div>
+        <div className="rounded-wds border border-line-neutral bg-surface-normal p-2 text-xs">
+          <p className="font-semibold">누수 기준</p>
+          <p className="mt-1 text-label-neutral">{primary.leakCriteriaLabel}</p>
+        </div>
       </div>
     </div>
   )
@@ -916,12 +1436,15 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const [inputMode, setInputMode] = useState<InputMode>('csv')
   const [rawCsv, setRawCsv] = useState('')
   const [revenueCsv, setRevenueCsv] = useState('')
+  const [outcomeCsv, setOutcomeCsv] = useState('')
+  const [measurementContracts, setMeasurementContracts] = useState<FeatureMeasurementContract[]>([])
   const [summaryJson, setSummaryJson] = useState('')
   const [snapshot, setSnapshot] = useState<DiagnosisSnapshot | null>(null)
   const [selectedDecisionId, setSelectedDecisionId] = useState('')
   const [decisionChoice, setDecisionChoice] = useState<MoneyLeakDecisionChoice | ''>('')
   const [trustResult, setTrustResult] = useState<TrustInspectionResult | null>(null)
-  const [activeRole, setActiveRole] = useState<RoleTab>('developer')
+  const [activeRole, setActiveRole] = useState<RoleTab>('ceo')
+  const [activeScene, setActiveScene] = useState<DemoScene>('data')
   const [message, setMessage] = useState('')
   const [pdfArtifact, setPdfArtifact] = useState<PdfArtifact | null>(null)
   const [reportError, setReportError] = useState('')
@@ -961,6 +1484,23 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   const diagnosis = snapshot ? buildMarginDiagnosisSummary(snapshot) : null
   const usageTemplates = useMemo(() => importTemplatesByKind('usage'), [])
   const allowanceTemplates = useMemo(() => importTemplatesByKind('allowance'), [])
+  const suggestedMeasurementContracts = useMemo(() => {
+    const sourceCsv = rawCsv.trim() ? rawCsv : AGENT_PAYROLL_SAMPLE_CSV
+    const summary = parseUsageCsv(sourceCsv, MODELS)
+    if (summary.errors.length > 0 || summary.featureSummaries.length === 0) return []
+    return buildDefaultFeatureMeasurementContracts(summary)
+  }, [rawCsv])
+  const visibleMeasurementContracts = measurementContracts.length > 0 ? measurementContracts : suggestedMeasurementContracts
+  const connectorReadiness = useMemo(() => {
+    const sourceCsv = rawCsv.trim() ? rawCsv : AGENT_PAYROLL_SAMPLE_CSV
+    const summary = parseUsageCsv(sourceCsv, MODELS)
+    return buildConnectorReadinessReport({
+      usageColumns: summary.schemaMappingProfile?.sourceColumns ?? [],
+      hasRevenueMapping: Boolean(revenueCsv.trim()),
+      hasOutcomeEvents: Boolean(outcomeCsv.trim()),
+      hasPolicyDecision: Boolean(decisionChoice),
+    })
+  }, [decisionChoice, outcomeCsv, rawCsv, revenueCsv])
   const buyerInterviewCoding = useMemo(() => codeBuyerInterviewNotes(buyerInterviewNotes), [buyerInterviewNotes])
   const icpTimingAssessment = useMemo(() => assessIcpTimingGate({
     monthlyAiSpendKrw: numericInput(monthlyLlmSpendKrw),
@@ -1046,6 +1586,26 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     writeServiceValidationLedgerRows(workspaceId, serviceLedgerRows)
   }, [serviceLedgerRows, workspaceId])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    function syncSceneFromHash() {
+      const scene = sceneFromHash(window.location.hash)
+      if (scene) setActiveScene(scene)
+    }
+
+    syncSceneFromHash()
+    window.addEventListener('hashchange', syncSceneFromHash)
+    return () => window.removeEventListener('hashchange', syncSceneFromHash)
+  }, [])
+
+  function selectScene(scene: DemoScene) {
+    setActiveScene(scene)
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', hashForScene(scene))
+    }
+  }
+
   function resetServiceValidationDraft(nextRows: ServiceValidationLedgerRow[]) {
     setServiceLeadId(nextServiceValidationLeadId(nextRows))
     setServiceAcceptedPriceKrw('')
@@ -1092,6 +1652,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     setPdfArtifact(null)
     setReportError('')
     setShowEvidence(false)
+    selectScene('data')
     setNextReviewDate('')
     setDecisionOwnerConfirmed(false)
     setPdcaAttributionAxes([])
@@ -1099,6 +1660,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
 
   function updateRawCsv(value: string) {
     setRawCsv(value)
+    setMeasurementContracts([])
     resetDerivedReportState()
   }
 
@@ -1107,20 +1669,84 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     resetDerivedReportState()
   }
 
+  function updateOutcomeCsv(value: string) {
+    setOutcomeCsv(value)
+    resetDerivedReportState()
+  }
+
   function updateSummaryJson(value: string) {
     setSummaryJson(value)
     resetDerivedReportState()
   }
 
+  async function handleUsageCsvFile(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) return
+    try {
+      const text = await readCsvFile(file)
+      setInputMode('csv')
+      updateRawCsv(text)
+    } catch {
+      setMessage('CSV 파일을 읽지 못했습니다. UTF-8 CSV 파일인지 확인하세요.')
+    } finally {
+      input.value = ''
+    }
+  }
+
+  async function handleRevenueCsvFile(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) return
+    try {
+      const text = await readCsvFile(file)
+      setInputMode('csv')
+      updateRevenueCsv(text)
+    } catch {
+      setMessage('요금제/매출 CSV 파일을 읽지 못했습니다. UTF-8 CSV 파일인지 확인하세요.')
+    } finally {
+      input.value = ''
+    }
+  }
+
+  async function handleOutcomeCsvFile(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) return
+    try {
+      const text = await readCsvFile(file)
+      setInputMode('csv')
+      updateOutcomeCsv(text)
+    } catch {
+      setMessage('성과 이벤트 CSV 파일을 읽지 못했습니다. UTF-8 CSV 파일인지 확인하세요.')
+    } finally {
+      input.value = ''
+    }
+  }
+
   function applyUsageTemplate(template: ImportTemplateProfile) {
     setInputMode('csv')
     setRawCsv(template.sampleCsv)
+    setMeasurementContracts([])
     resetDerivedReportState()
   }
 
   function applyAllowanceTemplate(template: ImportTemplateProfile) {
     setInputMode('csv')
     setRevenueCsv(template.sampleCsv)
+    resetDerivedReportState()
+  }
+
+  function applyOutcomeSample() {
+    setInputMode('csv')
+    updateOutcomeCsv(AGENT_PAYROLL_OUTCOME_SAMPLE_CSV)
+  }
+
+  function updateMeasurementContract(feature: string, updates: Partial<FeatureMeasurementContract>) {
+    const baseContracts = visibleMeasurementContracts.length > 0 ? visibleMeasurementContracts : suggestedMeasurementContracts
+    setMeasurementContracts(baseContracts.map(contract => (
+      contract.feature === feature ? { ...contract, ...updates } : contract
+    )))
     resetDerivedReportState()
   }
 
@@ -1151,6 +1777,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       planIncludedTokens?: Record<string, number>
       customerOverageRateUsdPer1kTokens?: Record<string, number>
       planOverageRateUsdPer1kTokens?: Record<string, number>
+      measurementContracts?: FeatureMeasurementContract[]
+      outcomeEvents?: OutcomeEventRow[]
     } = {},
   ) {
     const importGeneration = nextImportGeneration()
@@ -1164,6 +1792,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       planIncludedTokens: options.planIncludedTokens ?? (options.useSampleRevenue ? PLAN_TOKEN_ALLOWANCE : undefined),
       customerOverageRateUsdPer1kTokens: options.customerOverageRateUsdPer1kTokens ?? (options.useSampleRevenue ? CUSTOMER_OVERAGE_RATE_USD_PER_1K_TOKENS : undefined),
       planOverageRateUsdPer1kTokens: options.planOverageRateUsdPer1kTokens ?? (options.useSampleRevenue ? PLAN_OVERAGE_RATE_USD_PER_1K_TOKENS : undefined),
+      measurementContracts: options.measurementContracts,
+      outcomeEvents: options.outcomeEvents,
     })
     setSnapshot(next)
     setSelectedDecisionId('')
@@ -1174,6 +1804,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     setReportError('')
     setShowEvidence(false)
     setMessage(next.reportGate.status === 'blocked' ? next.reportGate.reason : '')
+    selectScene(next.reportGate.canPreview ? 'diagnosis' : 'data')
     return importGeneration
   }
 
@@ -1182,6 +1813,24 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       if (!remoteSnapshotRef || importGeneration !== importGenerationRef.current) return
       setSnapshot(current => current ? addSnapshotRef(current, remoteSnapshotRef) : current)
     })
+  }
+
+  function contractsForSummary(summary: UsageImportSummary): FeatureMeasurementContract[] {
+    const defaults = buildDefaultFeatureMeasurementContracts(summary)
+    if (measurementContracts.length === 0) return defaults
+    return defaults.map(defaultContract => (
+      measurementContracts.find(contract => contract.feature === defaultContract.feature) ?? defaultContract
+    ))
+  }
+
+  function outcomeEventsForAnalysis(): { rows: OutcomeEventRow[]; errors: string[]; warnings: string[] } {
+    if (!outcomeCsv.trim()) return { rows: [], errors: [], warnings: [] }
+    const result = parseOutcomeCsv(outcomeCsv)
+    return {
+      rows: result.errors.length > 0 ? [] : result.rows,
+      errors: result.errors,
+      warnings: result.mappingWarnings,
+    }
   }
 
   function handleStartCsv() {
@@ -1198,6 +1847,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     const summary = parseUsageCsv(rawCsv, MODELS, {
       revenueBasis: revenueReady && tokenPolicyReady ? 'manual_map' : undefined,
     })
+    const outcomeResult = outcomeEventsForAnalysis()
     const importGeneration = applySnapshot(summary, null, {
       customerRevenueUsd: revenueReady ? revenueMapping.customerRevenueUsd : undefined,
       planRevenueUsd: revenueReady ? revenueMapping.planRevenueUsd : undefined,
@@ -1205,9 +1855,15 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       planIncludedTokens: tokenPolicyReady ? revenueMapping.planIncludedTokens : undefined,
       customerOverageRateUsdPer1kTokens: tokenPolicyReady ? revenueMapping.customerOverageRateUsdPer1kTokens : undefined,
       planOverageRateUsdPer1kTokens: tokenPolicyReady ? revenueMapping.planOverageRateUsdPer1kTokens : undefined,
+      measurementContracts: contractsForSummary(summary),
+      outcomeEvents: outcomeResult.rows,
     })
     if (revenueMapping && revenueMapping.errors.length > 0) {
       setMessage(revenueMapping.errors.join(', '))
+    } else if (outcomeResult.errors.length > 0) {
+      setMessage(outcomeResult.errors.join(', '))
+    } else if (outcomeResult.warnings.length > 0) {
+      setMessage(outcomeResult.warnings.join(', '))
     } else if (revenueMapping && revenueMapping.mappingWarnings.length > 0) {
       setMessage(revenueMapping.mappingWarnings.join(', '))
     }
@@ -1219,8 +1875,12 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
   function handleSample() {
     setRawCsv(AGENT_PAYROLL_SAMPLE_CSV)
     setRevenueCsv(AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV)
+    setOutcomeCsv(AGENT_PAYROLL_OUTCOME_SAMPLE_CSV)
     const summary = parseUsageCsv(AGENT_PAYROLL_SAMPLE_CSV, MODELS)
     const revenueMapping = parseRevenueCsv(AGENT_PAYROLL_TOKEN_ALLOWANCE_CSV)
+    const contracts = buildDefaultFeatureMeasurementContracts(summary)
+    setMeasurementContracts(contracts)
+    const outcomeEvents = parseOutcomeCsv(AGENT_PAYROLL_OUTCOME_SAMPLE_CSV).rows
     const importGeneration = applySnapshot(summary, null, {
       customerRevenueUsd: revenueMapping.customerRevenueUsd,
       planRevenueUsd: revenueMapping.planRevenueUsd,
@@ -1228,6 +1888,8 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       planIncludedTokens: revenueMapping.planIncludedTokens,
       customerOverageRateUsdPer1kTokens: revenueMapping.customerOverageRateUsdPer1kTokens,
       planOverageRateUsdPer1kTokens: revenueMapping.planOverageRateUsdPer1kTokens,
+      measurementContracts: contracts,
+      outcomeEvents,
     })
     attachRemoteSnapshotRef(AGENT_PAYROLL_SAMPLE_CSV, importGeneration)
   }
@@ -1243,6 +1905,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
         setPdfArtifact(null)
         setReportError('')
         setShowEvidence(false)
+        selectScene('data')
         return
       }
       applySnapshot(parsed)
@@ -1254,6 +1917,7 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
       setPdfArtifact(null)
       setReportError('')
       setShowEvidence(false)
+      selectScene('data')
     }
   }
 
@@ -1310,6 +1974,138 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
     hasDecisionChoice: Boolean(decisionChoice),
     hasPdfArtifact: Boolean(pdfArtifact),
   })
+  const showCsvInputs = inputMode === 'csv' || audience === 'customer'
+  const inputModeSwitcher = audience === 'expert' ? (
+    <div className="mb-4 flex flex-wrap gap-2">
+      <Button variant={inputMode === 'csv' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('csv')}>
+        CSV 입력 보기
+      </Button>
+      <Button variant={inputMode === 'summary' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('summary')}>
+        요약 JSON
+      </Button>
+    </div>
+  ) : null
+  const csvUploadPanel = showCsvInputs ? (
+    <div data-testid="csv-upload-panel" className="mb-4 grid gap-3 md:grid-cols-3">
+      <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <label className="text-sm font-semibold text-label-normal" htmlFor="usage-csv-file">
+          사용량 파일 선택
+        </label>
+        <input
+          id="usage-csv-file"
+          type="file"
+          accept=".csv,text/csv"
+          onChange={event => void handleUsageCsvFile(event)}
+          className="mt-2 block w-full text-xs text-label-neutral file:mr-3 file:rounded-wds-sm file:border file:border-line-neutral file:bg-surface-normal file:px-3 file:py-2 file:text-xs file:font-semibold file:text-label-normal"
+        />
+        <p className="mt-2 text-xs text-label-alternative">
+          파일을 선택하면 아래 사용량 CSV 입력칸에 내용이 들어갑니다.
+        </p>
+        <a
+          href="/demo/agentpayroll-usage-sample.csv"
+          download
+          className="mt-3 inline-flex rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs font-semibold text-label-normal"
+        >
+          사용량 샘플 CSV 다운로드
+        </a>
+      </div>
+      <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <label className="text-sm font-semibold text-label-normal" htmlFor="allowance-csv-file">
+          요금제/매출 파일 선택
+        </label>
+        <input
+          id="allowance-csv-file"
+          type="file"
+          accept=".csv,text/csv"
+          onChange={event => void handleRevenueCsvFile(event)}
+          className="mt-2 block w-full text-xs text-label-neutral file:mr-3 file:rounded-wds-sm file:border file:border-line-neutral file:bg-surface-normal file:px-3 file:py-2 file:text-xs file:font-semibold file:text-label-normal"
+        />
+        <p className="mt-2 text-xs text-label-alternative">
+          파일을 선택하면 아래 요금제/매출 CSV 입력칸에 내용이 들어갑니다.
+        </p>
+        <a
+          href="/demo/agentpayroll-allowance-revenue-sample.csv"
+          download
+          className="mt-3 inline-flex rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs font-semibold text-label-normal"
+        >
+          요금제/매출 샘플 CSV 다운로드
+        </a>
+      </div>
+      <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+        <label className="text-sm font-semibold text-label-normal" htmlFor="outcome-csv-file">
+          성과 이벤트 파일 선택
+        </label>
+        <input
+          id="outcome-csv-file"
+          type="file"
+          accept=".csv,text/csv"
+          onChange={event => void handleOutcomeCsvFile(event)}
+          className="mt-2 block w-full text-xs text-label-neutral file:mr-3 file:rounded-wds-sm file:border file:border-line-neutral file:bg-surface-normal file:px-3 file:py-2 file:text-xs file:font-semibold file:text-label-normal"
+        />
+        <p className="mt-2 text-xs text-label-alternative">
+          선택 사항입니다. 있으면 성과 기준까지 검증합니다.
+        </p>
+        <a
+          href="/demo/agentpayroll-outcome-sample.csv"
+          download
+          className="mt-3 inline-flex rounded-wds border border-line-solid bg-surface-normal px-3 py-2 text-xs font-semibold text-label-normal"
+        >
+          성과 이벤트 샘플 CSV 다운로드
+        </a>
+      </div>
+    </div>
+  ) : null
+  const dataEntryPanel = showCsvInputs ? (
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <ImportTemplateButtons
+          title="사용량 CSV 템플릿"
+          templates={usageTemplates}
+          onSelect={applyUsageTemplate}
+        />
+        <ImportTemplateButtons
+          title="요금제/매출 CSV 템플릿"
+          templates={allowanceTemplates}
+          onSelect={applyAllowanceTemplate}
+        />
+      </div>
+      <Field label="사용량 CSV" htmlFor="report-first-csv" help="필수 컬럼: customer_id, feature, model, input_tokens, output_tokens. 권장: total_cost, latency_ms, status. plan_id는 보조 분류값입니다.">
+        <textarea
+          id="report-first-csv"
+          value={rawCsv}
+          onChange={event => updateRawCsv(event.currentTarget.value)}
+          rows={7}
+          className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
+        />
+      </Field>
+      <Field label="요금제/매출 CSV" htmlFor="report-first-revenue-csv" help="필수 컬럼: customer_id, revenue_collected, included_tokens. 권장: overage_rate_usd_per_1k_tokens. plan_id는 선택입니다.">
+        <textarea
+          id="report-first-revenue-csv"
+          value={revenueCsv}
+          onChange={event => updateRevenueCsv(event.currentTarget.value)}
+          rows={4}
+          className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
+        />
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={handleStartCsv}>분석 시작</Button>
+        <Button variant="secondary" onClick={handleSample}>샘플 데이터로 진단하기</Button>
+      </div>
+    </div>
+  ) : (
+    <div className="grid gap-3">
+      <Field label="구조화 summary JSON" htmlFor="report-first-summary" help="자연어 summary는 파싱하지 않습니다. UsageImportSummary와 trustInspection이 필요합니다.">
+        <textarea
+          id="report-first-summary"
+          value={summaryJson}
+          onChange={event => updateSummaryJson(event.currentTarget.value)}
+          rows={7}
+          className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
+        />
+      </Field>
+      <Button variant="primary" onClick={handleSummary}>요약 진단</Button>
+    </div>
+  )
 
   return (
     <section className="grid gap-6" data-testid="report-first-diagnosis">
@@ -1334,12 +2130,45 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
         </div>
       </div>
 
+      <DemoWorkflowTabs
+        activeScene={activeScene}
+        hasSnapshot={Boolean(snapshot)}
+        onSelectScene={selectScene}
+      />
+
+      {activeScene === 'data' && (
       <Surface
-        eyebrow="데이터 준비"
-        title="사용량 CSV와 요금제/매출 CSV"
-        description="사용량, 포함 토큰, 회수된 매출을 연결해 초과 사용분과 미회수 원가를 먼저 보여줍니다."
+        id="data"
+        eyebrow={SCENE_SURFACE_COPY.data.eyebrow}
+        title={SCENE_SURFACE_COPY.data.title}
+        description={SCENE_SURFACE_COPY.data.description}
         action={!snapshot ? <Button variant="primary" disabled>PDF 리포트 생성</Button> : undefined}
       >
+        <p
+          data-testid="csv-to-report-note"
+          className="mb-4 rounded-wds border border-primary-normal/20 bg-primary-normal/5 px-3 py-2 text-xs leading-5 text-label-neutral"
+        >
+          올리는 것은 리포트가 아니라 사용량 CSV와 요금제/매출 CSV입니다. 리포트는 분석 후 결정 기록을 남기면 만들어집니다.
+        </p>
+        <CsvSourceGuide />
+        <ConnectorReadinessPanel report={snapshot?.sourceCoverage ?? connectorReadiness} />
+        {inputModeSwitcher}
+        {csvUploadPanel}
+        {showCsvInputs && (
+          <MeasurementContractPanel
+            contracts={visibleMeasurementContracts}
+            outcomeCsv={outcomeCsv}
+            onContractChange={updateMeasurementContract}
+            onOutcomeCsvChange={updateOutcomeCsv}
+            onLoadOutcomeSample={applyOutcomeSample}
+          />
+        )}
+        {dataEntryPanel}
+        {visibleMessage && (
+          <p className="mt-3 text-xs font-semibold text-status-negative" translate={audience === 'expert' ? 'no' : undefined}>
+            {visibleMessage}
+          </p>
+        )}
         <TrustAssurancePanel result={trustResult} audience={audience} mappingStatus={reportMappingStatus} />
         <ServiceMvpOfferPanel />
         <IcpTimingGatePanel
@@ -1410,84 +2239,20 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
           </>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          <Button variant={inputMode === 'csv' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('csv')}>
-            사용량 CSV 올리기
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setInputMode('csv')}>
-            요금제/매출 CSV 올리기
-          </Button>
-          {audience === 'expert' && (
-            <Button variant={inputMode === 'summary' ? 'primary' : 'secondary'} size="sm" onClick={() => setInputMode('summary')}>
-              요약 JSON
-            </Button>
-          )}
-        </div>
-
-        {inputMode === 'csv' || audience === 'customer' ? (
-          <div className="grid gap-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <ImportTemplateButtons
-                title="사용량 CSV 템플릿"
-                templates={usageTemplates}
-                onSelect={applyUsageTemplate}
-              />
-              <ImportTemplateButtons
-                title="요금제/매출 CSV 템플릿"
-                templates={allowanceTemplates}
-                onSelect={applyAllowanceTemplate}
-              />
-            </div>
-            <Field label="사용량 CSV" htmlFor="report-first-csv" help="필수 컬럼: customer_id, feature, model, input_tokens, output_tokens. 권장: total_cost, latency_ms, status. plan_id는 보조 분류값입니다.">
-              <textarea
-                id="report-first-csv"
-                value={rawCsv}
-                onChange={event => updateRawCsv(event.currentTarget.value)}
-                rows={7}
-                className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
-              />
-            </Field>
-            <Field label="요금제/매출 CSV" htmlFor="report-first-revenue-csv" help="필수 컬럼: customer_id, revenue_collected, included_tokens. 권장: overage_rate_usd_per_1k_tokens. plan_id는 선택입니다.">
-              <textarea
-                id="report-first-revenue-csv"
-                value={revenueCsv}
-                onChange={event => updateRevenueCsv(event.currentTarget.value)}
-                rows={4}
-                className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
-              />
-            </Field>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="primary" onClick={handleStartCsv}>분석 시작</Button>
-              <Button variant="secondary" onClick={handleSample}>샘플 데이터로 진단하기</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            <Field label="구조화 summary JSON" htmlFor="report-first-summary" help="자연어 summary는 파싱하지 않습니다. UsageImportSummary와 trustInspection이 필요합니다.">
-              <textarea
-                id="report-first-summary"
-                value={summaryJson}
-                onChange={event => updateSummaryJson(event.currentTarget.value)}
-                rows={7}
-                className="w-full rounded-wds border border-line-solid bg-surface-normal px-3 py-2 font-mono text-xs text-label-normal"
-              />
-            </Field>
-            <Button variant="primary" onClick={handleSummary}>요약 진단</Button>
-          </div>
-        )}
-        {visibleMessage && (
-          <p className="mt-3 text-xs font-semibold text-status-negative" translate={audience === 'expert' ? 'no' : undefined}>
-            {visibleMessage}
-          </p>
-        )}
       </Surface>
+      )}
 
-      {snapshot && (
+      {activeScene !== 'data' && !snapshot && (
+        <LockedScenePanel scene={activeScene} />
+      )}
+
+      {snapshot && activeScene !== 'data' && (
         <Surface
-          eyebrow="진단 결과"
-          title="비용 누수 분석 완료"
-          description="포함 토큰을 초과한 고객, 토큰을 가장 많이 태우는 기능, 토큰 정책 후보를 한 화면에서 확인합니다."
-          action={(
+          id={activeScene}
+          eyebrow={SCENE_SURFACE_COPY[activeScene].eyebrow}
+          title={SCENE_SURFACE_COPY[activeScene].title}
+          description={SCENE_SURFACE_COPY[activeScene].description}
+          action={activeScene === 'report' ? (
             <Button
               variant="primary"
               onClick={() => void handleCreateReport()}
@@ -1495,155 +2260,200 @@ export function ReportFirstDiagnosisWorkspace({ workspaceId, productionStatus, a
             >
               PDF 리포트 생성
             </Button>
-          )}
+          ) : undefined}
         >
-          <div className="grid gap-3 md:grid-cols-4">
-            {snapshot.metrics.map(metric => (
-              <MetricTile key={metric.id} label={metric.label} value={metric.value} help={metric.help} />
-            ))}
-          </div>
-          <p
-            data-testid="diagnosis-calculation-basis"
-            className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative px-3 py-2 text-xs font-semibold text-label-neutral"
-          >
-            계산 기준: 현재 입력 CSV + 요금제/매출 CSV
-          </p>
+          {activeScene === 'process' && (
+            <AiTeamProcessView
+              snapshot={snapshot}
+              selectedDecisionTitle={selectedDecision?.title}
+              decisionChoice={decisionChoice}
+            />
+          )}
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {diagnosis && [diagnosis.topLeak, diagnosis.marginBreakingFeature, diagnosis.recommendedDecision].map(item => (
-              <div key={item.title} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
-                <p className="text-sm font-semibold">{item.title}</p>
-                <p className="mt-2 text-xs leading-5 text-label-neutral">{item.plainLanguageSummary}</p>
-                <Badge className="mt-2" tone="positive">{item.customerSafeEvidenceLabel}</Badge>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="rounded-wds border border-line-neutral bg-surface-normal p-3">
-              <p className="text-sm font-semibold">결정 후보 선택</p>
-              <div className="mt-2 grid gap-2">
-                {visibleDecisionCandidates.map(candidate => (
-                  <label key={candidate.id} className="flex cursor-pointer gap-2 rounded-wds border border-line-neutral p-3 text-sm">
-                    <input
-                      type="radio"
-                      name="diagnosis-decision"
-                      aria-label={candidate.title}
-                      checked={selectedDecisionId === candidate.id}
-                      onChange={() => {
-                        setSelectedDecisionId(candidate.id)
-                        setDecisionChoice('')
-                        setPdfArtifact(null)
-                        setShowEvidence(false)
-                      }}
-                    />
-                    <span>
-                      <strong>{candidate.title}</strong>
-                      <span className="mt-1 block text-xs text-label-neutral">{candidate.body}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <div className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-                <p className="text-sm font-semibold">결정 남기기</p>
+          {activeScene === 'diagnosis' && (
+              <section id="diagnosis" className="mt-4">
+                <h3 className="text-lg font-semibold">공통 진단 결과</h3>
                 <p className="mt-1 text-xs text-label-neutral">
-                  사람이 채택, 보류, 거절 중 하나를 선택해야 리포트에 판단 근거가 고정됩니다.
+                  손해 고객, 비용을 많이 태우는 기능, 지금 검토할 정책 후보를 먼저 고정합니다.
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(['adopt', 'reject', 'hold'] as const).map(choice => (
+                <div className="mt-3 grid gap-3 md:grid-cols-4">
+                  {snapshot.metrics.map(metric => (
+                    <MetricTile key={metric.id} label={metric.label} value={metric.value} help={metric.help} />
+                  ))}
+                </div>
+                <p
+                  data-testid="diagnosis-calculation-basis"
+                  className="mt-3 rounded-wds border border-line-neutral bg-fill-alternative px-3 py-2 text-xs font-semibold text-label-neutral"
+                >
+                  계산 기준: 현재 입력 CSV + 요금제/매출 CSV
+                </p>
+                <OutcomeVerificationPanel snapshot={snapshot} />
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {diagnosis && [diagnosis.topLeak, diagnosis.marginBreakingFeature, diagnosis.recommendedDecision].map(item => (
+                    <div key={item.title} className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+                      <p className="text-sm font-semibold">{item.title}</p>
+                      <p className="mt-2 text-xs leading-5 text-label-neutral">{item.plainLanguageSummary}</p>
+                      <Badge className="mt-2" tone="positive">{item.customerSafeEvidenceLabel}</Badge>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {visibleDecisionCandidates.map(candidate => (
+                    <div key={candidate.id} className="rounded-wds border border-line-neutral bg-surface-normal p-3">
+                      <p className="text-sm font-semibold">{candidate.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-label-neutral">{candidate.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+          )}
+
+          {activeScene === 'roles' && (
+              <section id="roles" className="mt-5 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+                <h3 className="text-lg font-semibold">역할별 판단</h3>
+                <p className="mt-1 text-xs text-label-neutral">
+                  같은 진단 결과를 CEO, PM, 개발자가 각자 해야 할 일 기준으로 다시 읽습니다.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="역할별 판단">
+                  {(['ceo', 'pm', 'developer'] as const).map(role => (
                     <Button
-                      key={choice}
+                      key={role}
                       type="button"
                       size="sm"
-                      variant={decisionChoice === choice ? 'primary' : 'secondary'}
-                      disabled={!selectedDecisionId}
-                      onClick={() => {
-                        setDecisionChoice(choice)
-                        setPdfArtifact(null)
-                      }}
+                      variant={activeRole === role ? 'primary' : 'secondary'}
+                      role="tab"
+                      aria-selected={activeRole === role}
+                      onClick={() => setActiveRole(role)}
                     >
-                      {DECISION_CHOICE_LABELS[choice]}
+                      {ROLE_TAB_LABELS[role]}
                     </Button>
                   ))}
                 </div>
-                {!decisionChoice && (
-                  <p className="mt-2 text-xs font-semibold text-status-cautionary">
-                    채택/보류/거절 선택이 필요합니다.
+                {roleView && <RoleWorkspacePanel roleView={roleView} />}
+              </section>
+          )}
+
+          {activeScene === 'decision' && (
+              <section id="decision" className="mt-5 rounded-wds border border-line-neutral bg-surface-normal p-3">
+                <h3 className="text-lg font-semibold">결정 기록</h3>
+                <p className="mt-1 text-xs text-label-neutral">
+                  정책 후보를 고르고 사람이 채택, 보류, 거절 중 하나를 남겨야 리포트 판단 근거가 고정됩니다.
+                </p>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="grid gap-2">
+                    {visibleDecisionCandidates.map(candidate => (
+                      <label key={candidate.id} className="flex cursor-pointer gap-2 rounded-wds border border-line-neutral p-3 text-sm">
+                        <input
+                          type="radio"
+                          name="diagnosis-decision"
+                          aria-label={candidate.title}
+                          checked={selectedDecisionId === candidate.id}
+                          onChange={() => {
+                            setSelectedDecisionId(candidate.id)
+                            setDecisionChoice('')
+                            setPdfArtifact(null)
+                            setShowEvidence(false)
+                          }}
+                        />
+                        <span>
+                          <strong>{candidate.title}</strong>
+                          <span className="mt-1 block text-xs text-label-neutral">{candidate.body}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="rounded-wds border border-line-neutral bg-fill-alternative p-3">
+                    <p className="text-sm font-semibold">결정 남기기</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(['adopt', 'reject', 'hold'] as const).map(choice => (
+                        <Button
+                          key={choice}
+                          type="button"
+                          size="sm"
+                          variant={decisionChoice === choice ? 'primary' : 'secondary'}
+                          disabled={!selectedDecisionId}
+                          onClick={() => {
+                            setDecisionChoice(choice)
+                            setPdfArtifact(null)
+                          }}
+                        >
+                          {DECISION_CHOICE_LABELS[choice]}
+                        </Button>
+                      ))}
+                    </div>
+                    {!decisionChoice && (
+                      <p className="mt-2 text-xs font-semibold text-status-cautionary">
+                        채택/보류/거절 선택이 필요합니다.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+          )}
+
+          {activeScene === 'report' && (
+              <section id="report" className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
+                <h3 className="text-lg font-semibold">{audience === 'expert' ? 'PDF 저장 관문' : '리포트 미리보기 / PDF 준비'}</h3>
+                <p className="mt-1 text-xs text-label-neutral">
+                  {diagnosis ? `근거 상태: ${diagnosis.evidenceState}` : '근거 상태: 검토 필요'}
+                  {selectedDecision ? ` / ${selectedDecision.title}` : ''}
+                </p>
+                {snapshot && selectedDecisionId && decisionChoice && (
+                  <LocalReportPreview
+                    snapshot={snapshot}
+                    selectedDecisionId={selectedDecisionId}
+                    decisionChoice={decisionChoice}
+                  />
+                )}
+                {pdfArtifact ? (
+                  <a className="mt-3 inline-flex rounded-wds bg-primary-normal px-4 py-2 text-sm font-semibold text-white" href={pdfArtifact.downloadPath}>
+                    PDF 리포트 다운로드
+                  </a>
+                ) : (
+                  <p className="mt-2 text-xs text-label-alternative">
+                    {audience === 'expert'
+                      ? '저장된 artifact가 아직 없어서 PDF 다운로드는 열리지 않았습니다.'
+                      : '아직 PDF 다운로드가 준비되지 않았습니다.'}
                   </p>
                 )}
-              </div>
-            </div>
-
-            <div className="rounded-wds border border-line-neutral bg-surface-normal p-3">
-              <p className="text-sm font-semibold">역할별 보기</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" variant={activeRole === 'developer' ? 'primary' : 'secondary'} onClick={() => setActiveRole('developer')}>개발자 보기</Button>
-                <Button size="sm" variant={activeRole === 'pm' ? 'primary' : 'secondary'} onClick={() => setActiveRole('pm')}>PM 보기</Button>
-                <Button size="sm" variant={activeRole === 'ceo' ? 'primary' : 'secondary'} onClick={() => setActiveRole('ceo')}>CEO 보기</Button>
-              </div>
-              {roleView && (
-                <div className="mt-3 grid gap-2 text-xs">
-                  <p className="font-semibold">{roleView.assistant.title}</p>
-                  <p className="text-label-neutral">{roleView.assistant.focus}</p>
-                  <p translate="no">{roleView.primaryKpis.map(kpi => `${kpi.label}: ${kpi.value}`).join(' / ')}</p>
+                {pdfDisabledReason && (
+                  <p className="mt-2 text-xs font-semibold text-status-cautionary" data-testid="pdf-disabled-reason">
+                    {pdfDisabledReason}
+                  </p>
+                )}
+                {reportError && <p className="mt-2 text-xs font-semibold text-status-negative" translate="no">{reportError}</p>}
+                <div className="mt-3">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setShowEvidence(value => !value)}>
+                    {showEvidence ? '근거 닫기' : '근거 보기'}
+                  </Button>
+                  {showEvidence && (
+                    audience === 'expert' ? (
+                      <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
+                        <p className="text-sm font-semibold">Evidence refs</p>
+                        <ul className="mt-2 grid gap-1 text-xs text-label-alternative">
+                          {snapshot.refs.map(ref => (
+                            <li key={ref} translate="no">{ref}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-xs text-label-alternative">
+                          RAG, Watchtower, source review, and agent route details stay in expert/admin views unless needed for inspection.
+                        </p>
+                      </div>
+                    ) : (
+                      <CustomerEvidenceSummary snapshot={snapshot} selectedDecisionTitle={selectedDecision?.title} />
+                    )
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </section>
+          )}
 
-          <div className="mt-4 rounded-wds border border-line-neutral bg-fill-alternative p-3">
-            <p className="text-sm font-semibold">{audience === 'expert' ? 'PDF 저장 관문' : '리포트 미리보기 / PDF 준비'}</p>
-            <p className="mt-1 text-xs text-label-neutral">
-              {diagnosis ? `근거 상태: ${diagnosis.evidenceState}` : '근거 상태: 검토 필요'}
-              {selectedDecision ? ` / ${selectedDecision.title}` : ''}
-            </p>
-            {snapshot && selectedDecisionId && decisionChoice && (
-              <LocalReportPreview
-                snapshot={snapshot}
-                selectedDecisionId={selectedDecisionId}
-                decisionChoice={decisionChoice}
+          {activeScene === 'review' && (
+              <NextMonthReviewPanel
+                nextReviewDate={nextReviewDate}
+                onNextReviewDateChange={setNextReviewDate}
               />
-            )}
-            {pdfArtifact ? (
-              <a className="mt-3 inline-flex rounded-wds bg-primary-normal px-4 py-2 text-sm font-semibold text-white" href={pdfArtifact.downloadPath}>
-                PDF 리포트 다운로드
-              </a>
-            ) : (
-              <p className="mt-2 text-xs text-label-alternative">
-                {audience === 'expert'
-                  ? '저장된 artifact가 아직 없어서 PDF 다운로드는 열리지 않았습니다.'
-                  : '아직 PDF 다운로드가 준비되지 않았습니다.'}
-              </p>
-            )}
-            {pdfDisabledReason && (
-              <p className="mt-2 text-xs font-semibold text-status-cautionary" data-testid="pdf-disabled-reason">
-                {pdfDisabledReason}
-              </p>
-            )}
-            {reportError && <p className="mt-2 text-xs font-semibold text-status-negative" translate="no">{reportError}</p>}
-            <div className="mt-3">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setShowEvidence(value => !value)}>
-                {showEvidence ? '근거 닫기' : '근거 보기'}
-              </Button>
-              {showEvidence && (
-                audience === 'expert' ? (
-                  <div className="mt-3 rounded-wds border border-line-neutral bg-surface-normal p-3">
-                    <p className="text-sm font-semibold">Evidence refs</p>
-                    <ul className="mt-2 grid gap-1 text-xs text-label-alternative">
-                      {snapshot.refs.map(ref => (
-                        <li key={ref} translate="no">{ref}</li>
-                      ))}
-                    </ul>
-                    <p className="mt-2 text-xs text-label-alternative">
-                      RAG, Watchtower, source review, and agent route details stay in expert/admin views unless needed for inspection.
-                    </p>
-                  </div>
-                ) : (
-                  <CustomerEvidenceSummary snapshot={snapshot} selectedDecisionTitle={selectedDecision?.title} />
-                )
-              )}
-            </div>
-          </div>
+          )}
         </Surface>
       )}
     </section>

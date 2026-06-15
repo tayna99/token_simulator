@@ -54,12 +54,23 @@ export interface RoleAssistantProjection {
   refs: string[]
 }
 
+export interface RoleWorkspaceCard {
+  id: string
+  title: string
+  value: string
+  body: string
+}
+
 export interface RoleViewModel {
   role: RoleProjectionRole
   audience: RoleProjectionAudience
   title: string
+  question: string
   primaryKpis: RoleProjectionKpi[]
   assistant: RoleAssistantProjection
+  cards: RoleWorkspaceCard[]
+  actions: string[]
+  nextStep: string
 }
 
 function visibleRefs(snapshot: RoleProjectionSnapshot, audience: RoleProjectionAudience): string[] {
@@ -88,6 +99,7 @@ export function projectSnapshotForRole(
       role,
       audience,
       title: 'Developer projection',
+      question: '어떤 모델/세션/실행 패턴 때문에 비용이 터졌나?',
       primaryKpis: [
         { id: 'top_agent_share', label: 'Top agent share', value: topAgentShareValue },
         { id: 'monthly_cost', label: 'Monthly AI cost', value: monthlyCostValue },
@@ -98,6 +110,9 @@ export function projectSnapshotForRole(
         focus: 'Model, token, retry, and cache behavior are prioritized for debugging cost spikes.',
         refs,
       },
+      cards: [],
+      actions: [],
+      nextStep: '출력 길이 제한, 캐시, 모델 교체, 호출 횟수 제한을 순서대로 검토합니다.',
     }
   }
 
@@ -106,6 +121,7 @@ export function projectSnapshotForRole(
       role,
       audience,
       title: 'CEO projection',
+      question: '지금 얼마가 새고, 어떤 정책 결정을 해야 하나?',
       primaryKpis: [
         { id: 'monthly_cost', label: 'Monthly AI cost', value: monthlyCostValue },
         { id: 'margin', label: 'Margin', value: marginValue },
@@ -116,6 +132,9 @@ export function projectSnapshotForRole(
         focus: 'Margin, loss customers, and operating decision readiness are prioritized for executive review.',
         refs,
       },
+      cards: [],
+      actions: [],
+      nextStep: '정책 후보를 선택하고 채택/보류/거절 결정을 남긴 뒤 리포트를 공유합니다.',
     }
   }
 
@@ -123,6 +142,7 @@ export function projectSnapshotForRole(
     role,
     audience,
     title: 'PM projection',
+    question: '어떤 기능의 제공 방식이나 가격을 바꿔야 하나?',
     primaryKpis: [
       { id: 'feature', label: 'Feature driver', value: snapshot.topFeature },
       { id: 'customer', label: 'Customer segment', value: customerValue },
@@ -133,5 +153,8 @@ export function projectSnapshotForRole(
       focus: 'Feature, customer, and plan economics are prioritized for product pricing decisions.',
       refs,
     },
+    cards: [],
+    actions: [],
+    nextStep: '기능 제공 방식, 사용량 제한, 초과 과금, 고객 안내 문장을 함께 정리합니다.',
   }
 }

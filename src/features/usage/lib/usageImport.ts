@@ -28,6 +28,7 @@ export interface UsageImportRow {
   totalCostUsd: number
   latencyMs: number | null
   customerId: string | null
+  customerName?: string | null
   status: string | null
   costSource: 'explicit' | 'model_price' | 'missing_model'
   pricingWarnings?: string[]
@@ -49,7 +50,7 @@ export interface UsageSchemaMappingProfile {
   normalizedTable: 'normalized_usage_table'
   sourceColumns: string[]
   columns: Partial<Record<
-    'timestamp' | 'request_id' | 'customer_id' | 'plan_id' | 'feature' | 'model' | 'session_id' | 'agent_run_id' | 'input_tokens' | 'output_tokens' | 'image_input_tokens' | 'audio_input_seconds' | 'video_input_seconds' | 'video_output_seconds' | 'cache_read_tokens' | 'cache_write_tokens' | 'tool_call_count' | 'web_search_count' | 'total_cost' | 'latency_ms' | 'status',
+    'timestamp' | 'request_id' | 'customer_id' | 'customer_name' | 'plan_id' | 'feature' | 'model' | 'session_id' | 'agent_run_id' | 'input_tokens' | 'output_tokens' | 'image_input_tokens' | 'audio_input_seconds' | 'video_input_seconds' | 'video_output_seconds' | 'cache_read_tokens' | 'cache_write_tokens' | 'tool_call_count' | 'web_search_count' | 'total_cost' | 'latency_ms' | 'status',
     string[]
   >>
 }
@@ -93,6 +94,7 @@ const FIELD_KEYS = {
   timestamp: ['timestamp', 'created_at', 'createdAt'],
   request_id: ['request_id', 'requestId', 'id'],
   customer_id: ['customer_id', 'customerId', 'user_id', 'userId'],
+  customer_name: ['customer_name', 'customerName', 'account_name', 'accountName', 'company_name', 'companyName'],
   plan_id: ['plan_id', 'planId', 'plan'],
   feature: ['feature', 'route', 'use_case', 'useCase'],
   model: ['model', 'model_id', 'modelId'],
@@ -365,6 +367,7 @@ export function parseUsageCsv(rawCsv: string, models: Model[], options: ParseUsa
       totalCostUsd: cost.totalCostUsd,
       latencyMs: numberFrom(valueFor(record, [...FIELD_KEYS.latency_ms])) || null,
       customerId: valueFor(record, [...FIELD_KEYS.customer_id]) ?? null,
+      customerName: valueFor(record, [...FIELD_KEYS.customer_name]) ?? null,
       status: valueFor(record, [...FIELD_KEYS.status]) ?? null,
       costSource: cost.costSource,
       pricingWarnings,

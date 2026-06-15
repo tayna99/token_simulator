@@ -1,0 +1,5 @@
+timestamp,customer_id,customer_name,feature,agent_run_id,outcome_type,outcome_count,outcome_value_usd,accepted
+2026-05-01T10:30:00Z,northstar_health,Northstar Health,report_generation,run_001,report_downloaded,0,0,false
+2026-05-01T10:40:00Z,northstar_health,Northstar Health,agent_workflow,run_001,workflow_completed,1,25,true
+2026-05-01T11:30:00Z,atlas_legal,Atlas Legal,report_generation,run_002,report_shared,0,0,false
+2026-05-01T15:40:00Z,cobalt_sales,Cobalt Sales,agent_workflow,run_007,workflow_completed,0,0,false

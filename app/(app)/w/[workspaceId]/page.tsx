@@ -138,10 +138,10 @@ export default async function WorkspacePage({
   })
 
   const serviceNav = [
-    { label: '진단하기', href: `/w/${workspaceId}`, active: true },
-    { label: '리포트 보기', href: `/reports/demo?workspaceId=${workspaceId}`, active: false },
+    { label: '진단하기', href: `/w/${workspaceId}#data`, active: true },
+    { label: '역할별 판단', href: `/w/${workspaceId}#roles`, active: false },
     { label: '결정 기록', href: `/w/${workspaceId}#decision`, active: false },
-    { label: '데이터 설정', href: `/w/${workspaceId}#data`, active: false },
+    { label: '리포트 보기', href: `/w/${workspaceId}#report`, active: false },
     { label: '다음 달 검산', href: `/w/${workspaceId}#review`, active: false },
   ]
 
